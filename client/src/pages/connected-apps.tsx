@@ -21,6 +21,7 @@ import {
   Webhook,
   TrendingUp,
   Power,
+  PowerOff,
   Key,
   Copy,
   RefreshCw,
@@ -308,24 +309,7 @@ function EditAppDialog({ app, open, onOpenChange }: { app: ConnectedApp; open: b
               />
             </div>
             <div className="space-y-3 rounded-lg border p-3">
-              <p className="text-sm font-medium">App Controls</p>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm">
-                  <Power className="h-4 w-4 text-muted-foreground" />
-                  <span>Active</span>
-                </div>
-                <FormField
-                  control={form.control}
-                  name="status"
-                  render={({ field }) => (
-                    <Switch
-                      checked={field.value === "active"}
-                      onCheckedChange={(checked) => field.onChange(checked ? "active" : "inactive")}
-                      data-testid="switch-edit-app-status"
-                    />
-                  )}
-                />
-              </div>
+              <p className="text-sm font-medium">Sync Settings</p>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm">
                   <TrendingUp className="h-4 w-4 text-muted-foreground" />
@@ -425,9 +409,10 @@ function ApiKeyDisplay({ app }: { app: ConnectedApp }) {
   );
 }
 
-function AppCard({ app, onDelete, onEdit }: {
+function AppCard({ app, onDelete, onToggleStatus, onEdit }: {
   app: ConnectedApp;
   onDelete: (id: string) => void;
+  onToggleStatus: (id: string, status: string) => void;
   onEdit: (app: ConnectedApp) => void;
 }) {
   const isActive = app.status === "active";
@@ -435,61 +420,24 @@ function AppCard({ app, onDelete, onEdit }: {
   return (
     <Card className="hover-elevate" data-testid={`card-app-${app.id}`}>
       <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isActive ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
-                <Puzzle className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="font-semibold leading-tight" data-testid={`text-app-name-${app.id}`}>{app.name}</h3>
-                <p className="text-xs text-muted-foreground">{app.slug}</p>
-              </div>
-              <Badge variant={isActive ? "default" : "secondary"} className="ml-auto text-xs" data-testid={`badge-app-status-${app.id}`}>
-                {isActive ? (
-                  <><span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block" />Active</>
-                ) : (
-                  <><span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-gray-400 inline-block" />Inactive</>
-                )}
-              </Badge>
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isActive ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+              <Puzzle className="h-5 w-5" />
             </div>
-            <p className="mt-2 text-sm text-muted-foreground line-clamp-2" data-testid={`text-app-description-${app.id}`}>
-              {app.description}
-            </p>
-
-            <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
-              {app.apiEndpoint && (
-                <div className="flex items-center gap-1">
-                  <Globe className="h-3.5 w-3.5" />
-                  <span className="truncate max-w-[180px]">{app.apiEndpoint}</span>
-                </div>
-              )}
-              {app.webhookUrl && (
-                <div className="flex items-center gap-1">
-                  <Webhook className="h-3.5 w-3.5" />
-                  <span>Webhook</span>
-                </div>
-              )}
+            <div className="min-w-0">
+              <h3 className="font-semibold leading-tight" data-testid={`text-app-name-${app.id}`}>{app.name}</h3>
+              <p className="text-xs text-muted-foreground">{app.slug}</p>
             </div>
-
-            <div className="mt-3 flex items-center gap-2 flex-wrap">
-              {app.syncSignals && (
-                <Badge variant="outline" className="text-xs font-normal">
-                  <TrendingUp className="mr-1 h-3 w-3" />Signals
-                </Badge>
-              )}
-            </div>
-
-            <ApiKeyDisplay app={app} />
-
-            {app.lastSyncAt && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                Last synced {formatDistanceToNow(new Date(app.lastSyncAt), { addSuffix: true })}
-              </p>
-            )}
           </div>
-
-          <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-1 shrink-0">
+            <Badge variant={isActive ? "default" : "secondary"} className="text-xs mr-1 h-7 flex items-center" data-testid={`badge-app-status-${app.id}`}>
+              {isActive ? (
+                <><span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block" />Active</>
+              ) : (
+                <><span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-gray-400 inline-block" />Inactive</>
+              )}
+            </Badge>
             <Button
               size="icon"
               variant="ghost"
@@ -502,13 +450,58 @@ function AppCard({ app, onDelete, onEdit }: {
             <Button
               size="icon"
               variant="ghost"
+              onClick={() => onToggleStatus(app.id, isActive ? "inactive" : "active")}
+              title={isActive ? "Deactivate" : "Activate"}
+              data-testid={`button-toggle-app-${app.id}`}
+            >
+              {isActive ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
               onClick={() => onDelete(app.id)}
+              title="Delete"
               data-testid={`button-delete-app-${app.id}`}
             >
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         </div>
+
+        <p className="text-sm text-muted-foreground line-clamp-2" data-testid={`text-app-description-${app.id}`}>
+          {app.description}
+        </p>
+
+        <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
+          {app.apiEndpoint && (
+            <div className="flex items-center gap-1">
+              <Globe className="h-3.5 w-3.5" />
+              <span className="truncate max-w-[180px]">{app.apiEndpoint}</span>
+            </div>
+          )}
+          {app.webhookUrl && (
+            <div className="flex items-center gap-1">
+              <Webhook className="h-3.5 w-3.5" />
+              <span>Webhook</span>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-3 flex items-center gap-2 flex-wrap">
+          {app.syncSignals && (
+            <Badge variant="outline" className="text-xs font-normal">
+              <TrendingUp className="mr-1 h-3 w-3" />Signals
+            </Badge>
+          )}
+        </div>
+
+        <ApiKeyDisplay app={app} />
+
+        {app.lastSyncAt && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Last synced {formatDistanceToNow(new Date(app.lastSyncAt), { addSuffix: true })}
+          </p>
+        )}
       </CardContent>
     </Card>
   );
@@ -529,6 +522,17 @@ export default function ConnectedAppsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/connected-apps"] });
       toast({ title: "App disconnected" });
+    },
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const res = await apiRequest("PATCH", `/api/connected-apps/${id}`, { status });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/connected-apps"] });
+      toast({ title: "App status updated" });
     },
   });
 
@@ -624,6 +628,7 @@ export default function ConnectedAppsPage() {
               key={app.id}
               app={app}
               onDelete={(id) => deleteMutation.mutate(id)}
+              onToggleStatus={(id, status) => toggleMutation.mutate({ id, status })}
               onEdit={(app) => setEditingApp(app)}
             />
           ))}
