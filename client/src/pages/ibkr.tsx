@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +44,45 @@ import { EmptyState } from "@/components/empty-state";
 import type { ElementType } from "react";
 
 const PAGE_SIZE = 10;
+
+function useDragScroll() {
+  const ref = useRef<HTMLDivElement>(null);
+  const state = useRef({ isDown: false, startX: 0, scrollLeft: 0 });
+
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    const el = ref.current;
+    if (!el) return;
+    state.current = { isDown: true, startX: e.pageX - el.offsetLeft, scrollLeft: el.scrollLeft };
+    el.style.cursor = "grabbing";
+    el.style.userSelect = "none";
+  }, []);
+
+  const onMouseLeave = useCallback(() => {
+    state.current.isDown = false;
+    if (ref.current) {
+      ref.current.style.cursor = "grab";
+      ref.current.style.userSelect = "";
+    }
+  }, []);
+
+  const onMouseUp = useCallback(() => {
+    state.current.isDown = false;
+    if (ref.current) {
+      ref.current.style.cursor = "grab";
+      ref.current.style.userSelect = "";
+    }
+  }, []);
+
+  const onMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!state.current.isDown || !ref.current) return;
+    e.preventDefault();
+    const x = e.pageX - ref.current.offsetLeft;
+    const walk = (x - state.current.startX) * 1.5;
+    ref.current.scrollLeft = state.current.scrollLeft - walk;
+  }, []);
+
+  return { ref, onMouseDown, onMouseLeave, onMouseUp, onMouseMove };
+}
 
 function Pagination({ currentPage, totalPages, onPageChange, totalItems, label }: {
   currentPage: number;
@@ -162,6 +201,8 @@ function SummaryCards({ orders, positions }: { orders: IbkrOrder[]; positions: I
 }
 
 function OrdersTable({ orders, showSource, page, onPageChange }: { orders: IbkrOrder[]; showSource: boolean; page: number; onPageChange: (p: number) => void }) {
+  const drag = useDragScroll();
+
   if (orders.length === 0) {
     return (
       <EmptyState
@@ -178,7 +219,14 @@ function OrdersTable({ orders, showSource, page, onPageChange }: { orders: IbkrO
 
   return (
     <div>
-      <div className="rounded-lg border overflow-hidden">
+      <div
+        ref={drag.ref}
+        className="rounded-lg border overflow-x-auto cursor-grab"
+        onMouseDown={drag.onMouseDown}
+        onMouseLeave={drag.onMouseLeave}
+        onMouseUp={drag.onMouseUp}
+        onMouseMove={drag.onMouseMove}
+      >
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50">
@@ -228,6 +276,8 @@ function OrdersTable({ orders, showSource, page, onPageChange }: { orders: IbkrO
 }
 
 function PositionsTable({ positions, showSource, page, onPageChange }: { positions: IbkrPosition[]; showSource: boolean; page: number; onPageChange: (p: number) => void }) {
+  const drag = useDragScroll();
+
   if (positions.length === 0) {
     return (
       <EmptyState
@@ -244,7 +294,14 @@ function PositionsTable({ positions, showSource, page, onPageChange }: { positio
 
   return (
     <div>
-      <div className="rounded-lg border overflow-hidden">
+      <div
+        ref={drag.ref}
+        className="rounded-lg border overflow-x-auto cursor-grab"
+        onMouseDown={drag.onMouseDown}
+        onMouseLeave={drag.onMouseLeave}
+        onMouseUp={drag.onMouseUp}
+        onMouseMove={drag.onMouseMove}
+      >
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50">
