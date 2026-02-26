@@ -190,7 +190,7 @@ function CreateAppDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
                 name="discordWebhookLetf"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>LETF Webhook URL</FormLabel>
+                    <FormLabel>Leveraged ETF Webhook URL</FormLabel>
                     <FormControl>
                       <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-discord-letf" />
                     </FormControl>
@@ -399,7 +399,7 @@ function EditAppDialog({ app, open, onOpenChange }: { app: ConnectedApp; open: b
                 name="discordWebhookLetf"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>LETF Webhook URL</FormLabel>
+                    <FormLabel>Leveraged ETF Webhook URL</FormLabel>
                     <FormControl>
                       <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-edit-discord-letf" />
                     </FormControl>
@@ -638,7 +638,7 @@ function AppCard({ app, onDelete, onToggleStatus, onEdit }: {
               <Badge variant="secondary" className="text-[10px] font-normal">Options</Badge>
             )}
             {hasLetfWebhook && (
-              <Badge variant="secondary" className="text-[10px] font-normal">LETF</Badge>
+              <Badge variant="secondary" className="text-[10px] font-normal">Leveraged ETF</Badge>
             )}
           </div>
         )}
