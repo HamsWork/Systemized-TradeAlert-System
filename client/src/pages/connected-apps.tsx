@@ -21,7 +21,6 @@ import {
   Webhook,
   TrendingUp,
   Power,
-  PowerOff,
   Key,
   Copy,
   RefreshCw,
@@ -309,7 +308,24 @@ function EditAppDialog({ app, open, onOpenChange }: { app: ConnectedApp; open: b
               />
             </div>
             <div className="space-y-3 rounded-lg border p-3">
-              <p className="text-sm font-medium">Sync Settings</p>
+              <p className="text-sm font-medium">App Controls</p>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm">
+                  <Power className="h-4 w-4 text-muted-foreground" />
+                  <span>Active</span>
+                </div>
+                <FormField
+                  control={form.control}
+                  name="status"
+                  render={({ field }) => (
+                    <Switch
+                      checked={field.value === "active"}
+                      onCheckedChange={(checked) => field.onChange(checked ? "active" : "inactive")}
+                      data-testid="switch-edit-app-status"
+                    />
+                  )}
+                />
+              </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm">
                   <TrendingUp className="h-4 w-4 text-muted-foreground" />
@@ -409,10 +425,9 @@ function ApiKeyDisplay({ app }: { app: ConnectedApp }) {
   );
 }
 
-function AppCard({ app, onDelete, onToggleStatus, onEdit }: {
+function AppCard({ app, onDelete, onEdit }: {
   app: ConnectedApp;
   onDelete: (id: string) => void;
-  onToggleStatus: (id: string, status: string) => void;
   onEdit: (app: ConnectedApp) => void;
 }) {
   const isActive = app.status === "active";
@@ -487,15 +502,6 @@ function AppCard({ app, onDelete, onToggleStatus, onEdit }: {
             <Button
               size="icon"
               variant="ghost"
-              onClick={() => onToggleStatus(app.id, isActive ? "inactive" : "active")}
-              title={isActive ? "Deactivate" : "Activate"}
-              data-testid={`button-toggle-app-${app.id}`}
-            >
-              {isActive ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
               onClick={() => onDelete(app.id)}
               data-testid={`button-delete-app-${app.id}`}
             >
@@ -523,17 +529,6 @@ export default function ConnectedAppsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/connected-apps"] });
       toast({ title: "App disconnected" });
-    },
-  });
-
-  const toggleMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const res = await apiRequest("PATCH", `/api/connected-apps/${id}`, { status });
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/connected-apps"] });
-      toast({ title: "App status updated" });
     },
   });
 
@@ -629,7 +624,6 @@ export default function ConnectedAppsPage() {
               key={app.id}
               app={app}
               onDelete={(id) => deleteMutation.mutate(id)}
-              onToggleStatus={(id, status) => toggleMutation.mutate({ id, status })}
               onEdit={(app) => setEditingApp(app)}
             />
           ))}
