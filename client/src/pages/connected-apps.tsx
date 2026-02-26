@@ -50,8 +50,11 @@ function CreateAppDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
       discordWebhookShares: "",
       discordWebhookOptions: "",
       discordWebhookLetf: "",
-      executeIbkrTrades: false,
       sendDiscordMessages: false,
+      executeIbkrTrades: false,
+      ibkrClientId: "",
+      ibkrHost: "",
+      ibkrPort: "",
     },
   });
 
@@ -143,16 +146,25 @@ function CreateAppDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
               </p>
             </div>
             <div className="space-y-3 rounded-lg border p-3">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <SiDiscord className="h-4 w-4 text-indigo-500" />
-                Discord Webhooks
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <SiDiscord className="h-4 w-4 text-indigo-500" />
+                  Discord Settings
+                </div>
+                <FormField
+                  control={form.control}
+                  name="sendDiscordMessages"
+                  render={({ field }) => (
+                    <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-send-discord" />
+                  )}
+                />
               </div>
               <FormField
                 control={form.control}
                 name="discordWebhookShares"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Shares</FormLabel>
+                    <FormLabel>Shares Webhook URL</FormLabel>
                     <FormControl>
                       <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-discord-shares" />
                     </FormControl>
@@ -165,7 +177,7 @@ function CreateAppDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
                 name="discordWebhookOptions"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Options</FormLabel>
+                    <FormLabel>Options Webhook URL</FormLabel>
                     <FormControl>
                       <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-discord-options" />
                     </FormControl>
@@ -178,7 +190,7 @@ function CreateAppDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
                 name="discordWebhookLetf"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>LETF</FormLabel>
+                    <FormLabel>LETF Webhook URL</FormLabel>
                     <FormControl>
                       <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-discord-letf" />
                     </FormControl>
@@ -188,11 +200,10 @@ function CreateAppDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
               />
             </div>
             <div className="space-y-3 rounded-lg border p-3">
-              <p className="text-sm font-medium">Execution Settings</p>
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm">
+                <div className="flex items-center gap-2 text-sm font-medium">
                   <Landmark className="h-4 w-4 text-purple-500" />
-                  <span>Execute IBKR Trades</span>
+                  IBKR Settings
                 </div>
                 <FormField
                   control={form.control}
@@ -202,16 +213,44 @@ function CreateAppDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
                   )}
                 />
               </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm">
-                  <MessageSquare className="h-4 w-4 text-indigo-500" />
-                  <span>Send Discord Messages</span>
-                </div>
+              <FormField
+                control={form.control}
+                name="ibkrClientId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Client ID</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g., 1" {...field} value={field.value ?? ""} data-testid="input-ibkr-client-id" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-3">
                 <FormField
                   control={form.control}
-                  name="sendDiscordMessages"
+                  name="ibkrHost"
                   render={({ field }) => (
-                    <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-send-discord" />
+                    <FormItem>
+                      <FormLabel>Host IP</FormLabel>
+                      <FormControl>
+                        <Input placeholder="127.0.0.1" {...field} value={field.value ?? ""} data-testid="input-ibkr-host" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="ibkrPort"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Port</FormLabel>
+                      <FormControl>
+                        <Input placeholder="7497" {...field} value={field.value ?? ""} data-testid="input-ibkr-port" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
                   )}
                 />
               </div>
@@ -239,8 +278,11 @@ function EditAppDialog({ app, open, onOpenChange }: { app: ConnectedApp; open: b
       discordWebhookShares: app.discordWebhookShares ?? "",
       discordWebhookOptions: app.discordWebhookOptions ?? "",
       discordWebhookLetf: app.discordWebhookLetf ?? "",
-      executeIbkrTrades: app.executeIbkrTrades,
       sendDiscordMessages: app.sendDiscordMessages,
+      executeIbkrTrades: app.executeIbkrTrades,
+      ibkrClientId: app.ibkrClientId ?? "",
+      ibkrHost: app.ibkrHost ?? "",
+      ibkrPort: app.ibkrPort ?? "",
     },
   });
 
@@ -313,16 +355,25 @@ function EditAppDialog({ app, open, onOpenChange }: { app: ConnectedApp; open: b
               )}
             />
             <div className="space-y-3 rounded-lg border p-3">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <SiDiscord className="h-4 w-4 text-indigo-500" />
-                Discord Webhooks
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <SiDiscord className="h-4 w-4 text-indigo-500" />
+                  Discord Settings
+                </div>
+                <FormField
+                  control={form.control}
+                  name="sendDiscordMessages"
+                  render={({ field }) => (
+                    <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-edit-send-discord" />
+                  )}
+                />
               </div>
               <FormField
                 control={form.control}
                 name="discordWebhookShares"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Shares</FormLabel>
+                    <FormLabel>Shares Webhook URL</FormLabel>
                     <FormControl>
                       <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-edit-discord-shares" />
                     </FormControl>
@@ -335,7 +386,7 @@ function EditAppDialog({ app, open, onOpenChange }: { app: ConnectedApp; open: b
                 name="discordWebhookOptions"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Options</FormLabel>
+                    <FormLabel>Options Webhook URL</FormLabel>
                     <FormControl>
                       <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-edit-discord-options" />
                     </FormControl>
@@ -348,7 +399,7 @@ function EditAppDialog({ app, open, onOpenChange }: { app: ConnectedApp; open: b
                 name="discordWebhookLetf"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>LETF</FormLabel>
+                    <FormLabel>LETF Webhook URL</FormLabel>
                     <FormControl>
                       <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-edit-discord-letf" />
                     </FormControl>
@@ -358,11 +409,10 @@ function EditAppDialog({ app, open, onOpenChange }: { app: ConnectedApp; open: b
               />
             </div>
             <div className="space-y-3 rounded-lg border p-3">
-              <p className="text-sm font-medium">Execution Settings</p>
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm">
+                <div className="flex items-center gap-2 text-sm font-medium">
                   <Landmark className="h-4 w-4 text-purple-500" />
-                  <span>Execute IBKR Trades</span>
+                  IBKR Settings
                 </div>
                 <FormField
                   control={form.control}
@@ -372,16 +422,44 @@ function EditAppDialog({ app, open, onOpenChange }: { app: ConnectedApp; open: b
                   )}
                 />
               </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm">
-                  <MessageSquare className="h-4 w-4 text-indigo-500" />
-                  <span>Send Discord Messages</span>
-                </div>
+              <FormField
+                control={form.control}
+                name="ibkrClientId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Client ID</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g., 1" {...field} value={field.value ?? ""} data-testid="input-edit-ibkr-client-id" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-3">
                 <FormField
                   control={form.control}
-                  name="sendDiscordMessages"
+                  name="ibkrHost"
                   render={({ field }) => (
-                    <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-edit-send-discord" />
+                    <FormItem>
+                      <FormLabel>Host IP</FormLabel>
+                      <FormControl>
+                        <Input placeholder="127.0.0.1" {...field} value={field.value ?? ""} data-testid="input-edit-ibkr-host" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="ibkrPort"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Port</FormLabel>
+                      <FormControl>
+                        <Input placeholder="7497" {...field} value={field.value ?? ""} data-testid="input-edit-ibkr-port" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
                   )}
                 />
               </div>
