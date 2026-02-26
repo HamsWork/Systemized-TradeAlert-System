@@ -1,3 +1,9 @@
+import dotenv from "dotenv";
+
+if (!process.env.REPL_ID) {
+  dotenv.config();
+}
+
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
