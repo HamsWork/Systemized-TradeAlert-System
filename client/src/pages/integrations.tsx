@@ -474,7 +474,7 @@ function IntegrationCard({ integration, onDelete }: { integration: Integration; 
               <p className="text-sm font-medium truncate" data-testid={`text-integration-name-${integration.id}`}>{integration.name}</p>
               <p className="text-xs text-muted-foreground truncate">
                 {isDiscord && config?.channelName}
-                {isIBKR && `Account: ${config?.accountId} (${config?.accountType})`}
+                {isIBKR && `${config?.accountType === "paper" ? "Paper" : "Live"} Account`}
               </p>
             </div>
           </div>
