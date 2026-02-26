@@ -8,10 +8,12 @@ import {
   TrendingUp,
   Eye,
   Zap,
-  AlertTriangle,
 } from "lucide-react";
 import type { ActivityLogEntry } from "@shared/schema";
-import { formatDistanceToNow, format } from "date-fns";
+import { formatRelativeTime } from "@/lib/formatters";
+import { format } from "date-fns";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
 
 function getActivityIcon(type: string) {
   switch (type) {
@@ -67,24 +69,21 @@ export default function ActivityPage() {
 
   return (
     <div className="space-y-6 p-6" data-testid="page-activity">
-      <div>
-        <div className="flex items-center gap-2">
-          <Activity className="h-5 w-5 text-primary" />
-          <h1 className="text-2xl font-bold tracking-tight">Activity</h1>
-        </div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Complete log of system events and actions
-        </p>
-      </div>
+      <PageHeader
+        icon={Activity}
+        title="Activity"
+        description="Complete log of system events and actions"
+        testId="heading-activity"
+      />
 
       {activities.length === 0 ? (
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <Activity className="mb-3 h-12 w-12 text-muted-foreground/40" />
-            <h3 className="text-lg font-medium">No activity yet</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Activity will appear here as you use the system
-            </p>
+          <CardContent className="py-16">
+            <EmptyState
+              icon={Activity}
+              title="No activity yet"
+              description="Activity will appear here as you use the system"
+            />
           </CardContent>
         </Card>
       ) : (
@@ -108,7 +107,7 @@ export default function ActivityPage() {
                   <p className="mt-0.5 text-sm text-muted-foreground">{entry.description}</p>
                   <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
                     <span>
-                      {entry.createdAt ? formatDistanceToNow(new Date(entry.createdAt), { addSuffix: true }) : ""}
+                      {formatRelativeTime(entry.createdAt)}
                     </span>
                     {entry.createdAt && (
                       <>

@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import { registerDashboardRoutes } from "./dashboard";
 import { registerAlertRoutes } from "./alerts";
@@ -8,6 +8,12 @@ import { registerAppRoutes } from "./apps";
 import { registerSettingsRoutes } from "./settings";
 import { registerIntegrationRoutes } from "./integrations";
 import { registerIbkrRoutes } from "./ibkr";
+
+function errorHandler(err: any, _req: Request, res: Response, _next: NextFunction) {
+  const status = err.status || (err.issues ? 400 : 500);
+  const message = err.message || "Internal server error";
+  res.status(status).json({ message });
+}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -21,6 +27,8 @@ export async function registerRoutes(
   registerSettingsRoutes(app);
   registerIntegrationRoutes(app);
   registerIbkrRoutes(app);
+
+  app.use(errorHandler);
 
   return httpServer;
 }

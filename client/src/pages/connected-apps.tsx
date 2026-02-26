@@ -42,6 +42,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { insertConnectedAppSchema, type ConnectedApp, type InsertConnectedApp, type Integration } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
+import { PageHeader } from "@/components/page-header";
 import { Textarea } from "@/components/ui/textarea";
 
 function IbkrAccountSelector({ form, ibkrAccounts, testIdPrefix }: { form: any; ibkrAccounts: Integration[]; testIdPrefix: string }) {
@@ -679,21 +680,18 @@ export default function ConnectedAppsPage() {
 
   return (
     <div className="space-y-6 p-6" data-testid="page-connected-apps">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <div className="flex items-center gap-2">
-            <Puzzle className="h-5 w-5 text-primary" />
-            <h1 className="text-2xl font-bold tracking-tight">Connected Apps</h1>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Manage apps plugged into TradeSync — each app gets an API key to send signals
-          </p>
-        </div>
-        <Button onClick={() => setDialogOpen(true)} data-testid="button-open-connect-app">
-          <Plus className="mr-2 h-4 w-4" />
-          Connect App
-        </Button>
-      </div>
+      <PageHeader
+        icon={Puzzle}
+        title="Connected Apps"
+        description="Manage apps plugged into TradeSync — each app gets an API key to send signals"
+        testId="heading-connected-apps"
+        actions={
+          <Button onClick={() => setDialogOpen(true)} data-testid="button-open-connect-app">
+            <Plus className="mr-2 h-4 w-4" />
+            Connect App
+          </Button>
+        }
+      />
 
       <Card className="border-dashed">
         <CardContent className="p-4">

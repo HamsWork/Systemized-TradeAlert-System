@@ -10,6 +10,15 @@ A modular trading dashboard where plugged-in apps send signals, which trigger IB
 - **Styling**: Tailwind CSS with dark mode support (dark by default)
 - **Environment**: Loads `.env` via dotenv when not running in Replit (checks REPL_ID)
 
+## Code Conventions
+
+- **DRY Rule**: Extract common patterns into shared functions/components. Never duplicate logic across files.
+- **Frontend shared utilities**: `client/src/lib/formatters.ts` (formatCurrency, formatNumber, formatRelativeTime)
+- **Frontend shared components**: `client/src/components/page-header.tsx` (PageHeader), `client/src/components/empty-state.tsx` (EmptyState)
+- **Backend shared utilities**: `server/lib/async-handler.ts` (asyncHandler wrapper for routes), `server/storage/crud-helpers.ts` (createCrudMethods generic CRUD factory)
+- **Error handling**: Central error handler middleware in `server/routes/index.ts`; routes use `asyncHandler` wrapper instead of manual try-catch
+- **Storage CRUD**: Standard CRUD operations use `createCrudMethods` factory; only custom methods are written manually
+
 ## System Flow
 
 Plugged-in apps → Send signals → TradeSync executes IBKR trades + sends Discord notifications based on settings
@@ -49,7 +58,7 @@ Variables support `showWhen` conditional visibility:
 4. **Integrations** (`/integrations`) - Full CRUD for Discord channels and IBKR trading accounts with notification/trading toggles
 5. **Connected Apps** (`/connected-apps`) - Manage plugged-in trading apps with API key management (show/hide, copy, regenerate)
 6. **API Guide** (`/api-guide`) - Interactive API documentation with Massive.com-style layout, live code generation, and query testing
-7. **IBKR Trading** (`/ibkr`) - Dedicated IBKR page with order status, open positions, and order history per connected app
+7. **IBKR** (`/ibkr`) - Dedicated IBKR page with order status, open positions, and order history per connected app
 8. **Settings** (`/settings`) - System controls organized by category (signals, trading, system) with toggle switches and value inputs
 
 ## API Routes
@@ -69,6 +78,13 @@ All routes prefixed with `/api`:
 
 ## Key Files
 
+### Shared Utilities
+- `client/src/lib/formatters.ts` - Shared formatting functions (formatCurrency, formatNumber, formatRelativeTime)
+- `client/src/components/page-header.tsx` - Reusable PageHeader component (icon, title, description, actions)
+- `client/src/components/empty-state.tsx` - Reusable EmptyState component (icon, title, description)
+- `server/lib/async-handler.ts` - Express async route handler wrapper (eliminates manual try-catch)
+- `server/storage/crud-helpers.ts` - Generic CRUD factory (createCrudMethods) for storage layer
+
 ### Shared Schema (split by domain)
 - `shared/schema.ts` - Barrel file re-exporting all domain schemas
 - `shared/schema/users.ts` - Users table, insert schema, types
@@ -85,12 +101,12 @@ All routes prefixed with `/api`:
 - `server/storage.ts` - Barrel file re-exporting storage interface, class, and instance
 - `server/storage/interface.ts` - IStorage interface definition
 - `server/storage/users.ts` - User CRUD methods
-- `server/storage/alerts.ts` - Alert CRUD methods
-- `server/storage/signals.ts` - SignalType + Signal CRUD methods
+- `server/storage/alerts.ts` - Alert CRUD methods (uses createCrudMethods)
+- `server/storage/signals.ts` - SignalType + Signal CRUD methods (uses createCrudMethods)
 - `server/storage/activity.ts` - Activity log methods
-- `server/storage/apps.ts` - ConnectedApp CRUD methods
+- `server/storage/apps.ts` - ConnectedApp CRUD methods (uses createCrudMethods + custom getByApiKey)
 - `server/storage/settings.ts` - SystemSettings methods
-- `server/storage/integrations.ts` - Integration CRUD methods
+- `server/storage/integrations.ts` - Integration CRUD methods (uses createCrudMethods)
 - `server/storage/ibkr.ts` - IBKR orders/positions methods
 - `server/storage/dashboard.ts` - Dashboard stats method
 - `server/storage/index.ts` - DatabaseStorage class composing all domain methods
@@ -105,7 +121,7 @@ All routes prefixed with `/api`:
 - `server/routes/settings.ts` - /api/settings
 - `server/routes/integrations.ts` - /api/integrations CRUD
 - `server/routes/ibkr.ts` - /api/ibkr/orders + /api/ibkr/positions
-- `server/routes/index.ts` - registerRoutes composing all domain route registrars
+- `server/routes/index.ts` - registerRoutes composing all domain route registrars + error handler middleware
 
 ### Other Key Files
 - `server/db.ts` - Database connection with keepAlive and error handling

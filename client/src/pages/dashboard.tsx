@@ -20,6 +20,7 @@ import { SiDiscord } from "react-icons/si";
 import { Link } from "wouter";
 import type { Signal, SignalType, ConnectedApp, ActivityLogEntry, Integration, IbkrPosition, IbkrOrder } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
+import { PageHeader } from "@/components/page-header";
 
 function StatCard({ title, value, subtitle, icon: Icon, accent, href }: {
   title: string;
@@ -383,15 +384,12 @@ export default function Dashboard() {
 
   return (
     <div className="p-6 space-y-6" data-testid="page-dashboard">
-      <div>
-        <div className="flex items-center gap-2">
-          <Zap className="h-5 w-5 text-primary" />
-          <h1 className="text-2xl font-bold tracking-tight" data-testid="heading-dashboard">Dashboard</h1>
-        </div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Signal execution system overview and recent activity
-        </p>
-      </div>
+      <PageHeader
+        icon={Zap}
+        title="Dashboard"
+        description="Signal execution system overview and recent activity"
+        testId="heading-dashboard"
+      />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard

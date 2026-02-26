@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { SystemSetting } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
+import { PageHeader } from "@/components/page-header";
 
 function SettingsToggle({ setting, onToggle, isPending }: {
   setting: SystemSetting;
@@ -142,15 +143,12 @@ export default function SettingsPage() {
 
   return (
     <div className="p-6 space-y-6" data-testid="page-settings">
-      <div>
-        <div className="flex items-center gap-2">
-          <Settings2 className="h-5 w-5 text-primary" />
-          <h1 className="text-2xl font-bold tracking-tight" data-testid="heading-settings">Settings</h1>
-        </div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Configure system controls, trading parameters, and notification preferences
-        </p>
-      </div>
+      <PageHeader
+        icon={Settings2}
+        title="Settings"
+        description="Configure system controls, trading parameters, and notification preferences"
+        testId="heading-settings"
+      />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <SettingsPanel

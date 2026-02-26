@@ -1,13 +1,10 @@
 import type { Express } from "express";
 import { storage } from "../storage";
+import { asyncHandler } from "../lib/async-handler";
 
 export function registerDashboardRoutes(app: Express) {
-  app.get("/api/dashboard/stats", async (_req, res) => {
-    try {
-      const stats = await storage.getDashboardStats();
-      res.json(stats);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch dashboard stats" });
-    }
-  });
+  app.get("/api/dashboard/stats", asyncHandler(async (_req, res) => {
+    const stats = await storage.getDashboardStats();
+    res.json(stats);
+  }));
 }

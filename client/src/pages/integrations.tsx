@@ -48,6 +48,7 @@ import {
 } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import { useForm } from "react-hook-form";
+import { PageHeader } from "@/components/page-header";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { insertIntegrationSchema, type Integration, type InsertIntegration, type ConnectedApp } from "@shared/schema";
@@ -993,27 +994,24 @@ export default function IntegrationsPage() {
 
   return (
     <div className="space-y-6 p-6" data-testid="page-integrations">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <div className="flex items-center gap-2">
-            <Radio className="h-5 w-5 text-primary" />
-            <h1 className="text-2xl font-bold tracking-tight">Integrations</h1>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Connect Discord channels and IBKR trading accounts to TradeSync
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setDiscordDialogOpen(true)} data-testid="button-add-discord">
-            <SiDiscord className="mr-2 h-4 w-4 text-indigo-500" />
-            Add Discord
-          </Button>
-          <Button variant="outline" onClick={() => setIbkrDialogOpen(true)} data-testid="button-add-ibkr">
-            <Landmark className="mr-2 h-4 w-4 text-purple-500" />
-            Add IBKR
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        icon={Radio}
+        title="Integrations"
+        description="Connect Discord channels and IBKR trading accounts to TradeSync"
+        testId="heading-integrations"
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setDiscordDialogOpen(true)} data-testid="button-add-discord">
+              <SiDiscord className="mr-2 h-4 w-4 text-indigo-500" />
+              Add Discord
+            </Button>
+            <Button variant="outline" onClick={() => setIbkrDialogOpen(true)} data-testid="button-add-ibkr">
+              <Landmark className="mr-2 h-4 w-4 text-purple-500" />
+              Add IBKR
+            </Button>
+          </>
+        }
+      />
 
       <div className="grid grid-cols-3 gap-3">
         <Card className="border-indigo-500/20 bg-indigo-500/5">

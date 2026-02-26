@@ -45,6 +45,8 @@ import {
 import { type Signal, type SignalType, type InsertSignal } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
 
 function renderTemplatePreview(template: string, data: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => data[key] || "");
@@ -565,21 +567,18 @@ export default function SignalsPage() {
 
   return (
     <div className="space-y-6 p-6" data-testid="page-signals">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-primary" />
-            <h1 className="text-2xl font-bold tracking-tight">Signals</h1>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Track and manage your trading signals
-          </p>
-        </div>
-        <Button onClick={() => setDialogOpen(true)} data-testid="button-open-create-signal">
-          <Plus className="mr-2 h-4 w-4" />
-          New Signal
-        </Button>
-      </div>
+      <PageHeader
+        icon={TrendingUp}
+        title="Signals"
+        description="Track and manage your trading signals"
+        testId="heading-signals"
+        actions={
+          <Button onClick={() => setDialogOpen(true)} data-testid="button-open-create-signal">
+            <Plus className="mr-2 h-4 w-4" />
+            New Signal
+          </Button>
+        }
+      />
 
       <div className="flex items-center gap-2 flex-wrap">
         {["all", "active", "closed", "expired"].map((f) => (

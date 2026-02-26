@@ -35,17 +35,10 @@ import {
   Filter,
 } from "lucide-react";
 import type { IbkrOrder, IbkrPosition, Integration, ConnectedApp } from "@shared/schema";
-import { formatDistanceToNow } from "date-fns";
-
-function formatCurrency(value: number | null | undefined): string {
-  if (value == null) return "-";
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
-}
-
-function formatNumber(value: number | null | undefined): string {
-  if (value == null) return "-";
-  return new Intl.NumberFormat("en-US").format(value);
-}
+import { formatCurrency, formatNumber, formatRelativeTime } from "@/lib/formatters";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
+import type { ElementType } from "react";
 
 function OrderStatusBadge({ status }: { status: string }) {
   const variants: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof CheckCircle2; label: string }> = {
@@ -94,9 +87,8 @@ function SummaryCards({ orders, positions }: { orders: IbkrOrder[]; positions: I
   const pendingOrders = orders.filter(o => o.status === "pending" || o.status === "submitted");
   const totalMarketValue = positions.reduce((sum, p) => sum + (p.marketValue || 0), 0);
   const totalUnrealizedPnl = positions.reduce((sum, p) => sum + (p.unrealizedPnl || 0), 0);
-  const totalRealizedPnl = filledOrders.reduce((sum, o) => sum + (o.commission || 0), 0);
 
-  const cards = [
+  const cards: { title: string; value: string; icon: ElementType; accent: string }[] = [
     { title: "Open Positions", value: positions.length.toString(), icon: Layers, accent: "text-blue-500" },
     { title: "Market Value", value: formatCurrency(totalMarketValue), icon: BarChart3, accent: "text-purple-500" },
     { title: "Unrealized P&L", value: formatCurrency(totalUnrealizedPnl), icon: totalUnrealizedPnl >= 0 ? TrendingUp : TrendingDown, accent: totalUnrealizedPnl >= 0 ? "text-emerald-500" : "text-red-500" },
@@ -123,11 +115,11 @@ function SummaryCards({ orders, positions }: { orders: IbkrOrder[]; positions: I
 function OrdersTable({ orders, showSource }: { orders: IbkrOrder[]; showSource: boolean }) {
   if (orders.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-        <History className="h-10 w-10 mb-3 opacity-50" />
-        <p className="text-sm font-medium">No orders found</p>
-        <p className="text-xs mt-1">Orders will appear here when trades are executed through IBKR</p>
-      </div>
+      <EmptyState
+        icon={History}
+        title="No orders found"
+        description="Orders will appear here when trades are executed through IBKR"
+      />
     );
   }
 
@@ -169,7 +161,7 @@ function OrdersTable({ orders, showSource }: { orders: IbkrOrder[]; showSource: 
                 </TableCell>
               )}
               <TableCell className="text-xs text-muted-foreground">
-                {order.submittedAt ? formatDistanceToNow(new Date(order.submittedAt), { addSuffix: true }) : "-"}
+                {formatRelativeTime(order.submittedAt)}
               </TableCell>
             </TableRow>
           ))}
@@ -182,11 +174,11 @@ function OrdersTable({ orders, showSource }: { orders: IbkrOrder[]; showSource: 
 function PositionsTable({ positions, showSource }: { positions: IbkrPosition[]; showSource: boolean }) {
   if (positions.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-        <Layers className="h-10 w-10 mb-3 opacity-50" />
-        <p className="text-sm font-medium">No open positions</p>
-        <p className="text-xs mt-1">Active positions from IBKR accounts will appear here</p>
-      </div>
+      <EmptyState
+        icon={Layers}
+        title="No open positions"
+        description="Active positions from IBKR accounts will appear here"
+      />
     );
   }
 
@@ -235,7 +227,7 @@ function PositionsTable({ positions, showSource }: { positions: IbkrPosition[]; 
                   </TableCell>
                 )}
                 <TableCell className="text-xs text-muted-foreground">
-                  {pos.lastUpdated ? formatDistanceToNow(new Date(pos.lastUpdated), { addSuffix: true }) : "-"}
+                  {formatRelativeTime(pos.lastUpdated)}
                 </TableCell>
               </TableRow>
             );
@@ -307,37 +299,32 @@ export default function IbkrPage() {
 
   return (
     <div className="p-6 space-y-6" data-testid="page-ibkr">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-500/10">
-            <Landmark className="h-5 w-5 text-purple-500" />
+      <PageHeader
+        icon={Landmark}
+        title="IBKR"
+        description="Orders and positions, synchronized in real time with IBKR"
+        accent="text-purple-500"
+        testId="heading-ibkr"
+        actions={
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Filter className="h-3.5 w-3.5" />
+              <span>Filter by:</span>
+            </div>
+            <Select value={appFilter} onValueChange={setAppFilter}>
+              <SelectTrigger className="w-[180px] h-9 text-sm" data-testid="select-app-filter">
+                <SelectValue placeholder="All Apps" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Apps</SelectItem>
+                {sourceApps.map(app => (
+                  <SelectItem key={app} value={app}>{app}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight" data-testid="heading-ibkr">IBKR</h1>
-            <p className="text-sm text-muted-foreground">
-              Orders and positions, synchronized in real time with IBKR
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Filter className="h-3.5 w-3.5" />
-            <span>Filter by:</span>
-          </div>
-          <Select value={appFilter} onValueChange={setAppFilter}>
-            <SelectTrigger className="w-[180px] h-9 text-sm" data-testid="select-app-filter">
-              <SelectValue placeholder="All Apps" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Apps</SelectItem>
-              {sourceApps.map(app => (
-                <SelectItem key={app} value={app}>{app}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+        }
+      />
 
       <SummaryCards orders={filteredOrders} positions={filteredPositions} />
 
