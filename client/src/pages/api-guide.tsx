@@ -976,7 +976,8 @@ export default function ApiGuidePage() {
   }
 
   const apps = appsQuery.data ?? [];
-  const activeApp = apps.find(a => a.status === "active");
+  const builtInApp = apps.find(a => a.isBuiltIn);
+  const activeApp = builtInApp || apps.find(a => a.status === "active");
 
   const currentSection = activeSection === "auth"
     ? null

@@ -21,11 +21,13 @@ export async function seedDatabase() {
   const needsAppsSeed = existingApps.length === 0;
   const needsSignalTypesSeed = existingSignalTypes.length === 0;
   const needsIbkrSeed = existingIbkrOrders.length === 0;
+  const hasBuiltInApp = existingApps.some(a => a.slug === "tradesync-api");
 
-  if (!needsAlertSeed && !needsSettingsSeed && !needsIntegrationsSeed && !needsAppsSeed && !needsSignalTypesSeed && !needsIbkrSeed) {
+  if (!needsAlertSeed && !needsSettingsSeed && !needsIntegrationsSeed && !needsAppsSeed && !needsSignalTypesSeed && !needsIbkrSeed && hasBuiltInApp) {
     return;
   }
 
+  if (!hasBuiltInApp) await seedBuiltInApp();
   if (needsSignalTypesSeed) await seedSignalTypes();
   if (needsSettingsSeed) await seedSettings();
   if (needsIntegrationsSeed) await seedIntegrations();
@@ -189,6 +191,19 @@ async function seedSignals() {
       sourceAppName: "Situ Trader",
     },
   ]);
+}
+
+async function seedBuiltInApp() {
+  await db.insert(connectedApps).values({
+    name: "TradeSync API",
+    slug: "tradesync-api",
+    description: "Built-in TradeSync API app for testing and manual signal ingestion",
+    status: "active",
+    isBuiltIn: true,
+    apiKey: generateApiKey(),
+    syncAlerts: true,
+    syncSignals: true,
+  });
 }
 
 async function seedApps() {

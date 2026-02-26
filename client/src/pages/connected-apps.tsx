@@ -552,6 +552,11 @@ function AppCard({ app, onDelete, onToggleStatus, onEdit }: {
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            {app.isBuiltIn && (
+              <Badge variant="outline" className="text-xs mr-1 h-7 flex items-center border-primary/30 text-primary/80" data-testid={`badge-built-in-${app.id}`}>
+                Built-in
+              </Badge>
+            )}
             <Badge variant={isActive ? "default" : "secondary"} className="text-xs mr-1 h-7 flex items-center" data-testid={`badge-app-status-${app.id}`}>
               {isActive ? (
                 <><span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block" />Active</>
@@ -568,24 +573,28 @@ function AppCard({ app, onDelete, onToggleStatus, onEdit }: {
             >
               <Settings2 className="h-4 w-4" />
             </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => onToggleStatus(app.id, isActive ? "inactive" : "active")}
-              title={isActive ? "Deactivate" : "Activate"}
-              data-testid={`button-toggle-app-${app.id}`}
-            >
-              {isActive ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => onDelete(app.id)}
-              title="Delete"
-              data-testid={`button-delete-app-${app.id}`}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            {!app.isBuiltIn && (
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => onToggleStatus(app.id, isActive ? "inactive" : "active")}
+                title={isActive ? "Deactivate" : "Activate"}
+                data-testid={`button-toggle-app-${app.id}`}
+              >
+                {isActive ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
+              </Button>
+            )}
+            {!app.isBuiltIn && (
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => onDelete(app.id)}
+                title="Delete"
+                data-testid={`button-delete-app-${app.id}`}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </div>
 

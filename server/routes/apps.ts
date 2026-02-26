@@ -40,6 +40,19 @@ export function registerAppRoutes(app: Express) {
   }));
 
   app.patch("/api/connected-apps/:id", asyncHandler(async (req, res) => {
+    const existing = await storage.getConnectedApp(req.params.id);
+    if (!existing) return res.status(404).json({ message: "App not found" });
+
+    if (existing.isBuiltIn) {
+      const { status, ...rest } = req.body;
+      if (status && status !== "active") {
+        return res.status(403).json({ message: "Cannot deactivate the built-in TradeSync API app" });
+      }
+      const parsed = partialConnectedAppSchema.parse(rest);
+      const updated = await storage.updateConnectedApp(req.params.id, parsed);
+      return res.json(updated);
+    }
+
     const parsed = partialConnectedAppSchema.parse(req.body);
     const updated = await storage.updateConnectedApp(req.params.id, parsed);
     if (!updated) return res.status(404).json({ message: "App not found" });
@@ -54,6 +67,13 @@ export function registerAppRoutes(app: Express) {
   }));
 
   app.delete("/api/connected-apps/:id", asyncHandler(async (req, res) => {
+    const existing = await storage.getConnectedApp(req.params.id);
+    if (!existing) return res.status(404).json({ message: "App not found" });
+
+    if (existing.isBuiltIn) {
+      return res.status(403).json({ message: "Cannot delete the built-in TradeSync API app" });
+    }
+
     const deleted = await storage.deleteConnectedApp(req.params.id);
     if (!deleted) return res.status(404).json({ message: "App not found" });
     res.json({ success: true });

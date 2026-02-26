@@ -3,12 +3,15 @@ import { pgTable, text, varchar, boolean, timestamp } from "drizzle-orm/pg-core"
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+export const TRADESYNC_APP_SLUG = "tradesync-api";
+
 export const connectedApps = pgTable("connected_apps", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   description: text("description").notNull(),
   status: text("status").notNull().default("active"),
+  isBuiltIn: boolean("is_built_in").notNull().default(false),
   apiEndpoint: text("api_endpoint"),
   apiKey: text("api_key"),
   webhookUrl: text("webhook_url"),
