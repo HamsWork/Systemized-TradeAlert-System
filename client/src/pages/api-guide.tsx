@@ -71,6 +71,7 @@ interface ParamDef {
   required: boolean;
   description: string;
   enumValues?: string[];
+  explanation?: string;
 }
 
 interface EndpointDef {
@@ -328,6 +329,11 @@ function EndpointInteractive({ endpoint, baseUrl, authKey }: { endpoint: Endpoin
                       <Info className="h-3 w-3 text-muted-foreground/50 mt-0.5 shrink-0" />
                       <p className="text-[11px] text-muted-foreground/60 leading-relaxed">{param.description}</p>
                     </div>
+                    {param.explanation && (
+                      <div className="mt-3 pt-3 border-t border-zinc-700/15">
+                        <pre className="text-[11px] text-muted-foreground/70 leading-relaxed whitespace-pre-wrap font-sans">{param.explanation}</pre>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -526,7 +532,46 @@ const sections: SectionDef[] = [
           { name: "expiration", type: "string", required: false, description: "Option expiration date (e.g., '2026-03-20'). Required for Options." },
           { name: "strike", type: "string", required: false, description: "Option strike price (e.g., '190'). Required for Options." },
           { name: "entryPrice", type: "string", required: false, description: "Entry price for the trade (e.g., '189.50')." },
-          { name: "tradePlan", type: "json", required: false, description: "Trade plan with target levels, stop losses, and raise stop settings." },
+          { name: "tradePlan", type: "json", required: false, description: "Trade plan with target levels, stop losses, and raise stop settings.", explanation: `The tradePlan object defines your exit strategy. All fields are optional — include only what applies to your trade.
+
+Structure:
+  targetLevels    Take-profit price targets
+    tp1           First target price (e.g. "195.00")
+    tp2           Second target price (e.g. "200.00")
+    tp3           Third target price (e.g. "205.00")
+
+  stopLoss        Stop-loss price levels
+    sl1           Primary stop loss (e.g. "182.00")
+    sl2           Secondary stop loss (e.g. "178.00")
+    sl3           Tertiary stop loss (e.g. "175.00")
+
+  raiseStopLevel  How to adjust the stop after hitting targets
+    method        Strategy name — one of:
+                    "Move to Entry at TP1"
+                    "Trail by %"
+                    "Trail by $"
+                    "Custom"
+    value         Value for the method (e.g. "189.50" or "2.5")
+
+  notes           Free-text trade thesis or notes (e.g. "Breakout above 188 resistance")
+
+Full example:
+{
+  "targetLevels": {
+    "tp1": "195.00",
+    "tp2": "200.00",
+    "tp3": "205.00"
+  },
+  "stopLoss": {
+    "sl1": "182.00",
+    "sl2": "178.00"
+  },
+  "raiseStopLevel": {
+    "method": "Move to Entry at TP1",
+    "value": "189.50"
+  },
+  "notes": "Breakout above 188 resistance with volume confirmation"
+}` },
         ],
         responseExample: `{
   "success": true,
