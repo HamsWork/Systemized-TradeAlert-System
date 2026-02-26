@@ -14,6 +14,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Puzzle,
   Plus,
   Trash2,
@@ -32,13 +39,112 @@ import { SiDiscord } from "react-icons/si";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { insertConnectedAppSchema, type ConnectedApp, type InsertConnectedApp } from "@shared/schema";
+import { insertConnectedAppSchema, type ConnectedApp, type InsertConnectedApp, type Integration } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { Textarea } from "@/components/ui/textarea";
 
+function IbkrAccountSelector({ form, ibkrAccounts, testIdPrefix }: { form: any; ibkrAccounts: Integration[]; testIdPrefix: string }) {
+  const [selectedAccountId, setSelectedAccountId] = useState<string>("");
+
+  const handleAccountSelect = (accountId: string) => {
+    setSelectedAccountId(accountId);
+    if (accountId === "manual") {
+      form.setValue("ibkrClientId", "");
+      form.setValue("ibkrHost", "127.0.0.1");
+      form.setValue("ibkrPort", "7497");
+    } else {
+      const account = ibkrAccounts.find(a => a.id === accountId);
+      if (account) {
+        const config = account.config as Record<string, any> | null;
+        form.setValue("ibkrClientId", String(config?.clientId ?? ""));
+        form.setValue("ibkrHost", config?.host ?? "");
+        form.setValue("ibkrPort", String(config?.port ?? ""));
+      }
+    }
+  };
+
+  return (
+    <>
+      <div>
+        <FormLabel>IBKR Account</FormLabel>
+        <Select value={selectedAccountId} onValueChange={handleAccountSelect}>
+          <SelectTrigger className="mt-1" data-testid={`${testIdPrefix}-select-ibkr-account`}>
+            <SelectValue placeholder="Select an IBKR account..." />
+          </SelectTrigger>
+          <SelectContent>
+            {ibkrAccounts.map(account => {
+              const cfg = account.config as Record<string, any> | null;
+              return (
+                <SelectItem key={account.id} value={account.id}>
+                  {account.name} ({cfg?.host}:{cfg?.port})
+                </SelectItem>
+              );
+            })}
+            <SelectItem value="manual">Manual Configuration</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {selectedAccountId === "manual" && (
+        <>
+          <FormField
+            control={form.control}
+            name="ibkrClientId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Client ID</FormLabel>
+                <FormControl>
+                  <Input placeholder="e.g., 1" {...field} value={field.value ?? ""} data-testid={`${testIdPrefix}-input-ibkr-client-id`} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <FormField
+              control={form.control}
+              name="ibkrHost"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Host IP</FormLabel>
+                  <FormControl>
+                    <Input placeholder="127.0.0.1" {...field} value={field.value ?? ""} data-testid={`${testIdPrefix}-input-ibkr-host`} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="ibkrPort"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Port</FormLabel>
+                  <FormControl>
+                    <Input placeholder="7497" {...field} value={field.value ?? ""} data-testid={`${testIdPrefix}-input-ibkr-port`} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </>
+      )}
+      {selectedAccountId && selectedAccountId !== "manual" && (
+        <div className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1.5 flex items-center gap-3">
+          <span><span className="font-medium">Host:</span> {form.getValues("ibkrHost")}:{form.getValues("ibkrPort")}</span>
+          <span><span className="font-medium">Client:</span> {form.getValues("ibkrClientId")}</span>
+        </div>
+      )}
+    </>
+  );
+}
+
 function CreateAppDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { toast } = useToast();
+
+  const ibkrQuery = useQuery<Integration[]>({ queryKey: ["/api/integrations"] });
+  const ibkrAccounts = (ibkrQuery.data ?? []).filter(i => i.type === "ibkr");
 
   const form = useForm<InsertConnectedApp>({
     resolver: zodResolver(insertConnectedAppSchema),
@@ -213,47 +319,7 @@ function CreateAppDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
                   )}
                 />
               </div>
-              <FormField
-                control={form.control}
-                name="ibkrClientId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Client ID</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., 1" {...field} value={field.value ?? ""} data-testid="input-ibkr-client-id" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="grid grid-cols-2 gap-3">
-                <FormField
-                  control={form.control}
-                  name="ibkrHost"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Host IP</FormLabel>
-                      <FormControl>
-                        <Input placeholder="127.0.0.1" {...field} value={field.value ?? ""} data-testid="input-ibkr-host" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="ibkrPort"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Port</FormLabel>
-                      <FormControl>
-                        <Input placeholder="7497" {...field} value={field.value ?? ""} data-testid="input-ibkr-port" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+              <IbkrAccountSelector form={form} ibkrAccounts={ibkrAccounts} testIdPrefix="create" />
             </div>
             <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-create-app">
               {createMutation.isPending ? "Connecting..." : "Connect App"}
@@ -267,6 +333,9 @@ function CreateAppDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
 
 function EditAppDialog({ app, open, onOpenChange }: { app: ConnectedApp; open: boolean; onOpenChange: (open: boolean) => void }) {
   const { toast } = useToast();
+
+  const ibkrQuery = useQuery<Integration[]>({ queryKey: ["/api/integrations"] });
+  const ibkrAccounts = (ibkrQuery.data ?? []).filter(i => i.type === "ibkr");
 
   const form = useForm<InsertConnectedApp>({
     resolver: zodResolver(insertConnectedAppSchema),
@@ -422,47 +491,7 @@ function EditAppDialog({ app, open, onOpenChange }: { app: ConnectedApp; open: b
                   )}
                 />
               </div>
-              <FormField
-                control={form.control}
-                name="ibkrClientId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Client ID</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., 1" {...field} value={field.value ?? ""} data-testid="input-edit-ibkr-client-id" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="grid grid-cols-2 gap-3">
-                <FormField
-                  control={form.control}
-                  name="ibkrHost"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Host IP</FormLabel>
-                      <FormControl>
-                        <Input placeholder="127.0.0.1" {...field} value={field.value ?? ""} data-testid="input-edit-ibkr-host" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="ibkrPort"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Port</FormLabel>
-                      <FormControl>
-                        <Input placeholder="7497" {...field} value={field.value ?? ""} data-testid="input-edit-ibkr-port" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+              <IbkrAccountSelector form={form} ibkrAccounts={ibkrAccounts} testIdPrefix="edit" />
             </div>
             <Button type="submit" className="w-full" disabled={updateMutation.isPending} data-testid="button-save-app">
               {updateMutation.isPending ? "Saving..." : "Save Changes"}
