@@ -6,6 +6,7 @@ import {
   Activity,
   Zap,
   Puzzle,
+  Radio,
 } from "lucide-react";
 import {
   Sidebar,
@@ -26,6 +27,7 @@ const navItems = [
   { title: "Alerts", url: "/alerts", icon: Bell },
   { title: "Signals", url: "/signals", icon: TrendingUp },
   { title: "Activity", url: "/activity", icon: Activity },
+  { title: "Integrations", url: "/integrations", icon: Radio },
   { title: "Connected Apps", url: "/connected-apps", icon: Puzzle },
 ];
 
