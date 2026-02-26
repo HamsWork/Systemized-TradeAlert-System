@@ -7,6 +7,7 @@ import {
   Zap,
   Puzzle,
   Radio,
+  BookOpen,
 } from "lucide-react";
 import {
   Sidebar,
@@ -29,6 +30,7 @@ const navItems = [
   { title: "Activity", url: "/activity", icon: Activity },
   { title: "Integrations", url: "/integrations", icon: Radio },
   { title: "Connected Apps", url: "/connected-apps", icon: Puzzle },
+  { title: "API Guide", url: "/api-guide", icon: BookOpen },
 ];
 
 export function AppSidebar() {

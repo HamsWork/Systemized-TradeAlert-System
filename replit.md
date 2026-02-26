@@ -40,6 +40,7 @@ Connected apps push signals to TradeSync via `POST /api/ingest/signals` using th
 4. **Activity** (`/activity`) - Complete activity log
 5. **Integrations** (`/integrations`) - Full CRUD for Discord channels and IBKR trading accounts with notification/trading toggles
 6. **Connected Apps** (`/connected-apps`) - Manage plugged-in trading apps with API key management (show/hide, copy, regenerate)
+7. **API Guide** (`/api-guide`) - Full API documentation with interactive signal testing tool
 
 ## API Routes
 
