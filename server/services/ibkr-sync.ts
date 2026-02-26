@@ -2,6 +2,18 @@ import { IbkrClient } from "./ibkr-client";
 import { storage } from "../storage";
 import type { Integration, InsertIbkrOrder, InsertIbkrPosition } from "@shared/schema";
 
+function parseIbkrTimestamp(ts: string): Date | null {
+  if (!ts) return null;
+  const cleaned = ts.replace(/\s+/g, " ").trim();
+  const parsed = new Date(cleaned);
+  if (!isNaN(parsed.getTime())) return parsed;
+  const match = cleaned.match(/^(\d{4})(\d{2})(\d{2})\s*[:-]?\s*(\d{2}):?(\d{2}):?(\d{2})/);
+  if (match) {
+    return new Date(`${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}`);
+  }
+  return null;
+}
+
 const STATUS_MAP: Record<string, string> = {
   "ApiPending": "pending",
   "PendingSubmit": "pending",
@@ -143,6 +155,11 @@ class IbkrSyncManager {
 
     for (const oo of openOrders) {
       const secType = oo.contract.secType || "STK";
+      const existing = await storage.getIbkrOrderByOrderId(String(oo.orderId), integrationId);
+      const completedTime = oo.orderState.completedTime
+        ? parseIbkrTimestamp(oo.orderState.completedTime)
+        : null;
+
       const orderData: InsertIbkrOrder = {
         integrationId,
         orderId: String(oo.orderId),
@@ -162,7 +179,8 @@ class IbkrSyncManager {
         timeInForce: oo.order.tif || "DAY",
         commission: oo.orderState.commission != null && oo.orderState.commission < 1e9
           ? oo.orderState.commission : null,
-        submittedAt: new Date(),
+        submittedAt: existing?.submittedAt ?? new Date(),
+        filledAt: completedTime,
       };
 
       await storage.upsertIbkrOrder(String(oo.orderId), integrationId, orderData);
