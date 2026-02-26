@@ -154,37 +154,37 @@ async function seedSignals() {
   await db.insert(signals).values([
     {
       signalTypeId: entryType.id,
-      data: { ticker: "AAPL", instrument_type: "Options", option_type: "CALL", strike: "190", expiration: "2026-03-20", entry_price: "189.50", stop_loss_1: "182.00", take_profit_1: "195.00", take_profit_2: "200.00", take_profit_3: "205.00", raise_stop_method: "Move to Entry at TP1", trade_plan: "Breakout above 188 resistance. Scale out at each TP. Full exit if daily close below SL.", notes: "Golden cross on daily chart. RSI at 55, room for upside." },
+      data: { ticker: "AAPL", instrument_type: "Options", direction: "Long", strike: "190", expiration: "2026-03-20", entry_price: "189.50", stop_loss_1: "182.00", take_profit_1: "195.00", take_profit_2: "200.00", take_profit_3: "205.00", raise_stop_method: "Move to Entry at TP1", trade_plan: "Breakout above 188 resistance. Scale out at each TP. Full exit if daily close below SL.", notes: "Golden cross on daily chart. RSI at 55, room for upside." },
       status: "active",
       sourceAppName: "Situ Trader",
     },
     {
       signalTypeId: slType.id,
-      data: { ticker: "TSLA", exit_price: "230.00", loss_amount: "950.00", notes: "Bearish divergence on RSI. Social sentiment turned negative." },
+      data: { ticker: "TSLA", direction: "Long", exit_price: "230.00", loss_amount: "950.00", notes: "Bearish divergence on RSI. Social sentiment turned negative." },
       status: "active",
       sourceAppName: "Crowned Trader",
     },
     {
       signalTypeId: entryType.id,
-      data: { ticker: "MSFT", instrument_type: "Shares", entry_price: "415.20", stop_loss_1: "400.00", stop_loss_2: "390.00", take_profit_1: "430.00", take_profit_2: "445.00", take_profit_3: "450.00", raise_stop_method: "Trail by %", raise_stop_value: "3%", trade_plan: "Long shares on strong cloud revenue beat. Trailing stop strategy.", notes: "Strong cloud revenue growth. AI integration driving new revenue." },
+      data: { ticker: "MSFT", instrument_type: "Shares", direction: "Long", entry_price: "415.20", stop_loss_1: "400.00", stop_loss_2: "390.00", take_profit_1: "430.00", take_profit_2: "445.00", take_profit_3: "450.00", raise_stop_method: "Trail by %", raise_stop_value: "3%", trade_plan: "Long shares on strong cloud revenue beat. Trailing stop strategy.", notes: "Strong cloud revenue growth. AI integration driving new revenue." },
       status: "active",
       sourceAppName: "Situ Trader",
     },
     {
       signalTypeId: tpType.id,
-      data: { ticker: "AMD", tp_level: "TP1", exit_price: "175.00", profit_amount: "460.00", notes: "First target hit on AMD position." },
+      data: { ticker: "AMD", direction: "Long", tp_level: "TP1", exit_price: "175.00", profit_amount: "460.00", notes: "First target hit on AMD position." },
       status: "active",
       sourceAppName: "Crowned Trader",
     },
     {
       signalTypeId: entryType.id,
-      data: { ticker: "NVDA", instrument_type: "Options", option_type: "CALL", strike: "900", expiration: "2026-04-17", entry_price: "875.30", stop_loss_1: "850.00", take_profit_1: "920.00", take_profit_2: "950.00", raise_stop_method: "Move to TP1 at TP2", trade_plan: "Momentum play on AI sector strength. Partial exits at each level.", notes: "ML model detected bullish pattern. Momentum aligning." },
+      data: { ticker: "NVDA", instrument_type: "Options", direction: "Long", strike: "900", expiration: "2026-04-17", entry_price: "875.30", stop_loss_1: "850.00", take_profit_1: "920.00", take_profit_2: "950.00", raise_stop_method: "Move to TP1 at TP2", trade_plan: "Momentum play on AI sector strength. Partial exits at each level.", notes: "ML model detected bullish pattern. Momentum aligning." },
       status: "active",
       sourceAppName: "Crowned Trader",
     },
     {
       signalTypeId: entryType.id,
-      data: { ticker: "TQQQ", instrument_type: "LETF", etf_ticker: "TQQQ", leverage: "3x", entry_price: "58.50", stop_loss_1: "55.00", take_profit_1: "62.00", take_profit_2: "65.00", raise_stop_method: "Trail by $", raise_stop_value: "2.00", trade_plan: "Leveraged play on QQQ momentum. Quick in/out.", notes: "Bullish tech momentum, leveraged ETF play." },
+      data: { ticker: "TQQQ", instrument_type: "LETF", direction: "Long", entry_price: "58.50", stop_loss_1: "55.00", take_profit_1: "62.00", take_profit_2: "65.00", raise_stop_method: "Trail by $", raise_stop_value: "2.00", trade_plan: "Leveraged play on QQQ momentum. Quick in/out.", notes: "Bullish tech momentum, leveraged ETF play." },
       status: "active",
       sourceAppName: "Situ Trader",
     },
