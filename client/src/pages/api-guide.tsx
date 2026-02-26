@@ -1149,9 +1149,10 @@ export default function ApiGuidePage() {
               <p className="text-sm text-muted-foreground mt-2">{currentEndpoint.description}</p>
             </div>
             <EndpointInteractive
+              key={`${currentEndpoint.method}-${currentEndpoint.path}`}
               endpoint={currentEndpoint}
               baseUrl={baseUrl}
-              defaultApiKey={currentEndpoint.auth ? activeApp?.apiKey : undefined}
+              defaultApiKey={currentEndpoint.auth ? (activeApp?.apiKey ?? undefined) : undefined}
             />
           </div>
         )}
