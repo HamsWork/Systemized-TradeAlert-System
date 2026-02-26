@@ -29,7 +29,6 @@ import {
   XCircle,
   AlertCircle,
   TrendingUp,
-  TrendingDown,
   BarChart3,
   Layers,
   History,
@@ -189,26 +188,15 @@ function SideBadge({ side }: { side: string }) {
   );
 }
 
-function PnlValue({ value }: { value: number | null | undefined }) {
-  if (value == null) return <span className="text-muted-foreground">-</span>;
-  const isPositive = value >= 0;
-  return (
-    <span className={`font-medium ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-      {isPositive ? "+" : ""}{formatCurrency(value)}
-    </span>
-  );
-}
-
 function SummaryCards({ orders, positions }: { orders: IbkrOrder[]; positions: IbkrPosition[] }) {
-  const filledOrders = orders.filter(o => o.status === "filled");
   const pendingOrders = orders.filter(o => o.status === "pending" || o.status === "submitted");
-  const totalMarketValue = positions.reduce((sum, p) => sum + (p.marketValue || 0), 0);
-  const totalUnrealizedPnl = positions.reduce((sum, p) => sum + (p.unrealizedPnl || 0), 0);
+  const optionPositions = positions.filter(p => p.secType === "OPT");
+  const stockPositions = positions.filter(p => p.secType !== "OPT");
 
   const cards: { title: string; value: string; icon: ElementType; accent: string }[] = [
     { title: "Open Positions", value: positions.length.toString(), icon: Layers, accent: "text-blue-500" },
-    { title: "Market Value", value: formatCurrency(totalMarketValue), icon: BarChart3, accent: "text-purple-500" },
-    { title: "Unrealized P&L", value: formatCurrency(totalUnrealizedPnl), icon: totalUnrealizedPnl >= 0 ? TrendingUp : TrendingDown, accent: totalUnrealizedPnl >= 0 ? "text-emerald-500" : "text-red-500" },
+    { title: "Stock Positions", value: stockPositions.length.toString(), icon: BarChart3, accent: "text-purple-500" },
+    { title: "Option Positions", value: optionPositions.length.toString(), icon: TrendingUp, accent: "text-emerald-500" },
     { title: "Pending Orders", value: pendingOrders.length.toString(), icon: Clock, accent: "text-amber-500" },
   ];
 
@@ -298,7 +286,7 @@ function OrdersTable({ orders, page, onPageChange }: { orders: IbkrOrder[]; page
   );
 }
 
-function PositionsTable({ positions, showSource, page, onPageChange }: { positions: IbkrPosition[]; showSource: boolean; page: number; onPageChange: (p: number) => void }) {
+function PositionsTable({ positions, page, onPageChange }: { positions: IbkrPosition[]; page: number; onPageChange: (p: number) => void }) {
   const drag = useDragScroll();
 
   if (positions.length === 0) {
@@ -329,50 +317,32 @@ function PositionsTable({ positions, showSource, page, onPageChange }: { positio
           <TableHeader>
             <TableRow className="bg-muted/50">
               <TableHead className="text-xs font-medium">Symbol</TableHead>
+              <TableHead className="text-xs font-medium">Type</TableHead>
               <TableHead className="text-xs font-medium text-right">Quantity</TableHead>
               <TableHead className="text-xs font-medium text-right">Avg Cost</TableHead>
-              <TableHead className="text-xs font-medium text-right">Market Price</TableHead>
-              <TableHead className="text-xs font-medium text-right">Market Value</TableHead>
-              <TableHead className="text-xs font-medium text-right">Unrealized P&L</TableHead>
-              <TableHead className="text-xs font-medium text-right">Realized P&L</TableHead>
-              {showSource && <TableHead className="text-xs font-medium">Source</TableHead>}
+              <TableHead className="text-xs font-medium">Currency</TableHead>
               <TableHead className="text-xs font-medium">Updated</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paged.map((pos) => {
-              const pnlPct = pos.avgCost && pos.marketPrice
-                ? ((pos.marketPrice - pos.avgCost) / pos.avgCost * 100)
-                : null;
-              return (
-                <TableRow key={pos.id} data-testid={`row-position-${pos.id}`}>
-                  <TableCell><SymbolDisplay symbol={pos.symbol} secType={pos.secType} expiration={pos.expiration} strike={pos.strike} right={pos.right} /></TableCell>
-                  <TableCell className="text-right text-sm">{formatNumber(pos.quantity)}</TableCell>
-                  <TableCell className="text-right text-sm font-mono">{formatCurrency(pos.avgCost)}</TableCell>
-                  <TableCell className="text-right text-sm font-mono">{formatCurrency(pos.marketPrice)}</TableCell>
-                  <TableCell className="text-right text-sm font-mono">{formatCurrency(pos.marketValue)}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <PnlValue value={pos.unrealizedPnl} />
-                      {pnlPct != null && (
-                        <span className={`text-xs ${pnlPct >= 0 ? "text-emerald-500" : "text-red-500"}`}>
-                          ({pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(2)}%)
-                        </span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right"><PnlValue value={pos.realizedPnl} /></TableCell>
-                  {showSource && (
-                    <TableCell>
-                      <Badge variant="outline" className="text-xs">{pos.sourceAppName || "Manual"}</Badge>
-                    </TableCell>
-                  )}
-                  <TableCell className="text-xs text-muted-foreground">
-                    {formatRelativeTime(pos.lastUpdated)}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
+            {paged.map((pos) => (
+              <TableRow key={pos.id} data-testid={`row-position-${pos.id}`}>
+                <TableCell><SymbolDisplay symbol={pos.symbol} secType={pos.secType} expiration={pos.expiration} strike={pos.strike} right={pos.right} /></TableCell>
+                <TableCell>
+                  <Badge variant="outline" className="text-xs">
+                    {pos.secType === "OPT" ? "Option" : pos.secType === "STK" ? "Stock" : pos.secType}
+                  </Badge>
+                </TableCell>
+                <TableCell className={`text-right text-sm font-medium ${pos.quantity >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                  {pos.quantity >= 0 ? "+" : ""}{formatNumber(pos.quantity)}
+                </TableCell>
+                <TableCell className="text-right text-sm font-mono">{formatCurrency(pos.avgCost)}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{pos.currency}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">
+                  {formatRelativeTime(pos.lastUpdated)}
+                </TableCell>
+              </TableRow>
+            ))}
           </TableBody>
         </Table>
       </div>
@@ -551,7 +521,7 @@ export default function IbkrPage() {
               <CardTitle className="text-base">Open Positions</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
-              <PositionsTable positions={filteredPositions} showSource={appFilter === "all"} page={positionsPage} onPageChange={setPositionsPage} />
+              <PositionsTable positions={filteredPositions} page={positionsPage} onPageChange={setPositionsPage} />
             </CardContent>
           </Card>
         </TabsContent>
