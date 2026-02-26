@@ -54,15 +54,10 @@ const discordFormSchema = z.object({
 
 const ibkrFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  accountId: z.string().min(1, "Account ID is required"),
   host: z.string().min(1, "Host is required"),
   port: z.coerce.number().min(1, "Port is required"),
   clientId: z.coerce.number().min(0, "Client ID is required"),
   accountType: z.enum(["paper", "live"]),
-  notifyTrades: z.boolean(),
-  notifySystem: z.boolean(),
-  autoTrade: z.boolean(),
-  paperTrade: z.boolean(),
 });
 
 type DiscordFormValues = z.infer<typeof discordFormSchema>;
@@ -247,15 +242,10 @@ function CreateIbkrDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
     resolver: zodResolver(ibkrFormSchema),
     defaultValues: {
       name: "",
-      accountId: "",
       host: "127.0.0.1",
       port: 7497,
       clientId: 1,
       accountType: "paper",
-      notifyTrades: true,
-      notifySystem: false,
-      autoTrade: false,
-      paperTrade: true,
     },
   });
 
@@ -266,7 +256,6 @@ function CreateIbkrDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
         name: data.name,
         status: "active",
         config: {
-          accountId: data.accountId,
           host: data.host,
           port: data.port,
           clientId: data.clientId,
@@ -275,10 +264,10 @@ function CreateIbkrDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
         enabled: true,
         notifyAlerts: false,
         notifySignals: false,
-        notifyTrades: data.notifyTrades,
-        notifySystem: data.notifySystem,
-        autoTrade: data.autoTrade,
-        paperTrade: data.paperTrade,
+        notifyTrades: false,
+        notifySystem: false,
+        autoTrade: false,
+        paperTrade: data.accountType === "paper",
       };
       const res = await apiRequest("POST", "/api/integrations", payload);
       return res.json();
@@ -322,42 +311,27 @@ function CreateIbkrDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
                 </FormItem>
               )}
             />
-            <div className="grid grid-cols-2 gap-3">
-              <FormField
-                control={form.control}
-                name="accountId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Account ID</FormLabel>
+            <FormField
+              control={form.control}
+              name="accountType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Account Type</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
-                      <Input placeholder="e.g., DU12345678" {...field} data-testid="input-ibkr-account" />
+                      <SelectTrigger data-testid="select-ibkr-type">
+                        <SelectValue />
+                      </SelectTrigger>
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="accountType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Account Type</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-ibkr-type">
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="paper">Paper</SelectItem>
-                        <SelectItem value="live">Live</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+                    <SelectContent>
+                      <SelectItem value="paper">Paper</SelectItem>
+                      <SelectItem value="live">Live</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <div className="grid grid-cols-3 gap-3">
               <FormField
                 control={form.control}
@@ -398,56 +372,6 @@ function CreateIbkrDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
                   </FormItem>
                 )}
               />
-            </div>
-            <div className="space-y-3 rounded-lg border p-3">
-              <p className="text-sm font-medium">Trading Controls</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">Auto-Trade</span>
-                  <FormField
-                    control={form.control}
-                    name="autoTrade"
-                    render={({ field }) => (
-                      <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-ibkr-autotrade" />
-                    )}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">Paper Mode</span>
-                  <FormField
-                    control={form.control}
-                    name="paperTrade"
-                    render={({ field }) => (
-                      <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-ibkr-paper" />
-                    )}
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="space-y-3 rounded-lg border p-3">
-              <p className="text-sm font-medium">Notifications</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">Trades</span>
-                  <FormField
-                    control={form.control}
-                    name="notifyTrades"
-                    render={({ field }) => (
-                      <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-ibkr-notify-trades" />
-                    )}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">System</span>
-                  <FormField
-                    control={form.control}
-                    name="notifySystem"
-                    render={({ field }) => (
-                      <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-ibkr-notify-system" />
-                    )}
-                  />
-                </div>
-              </div>
             </div>
             <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-create-ibkr">
               {createMutation.isPending ? "Adding..." : "Add IBKR Account"}
