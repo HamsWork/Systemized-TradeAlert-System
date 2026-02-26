@@ -18,7 +18,7 @@ Plugged-in apps → Send signals → TradeSync executes IBKR trades + sends Disc
 
 - **Signals**: Trading signals with direction (buy/sell), confidence scores, entry/target/stop-loss prices, source app tracking (sourceAppId, sourceAppName)
 - **Activity Log**: System event feed tracking all actions
-- **Connected Apps**: Plugged-in trading applications with auto-generated API keys and sync settings
+- **Connected Apps**: Plugged-in trading applications with auto-generated API keys, Discord webhook URLs (Shares/Options/LETF), and execution settings (Execute IBKR Trades, Send Discord Messages)
 - **System Settings**: Key-value toggle/config store for system controls (signals, trading, system)
 - **Integrations**: Discord channels and IBKR trading accounts with per-integration notification and trading toggles
 - **IBKR Orders/Positions**: Trade execution records and open position tracking

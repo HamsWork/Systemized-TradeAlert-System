@@ -73,6 +73,11 @@ export const connectedApps = pgTable("connected_apps", {
   webhookUrl: text("webhook_url"),
   syncAlerts: boolean("sync_alerts").notNull().default(true),
   syncSignals: boolean("sync_signals").notNull().default(true),
+  discordWebhookShares: text("discord_webhook_shares"),
+  discordWebhookOptions: text("discord_webhook_options"),
+  discordWebhookLetf: text("discord_webhook_letf"),
+  executeIbkrTrades: boolean("execute_ibkr_trades").notNull().default(false),
+  sendDiscordMessages: boolean("send_discord_messages").notNull().default(false),
   lastSyncAt: timestamp("last_sync_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

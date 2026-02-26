@@ -17,9 +17,6 @@ import {
   Puzzle,
   Plus,
   Trash2,
-  Globe,
-  Webhook,
-  TrendingUp,
   Power,
   PowerOff,
   Key,
@@ -28,7 +25,10 @@ import {
   Eye,
   EyeOff,
   Settings2,
+  Landmark,
+  MessageSquare,
 } from "lucide-react";
+import { SiDiscord } from "react-icons/si";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -47,10 +47,11 @@ function CreateAppDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
       slug: "",
       description: "",
       status: "active",
-      apiEndpoint: "",
-      apiKey: "",
-      webhookUrl: "",
-      syncSignals: true,
+      discordWebhookShares: "",
+      discordWebhookOptions: "",
+      discordWebhookLetf: "",
+      executeIbkrTrades: false,
+      sendDiscordMessages: false,
     },
   });
 
@@ -132,34 +133,6 @@ function CreateAppDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
                 </FormItem>
               )}
             />
-            <div className="grid grid-cols-2 gap-3">
-              <FormField
-                control={form.control}
-                name="apiEndpoint"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>API Endpoint</FormLabel>
-                    <FormControl>
-                      <Input placeholder="https://api.example.com/v1" {...field} value={field.value ?? ""} data-testid="input-app-endpoint" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="webhookUrl"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Webhook URL</FormLabel>
-                    <FormControl>
-                      <Input placeholder="https://api.example.com/hooks" {...field} value={field.value ?? ""} data-testid="input-app-webhook" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
             <div className="rounded-lg border border-dashed p-3 bg-muted/30">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Key className="h-4 w-4 text-amber-500" />
@@ -170,17 +143,75 @@ function CreateAppDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
               </p>
             </div>
             <div className="space-y-3 rounded-lg border p-3">
-              <p className="text-sm font-medium">Sync Settings</p>
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <SiDiscord className="h-4 w-4 text-indigo-500" />
+                Discord Webhooks
+              </div>
+              <FormField
+                control={form.control}
+                name="discordWebhookShares"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Shares</FormLabel>
+                    <FormControl>
+                      <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-discord-shares" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="discordWebhookOptions"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Options</FormLabel>
+                    <FormControl>
+                      <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-discord-options" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="discordWebhookLetf"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>LETF</FormLabel>
+                    <FormControl>
+                      <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-discord-letf" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <div className="space-y-3 rounded-lg border p-3">
+              <p className="text-sm font-medium">Execution Settings</p>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm">
-                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                  <span>Receive Signals</span>
+                  <Landmark className="h-4 w-4 text-purple-500" />
+                  <span>Execute IBKR Trades</span>
                 </div>
                 <FormField
                   control={form.control}
-                  name="syncSignals"
+                  name="executeIbkrTrades"
                   render={({ field }) => (
-                    <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-sync-signals" />
+                    <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-execute-ibkr" />
+                  )}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm">
+                  <MessageSquare className="h-4 w-4 text-indigo-500" />
+                  <span>Send Discord Messages</span>
+                </div>
+                <FormField
+                  control={form.control}
+                  name="sendDiscordMessages"
+                  render={({ field }) => (
+                    <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-send-discord" />
                   )}
                 />
               </div>
@@ -205,10 +236,11 @@ function EditAppDialog({ app, open, onOpenChange }: { app: ConnectedApp; open: b
       slug: app.slug,
       description: app.description ?? "",
       status: app.status,
-      apiEndpoint: app.apiEndpoint ?? "",
-      apiKey: app.apiKey ?? "",
-      webhookUrl: app.webhookUrl ?? "",
-      syncSignals: app.syncSignals,
+      discordWebhookShares: app.discordWebhookShares ?? "",
+      discordWebhookOptions: app.discordWebhookOptions ?? "",
+      discordWebhookLetf: app.discordWebhookLetf ?? "",
+      executeIbkrTrades: app.executeIbkrTrades,
+      sendDiscordMessages: app.sendDiscordMessages,
     },
   });
 
@@ -280,15 +312,19 @@ function EditAppDialog({ app, open, onOpenChange }: { app: ConnectedApp; open: b
                 </FormItem>
               )}
             />
-            <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-3 rounded-lg border p-3">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <SiDiscord className="h-4 w-4 text-indigo-500" />
+                Discord Webhooks
+              </div>
               <FormField
                 control={form.control}
-                name="apiEndpoint"
+                name="discordWebhookShares"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>API Endpoint</FormLabel>
+                    <FormLabel>Shares</FormLabel>
                     <FormControl>
-                      <Input placeholder="https://api.example.com/v1" {...field} value={field.value ?? ""} data-testid="input-edit-app-endpoint" />
+                      <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-edit-discord-shares" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -296,12 +332,25 @@ function EditAppDialog({ app, open, onOpenChange }: { app: ConnectedApp; open: b
               />
               <FormField
                 control={form.control}
-                name="webhookUrl"
+                name="discordWebhookOptions"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Webhook URL</FormLabel>
+                    <FormLabel>Options</FormLabel>
                     <FormControl>
-                      <Input placeholder="https://api.example.com/hooks" {...field} value={field.value ?? ""} data-testid="input-edit-app-webhook" />
+                      <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-edit-discord-options" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="discordWebhookLetf"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>LETF</FormLabel>
+                    <FormControl>
+                      <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-edit-discord-letf" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -309,17 +358,30 @@ function EditAppDialog({ app, open, onOpenChange }: { app: ConnectedApp; open: b
               />
             </div>
             <div className="space-y-3 rounded-lg border p-3">
-              <p className="text-sm font-medium">Sync Settings</p>
+              <p className="text-sm font-medium">Execution Settings</p>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm">
-                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                  <span>Receive Signals</span>
+                  <Landmark className="h-4 w-4 text-purple-500" />
+                  <span>Execute IBKR Trades</span>
                 </div>
                 <FormField
                   control={form.control}
-                  name="syncSignals"
+                  name="executeIbkrTrades"
                   render={({ field }) => (
-                    <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-edit-sync-signals" />
+                    <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-edit-execute-ibkr" />
+                  )}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm">
+                  <MessageSquare className="h-4 w-4 text-indigo-500" />
+                  <span>Send Discord Messages</span>
+                </div>
+                <FormField
+                  control={form.control}
+                  name="sendDiscordMessages"
+                  render={({ field }) => (
+                    <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-edit-send-discord" />
                   )}
                 />
               </div>
@@ -416,6 +478,9 @@ function AppCard({ app, onDelete, onToggleStatus, onEdit }: {
   onEdit: (app: ConnectedApp) => void;
 }) {
   const isActive = app.status === "active";
+  const hasSharesWebhook = !!app.discordWebhookShares;
+  const hasOptionsWebhook = !!app.discordWebhookOptions;
+  const hasLetfWebhook = !!app.discordWebhookLetf;
 
   return (
     <Card className="hover-elevate" data-testid={`card-app-${app.id}`}>
@@ -472,28 +537,33 @@ function AppCard({ app, onDelete, onToggleStatus, onEdit }: {
           {app.description}
         </p>
 
-        <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
-          {app.apiEndpoint && (
-            <div className="flex items-center gap-1">
-              <Globe className="h-3.5 w-3.5" />
-              <span className="truncate max-w-[180px]">{app.apiEndpoint}</span>
-            </div>
-          )}
-          {app.webhookUrl && (
-            <div className="flex items-center gap-1">
-              <Webhook className="h-3.5 w-3.5" />
-              <span>Webhook</span>
-            </div>
-          )}
-        </div>
-
         <div className="mt-3 flex items-center gap-2 flex-wrap">
-          {app.syncSignals && (
+          {app.executeIbkrTrades && (
             <Badge variant="outline" className="text-xs font-normal">
-              <TrendingUp className="mr-1 h-3 w-3" />Signals
+              <Landmark className="mr-1 h-3 w-3 text-purple-500" />IBKR Trades
+            </Badge>
+          )}
+          {app.sendDiscordMessages && (
+            <Badge variant="outline" className="text-xs font-normal">
+              <MessageSquare className="mr-1 h-3 w-3 text-indigo-500" />Discord
             </Badge>
           )}
         </div>
+
+        {(hasSharesWebhook || hasOptionsWebhook || hasLetfWebhook) && (
+          <div className="mt-3 flex items-center gap-2 flex-wrap">
+            <SiDiscord className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+            {hasSharesWebhook && (
+              <Badge variant="secondary" className="text-[10px] font-normal">Shares</Badge>
+            )}
+            {hasOptionsWebhook && (
+              <Badge variant="secondary" className="text-[10px] font-normal">Options</Badge>
+            )}
+            {hasLetfWebhook && (
+              <Badge variant="secondary" className="text-[10px] font-normal">LETF</Badge>
+            )}
+          </div>
+        )}
 
         <ApiKeyDisplay app={app} />
 

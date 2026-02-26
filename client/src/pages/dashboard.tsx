@@ -234,7 +234,8 @@ function ConnectionStatus({ apps, integrations }: { apps: ConnectedApp[]; integr
               <span className="text-sm truncate">{app.name}</span>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
-              {app.syncSignals && <Badge variant="outline" className="text-[9px] h-4"><TrendingUp className="mr-0.5 h-2 w-2" />Signals</Badge>}
+              {app.executeIbkrTrades && <Badge variant="outline" className="text-[9px] h-4"><Landmark className="mr-0.5 h-2 w-2" />IBKR</Badge>}
+              {app.sendDiscordMessages && <Badge variant="outline" className="text-[9px] h-4"><MessageSquare className="mr-0.5 h-2 w-2" />Discord</Badge>}
             </div>
           </div>
         ))}
