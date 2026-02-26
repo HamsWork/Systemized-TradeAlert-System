@@ -122,4 +122,9 @@ app.use((req, res, next) => {
   );
 
   seedDatabase().catch((err) => console.error("Seed error:", err));
+
+  const { ibkrSyncManager } = await import("./services/ibkr-sync");
+  ibkrSyncManager.start().catch((err) => {
+    console.warn("[IBKR Sync] Initial start failed:", err.message);
+  });
 })();

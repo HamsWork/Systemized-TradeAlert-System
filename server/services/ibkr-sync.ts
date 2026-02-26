@@ -1,0 +1,207 @@
+import { IbkrClient } from "./ibkr-client";
+import { storage } from "../storage";
+import type { Integration, InsertIbkrOrder, InsertIbkrPosition } from "@shared/schema";
+
+const STATUS_MAP: Record<string, string> = {
+  "ApiPending": "pending",
+  "PendingSubmit": "pending",
+  "PendingCancel": "pending",
+  "PreSubmitted": "submitted",
+  "Submitted": "submitted",
+  "ApiCancelled": "cancelled",
+  "Cancelled": "cancelled",
+  "Filled": "filled",
+  "Inactive": "rejected",
+};
+
+function mapOrderStatus(ibkrStatus: string): string {
+  return STATUS_MAP[ibkrStatus] || ibkrStatus.toLowerCase();
+}
+
+function mapOrderType(ibkrType: string): string {
+  const map: Record<string, string> = {
+    "MKT": "market",
+    "LMT": "limit",
+    "STP": "stop",
+    "STP LMT": "stop_limit",
+    "TRAIL": "trailing_stop",
+    "MOC": "market_on_close",
+    "LOC": "limit_on_close",
+  };
+  return map[ibkrType] || ibkrType.toLowerCase();
+}
+
+class IbkrSyncManager {
+  private clients: Map<string, IbkrClient> = new Map();
+  private syncInterval: ReturnType<typeof setInterval> | null = null;
+  private running = false;
+
+  async start(): Promise<void> {
+    if (this.running) return;
+    this.running = true;
+    console.log("[IBKR Sync] Starting sync manager...");
+
+    await this.connectAll();
+
+    this.syncInterval = setInterval(() => {
+      this.syncAll().catch(err => {
+        console.error("[IBKR Sync] Sync cycle error:", err.message);
+      });
+    }, 10000);
+
+    await this.syncAll();
+  }
+
+  stop(): void {
+    this.running = false;
+    if (this.syncInterval) {
+      clearInterval(this.syncInterval);
+      this.syncInterval = null;
+    }
+    for (const [id, client] of this.clients) {
+      client.disconnect();
+      this.clients.delete(id);
+    }
+    console.log("[IBKR Sync] Stopped.");
+  }
+
+  async connectAll(): Promise<void> {
+    const integrations = await storage.getIntegrations();
+    const ibkrIntegrations = integrations.filter(i => i.type === "ibkr" && i.enabled);
+
+    for (const integration of ibkrIntegrations) {
+      if (!this.clients.has(integration.id)) {
+        await this.connectOne(integration);
+      }
+    }
+
+    for (const [id] of this.clients) {
+      if (!ibkrIntegrations.find(i => i.id === id)) {
+        this.clients.get(id)?.disconnect();
+        this.clients.delete(id);
+      }
+    }
+  }
+
+  private async connectOne(integration: Integration): Promise<void> {
+    const client = new IbkrClient(integration);
+    try {
+      await client.connect();
+      this.clients.set(integration.id, client);
+      await storage.updateIntegration(integration.id, { status: "connected" } as any);
+      console.log(`[IBKR Sync] Connected integration ${integration.name} (${integration.id})`);
+    } catch (err: any) {
+      console.warn(`[IBKR Sync] Failed to connect ${integration.name}: ${err.message}`);
+      await storage.updateIntegration(integration.id, { status: "disconnected" } as any);
+    }
+  }
+
+  async reconnect(integrationId: string): Promise<void> {
+    const existing = this.clients.get(integrationId);
+    if (existing) {
+      existing.disconnect();
+      this.clients.delete(integrationId);
+    }
+    const integration = await storage.getIntegration(integrationId);
+    if (integration && integration.type === "ibkr" && integration.enabled) {
+      await this.connectOne(integration);
+    }
+  }
+
+  async disconnectOne(integrationId: string): Promise<void> {
+    const client = this.clients.get(integrationId);
+    if (client) {
+      client.disconnect();
+      this.clients.delete(integrationId);
+    }
+    await storage.updateIntegration(integrationId, { status: "disconnected" } as any);
+  }
+
+  private async syncAll(): Promise<void> {
+    for (const [integrationId, client] of this.clients) {
+      if (!client.isConnected) {
+        console.log(`[IBKR Sync] Skipping ${integrationId} - not connected`);
+        continue;
+      }
+      try {
+        await Promise.all([
+          this.syncOrders(integrationId, client),
+          this.syncPositions(integrationId, client),
+        ]);
+      } catch (err: any) {
+        console.error(`[IBKR Sync] Error syncing ${integrationId}: ${err.message}`);
+        if (err.message?.includes("disconnect") || err.message?.includes("socket")) {
+          this.clients.delete(integrationId);
+          await storage.updateIntegration(integrationId, { status: "disconnected" } as any);
+        }
+      }
+    }
+  }
+
+  private async syncOrders(integrationId: string, client: IbkrClient): Promise<void> {
+    const openOrders = await client.fetchOpenOrders();
+
+    for (const oo of openOrders) {
+      const orderData: InsertIbkrOrder = {
+        integrationId,
+        orderId: String(oo.orderId),
+        symbol: oo.contract.symbol || "UNKNOWN",
+        side: oo.order.action?.toLowerCase() === "sell" ? "sell" : "buy",
+        orderType: mapOrderType(oo.order.orderType || "MKT"),
+        quantity: oo.order.totalQuantity || 0,
+        limitPrice: oo.order.lmtPrice ?? null,
+        stopPrice: oo.order.auxPrice ?? null,
+        filledQuantity: oo.order.filledQuantity ?? 0,
+        avgFillPrice: null,
+        status: mapOrderStatus(oo.orderState.status || "Submitted"),
+        timeInForce: oo.order.tif || "DAY",
+        commission: oo.orderState.commission != null && oo.orderState.commission < 1e9
+          ? oo.orderState.commission : null,
+        submittedAt: new Date(),
+      };
+
+      await storage.upsertIbkrOrder(String(oo.orderId), integrationId, orderData);
+    }
+  }
+
+  private async syncPositions(integrationId: string, client: IbkrClient): Promise<void> {
+    const livePositions = await client.fetchPositions();
+
+    const positionMap = new Map<string, typeof livePositions[number]>();
+    for (const pos of livePositions) {
+      const symbol = pos.contract.symbol || "UNKNOWN";
+      positionMap.set(symbol, pos);
+    }
+
+    await storage.deleteIbkrPositionsByIntegration(integrationId);
+
+    for (const [symbol, pos] of positionMap) {
+      if (pos.position === 0) continue;
+
+      const posData: InsertIbkrPosition = {
+        integrationId,
+        symbol,
+        quantity: pos.position,
+        avgCost: pos.avgCost,
+        marketPrice: null,
+        marketValue: null,
+        unrealizedPnl: null,
+        realizedPnl: null,
+        currency: pos.contract.currency || "USD",
+        lastUpdated: new Date(),
+      };
+
+      await storage.upsertIbkrPosition(symbol, integrationId, posData);
+    }
+  }
+
+  getConnectionStatus(): Map<string, boolean> {
+    const status = new Map<string, boolean>();
+    for (const [id, client] of this.clients) {
+      status.set(id, client.isConnected);
+    }
+    return status;
+  }
+}
+
+export const ibkrSyncManager = new IbkrSyncManager();

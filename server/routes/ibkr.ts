@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { storage } from "../storage";
 import { insertIbkrOrderSchema, insertIbkrPositionSchema } from "@shared/schema";
 import { asyncHandler } from "../lib/async-handler";
+import { ibkrSyncManager } from "../services/ibkr-sync";
 
 const partialIbkrOrderSchema = insertIbkrOrderSchema.partial();
 const partialIbkrPositionSchema = insertIbkrPositionSchema.partial();
@@ -58,5 +59,31 @@ export function registerIbkrRoutes(app: Express) {
     const updated = await storage.updateIbkrPosition(req.params.id, parsed);
     if (!updated) return res.status(404).json({ message: "Position not found" });
     res.json(updated);
+  }));
+
+  app.post("/api/ibkr/connect/:integrationId", asyncHandler(async (req, res) => {
+    const integration = await storage.getIntegration(req.params.integrationId);
+    if (!integration) return res.status(404).json({ message: "Integration not found" });
+    if (integration.type !== "ibkr") return res.status(400).json({ message: "Not an IBKR integration" });
+
+    await ibkrSyncManager.reconnect(integration.id);
+    const status = ibkrSyncManager.getConnectionStatus();
+    const connected = status.get(integration.id) ?? false;
+
+    res.json({ success: connected, status: connected ? "connected" : "disconnected" });
+  }));
+
+  app.post("/api/ibkr/disconnect/:integrationId", asyncHandler(async (req, res) => {
+    await ibkrSyncManager.disconnectOne(req.params.integrationId);
+    res.json({ success: true, status: "disconnected" });
+  }));
+
+  app.get("/api/ibkr/status", asyncHandler(async (_req, res) => {
+    const status = ibkrSyncManager.getConnectionStatus();
+    const result: Record<string, boolean> = {};
+    for (const [id, connected] of status) {
+      result[id] = connected;
+    }
+    res.json(result);
   }));
 }

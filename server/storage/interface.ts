@@ -57,13 +57,18 @@ export interface IStorage {
 
   getIbkrOrders(): Promise<IbkrOrder[]>;
   getIbkrOrdersByIntegration(integrationId: string): Promise<IbkrOrder[]>;
+  getIbkrOrderByOrderId(orderId: string, integrationId: string): Promise<IbkrOrder | undefined>;
   createIbkrOrder(order: InsertIbkrOrder): Promise<IbkrOrder>;
   updateIbkrOrder(id: string, data: Partial<InsertIbkrOrder>): Promise<IbkrOrder | undefined>;
+  upsertIbkrOrder(orderId: string, integrationId: string, data: InsertIbkrOrder): Promise<IbkrOrder>;
 
   getIbkrPositions(): Promise<IbkrPosition[]>;
   getIbkrPositionsByIntegration(integrationId: string): Promise<IbkrPosition[]>;
+  getIbkrPositionBySymbol(symbol: string, integrationId: string): Promise<IbkrPosition | undefined>;
   createIbkrPosition(position: InsertIbkrPosition): Promise<IbkrPosition>;
   updateIbkrPosition(id: string, data: Partial<InsertIbkrPosition>): Promise<IbkrPosition | undefined>;
+  upsertIbkrPosition(symbol: string, integrationId: string, data: InsertIbkrPosition): Promise<IbkrPosition>;
+  deleteIbkrPositionsByIntegration(integrationId: string): Promise<void>;
 
   getDashboardStats(): Promise<{
     totalAlerts: number;

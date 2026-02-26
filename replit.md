@@ -73,6 +73,9 @@ All routes prefixed with `/api`:
 - `GET/POST /integrations`, `PATCH/DELETE /integrations/:id`
 - `GET /ibkr/orders`, `GET /ibkr/orders/:integrationId`, `POST /ibkr/orders`, `PATCH /ibkr/orders/:id`
 - `GET /ibkr/positions`, `GET /ibkr/positions/:integrationId`, `POST /ibkr/positions`, `PATCH /ibkr/positions/:id`
+- `POST /ibkr/connect/:integrationId` - Connect to IBKR TWS/Gateway for an integration
+- `POST /ibkr/disconnect/:integrationId` - Disconnect from IBKR for an integration
+- `GET /ibkr/status` - Get connection status of all IBKR integrations
 - `GET /dashboard/stats`
 - `GET/POST /alerts`, `GET/PATCH/DELETE /alerts/:id` (backend only, not exposed in frontend)
 
@@ -122,6 +125,10 @@ All routes prefixed with `/api`:
 - `server/routes/integrations.ts` - /api/integrations CRUD
 - `server/routes/ibkr.ts` - /api/ibkr/orders + /api/ibkr/positions
 - `server/routes/index.ts` - registerRoutes composing all domain route registrars + error handler middleware
+
+### IBKR Services
+- `server/services/ibkr-client.ts` - IbkrClient class wrapping `@stoqey/ib` IBApi for connection, order/position fetching
+- `server/services/ibkr-sync.ts` - IbkrSyncManager singleton: auto-connects enabled IBKR integrations, syncs orders/positions to DB every 10s
 
 ### Other Key Files
 - `server/db.ts` - Database connection with keepAlive and error handling
