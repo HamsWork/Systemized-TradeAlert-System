@@ -200,7 +200,7 @@ function SummaryCards({ orders, positions }: { orders: IbkrOrder[]; positions: I
   );
 }
 
-function OrdersTable({ orders, showSource, page, onPageChange }: { orders: IbkrOrder[]; showSource: boolean; page: number; onPageChange: (p: number) => void }) {
+function OrdersTable({ orders, page, onPageChange }: { orders: IbkrOrder[]; page: number; onPageChange: (p: number) => void }) {
   const drag = useDragScroll();
 
   if (orders.length === 0) {
@@ -239,7 +239,6 @@ function OrdersTable({ orders, showSource, page, onPageChange }: { orders: IbkrO
               <TableHead className="text-xs font-medium text-right">Price</TableHead>
               <TableHead className="text-xs font-medium text-right">Avg Fill</TableHead>
               <TableHead className="text-xs font-medium">Status</TableHead>
-              {showSource && <TableHead className="text-xs font-medium">Source</TableHead>}
               <TableHead className="text-xs font-medium">Time</TableHead>
             </TableRow>
           </TableHeader>
@@ -257,11 +256,6 @@ function OrdersTable({ orders, showSource, page, onPageChange }: { orders: IbkrO
                 </TableCell>
                 <TableCell className="text-right text-sm font-mono">{order.avgFillPrice ? formatCurrency(order.avgFillPrice) : "-"}</TableCell>
                 <TableCell><OrderStatusBadge status={order.status} /></TableCell>
-                {showSource && (
-                  <TableCell>
-                    <Badge variant="outline" className="text-xs">{order.sourceAppName || "Manual"}</Badge>
-                  </TableCell>
-                )}
                 <TableCell className="text-xs text-muted-foreground">
                   {formatRelativeTime(order.submittedAt)}
                 </TableCell>
@@ -517,7 +511,7 @@ export default function IbkrPage() {
               </div>
             </CardHeader>
             <CardContent className="pt-0">
-              <OrdersTable orders={activeOrders} showSource={appFilter === "all"} page={ordersPage} onPageChange={setOrdersPage} />
+              <OrdersTable orders={activeOrders} page={ordersPage} onPageChange={setOrdersPage} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -552,7 +546,7 @@ export default function IbkrPage() {
               </div>
             </CardHeader>
             <CardContent className="pt-0">
-              <OrdersTable orders={[...filledOrders, ...historicalOrders]} showSource={appFilter === "all"} page={historyPage} onPageChange={setHistoryPage} />
+              <OrdersTable orders={[...filledOrders, ...historicalOrders]} page={historyPage} onPageChange={setHistoryPage} />
             </CardContent>
           </Card>
         </TabsContent>
