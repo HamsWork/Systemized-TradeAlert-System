@@ -5,7 +5,10 @@ import {
   type WatchlistItem, type InsertWatchlistItem,
   type ActivityLogEntry, type InsertActivityLog,
   type ConnectedApp, type InsertConnectedApp,
+  type SystemSetting, type InsertSystemSetting,
+  type Integration, type InsertIntegration,
   users, alerts, signals, watchlist, activityLog, connectedApps,
+  systemSettings, integrations,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc } from "drizzle-orm";
@@ -39,6 +42,16 @@ export interface IStorage {
   createConnectedApp(app: InsertConnectedApp): Promise<ConnectedApp>;
   updateConnectedApp(id: string, data: Partial<InsertConnectedApp>): Promise<ConnectedApp | undefined>;
   deleteConnectedApp(id: string): Promise<boolean>;
+
+  getSystemSettings(): Promise<SystemSetting[]>;
+  getSystemSetting(key: string): Promise<SystemSetting | undefined>;
+  upsertSystemSetting(setting: InsertSystemSetting): Promise<SystemSetting>;
+
+  getIntegrations(): Promise<Integration[]>;
+  getIntegration(id: string): Promise<Integration | undefined>;
+  createIntegration(integration: InsertIntegration): Promise<Integration>;
+  updateIntegration(id: string, data: Partial<InsertIntegration>): Promise<Integration | undefined>;
+  deleteIntegration(id: string): Promise<boolean>;
 
   getDashboardStats(): Promise<{
     totalAlerts: number;
@@ -158,6 +171,49 @@ export class DatabaseStorage implements IStorage {
 
   async deleteConnectedApp(id: string): Promise<boolean> {
     const result = await db.delete(connectedApps).where(eq(connectedApps.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getSystemSettings(): Promise<SystemSetting[]> {
+    return db.select().from(systemSettings);
+  }
+
+  async getSystemSetting(key: string): Promise<SystemSetting | undefined> {
+    const [setting] = await db.select().from(systemSettings).where(eq(systemSettings.key, key));
+    return setting;
+  }
+
+  async upsertSystemSetting(setting: InsertSystemSetting): Promise<SystemSetting> {
+    const existing = await this.getSystemSetting(setting.key);
+    if (existing) {
+      const [updated] = await db.update(systemSettings).set(setting).where(eq(systemSettings.key, setting.key)).returning();
+      return updated;
+    }
+    const [created] = await db.insert(systemSettings).values(setting).returning();
+    return created;
+  }
+
+  async getIntegrations(): Promise<Integration[]> {
+    return db.select().from(integrations).orderBy(desc(integrations.createdAt));
+  }
+
+  async getIntegration(id: string): Promise<Integration | undefined> {
+    const [integration] = await db.select().from(integrations).where(eq(integrations.id, id));
+    return integration;
+  }
+
+  async createIntegration(integration: InsertIntegration): Promise<Integration> {
+    const [created] = await db.insert(integrations).values(integration).returning();
+    return created;
+  }
+
+  async updateIntegration(id: string, data: Partial<InsertIntegration>): Promise<Integration | undefined> {
+    const [updated] = await db.update(integrations).set(data).where(eq(integrations.id, id)).returning();
+    return updated;
+  }
+
+  async deleteIntegration(id: string): Promise<boolean> {
+    const result = await db.delete(integrations).where(eq(integrations.id, id)).returning();
     return result.length > 0;
   }
 

@@ -1,10 +1,26 @@
 import { db } from "./db";
-import { alerts, signals, watchlist, activityLog, connectedApps } from "@shared/schema";
+import { alerts, signals, watchlist, activityLog, connectedApps, systemSettings, integrations } from "@shared/schema";
 import { sql } from "drizzle-orm";
 
 export async function seedDatabase() {
   const existingAlerts = await db.select().from(alerts);
-  if (existingAlerts.length > 0) {
+  const existingSettings = await db.select().from(systemSettings);
+  const existingIntegrations = await db.select().from(integrations);
+  const existingApps = await db.select().from(connectedApps);
+
+  const needsAlertSeed = existingAlerts.length === 0;
+  const needsSettingsSeed = existingSettings.length === 0;
+  const needsIntegrationsSeed = existingIntegrations.length === 0;
+  const needsAppsSeed = existingApps.length === 0;
+
+  if (!needsAlertSeed && !needsSettingsSeed && !needsIntegrationsSeed && !needsAppsSeed) {
+    return;
+  }
+
+  if (!needsAlertSeed) {
+    if (needsSettingsSeed) await seedSettings();
+    if (needsIntegrationsSeed) await seedIntegrations();
+    if (needsAppsSeed) await seedApps();
     return;
   }
 
@@ -161,30 +177,9 @@ export async function seedDatabase() {
     },
   ]);
 
-  await db.insert(connectedApps).values([
-    {
-      name: "Situ Trader",
-      slug: "situ-trader",
-      description: "Advanced algorithmic trading platform with real-time market analysis and automated execution strategies",
-      status: "active",
-      apiEndpoint: "https://api.situtrader.com/v1",
-      webhookUrl: "https://api.situtrader.com/webhooks/tradesync",
-      syncAlerts: true,
-      syncSignals: true,
-      syncWatchlist: true,
-    },
-    {
-      name: "Crowned Trader",
-      slug: "crowned-trader",
-      description: "Community-driven trading signals platform with social sentiment analysis and copy trading features",
-      status: "active",
-      apiEndpoint: "https://api.crownedtrader.io/v2",
-      webhookUrl: "https://api.crownedtrader.io/hooks/tradesync",
-      syncAlerts: true,
-      syncSignals: true,
-      syncWatchlist: false,
-    },
-  ]);
+  await seedApps();
+  await seedSettings();
+  await seedIntegrations();
 
   await db.insert(activityLog).values([
     {
@@ -228,6 +223,120 @@ export async function seedDatabase() {
       description: "Price below $3,200 on ETH",
       symbol: "ETH",
       metadata: null,
+    },
+  ]);
+}
+
+async function seedApps() {
+  await db.insert(connectedApps).values([
+    {
+      name: "Situ Trader",
+      slug: "situ-trader",
+      description: "Advanced algorithmic trading platform with real-time market analysis and automated execution strategies",
+      status: "active",
+      apiEndpoint: "https://api.situtrader.com/v1",
+      webhookUrl: "https://api.situtrader.com/webhooks/tradesync",
+      syncAlerts: true,
+      syncSignals: true,
+      syncWatchlist: true,
+    },
+    {
+      name: "Crowned Trader",
+      slug: "crowned-trader",
+      description: "Community-driven trading signals platform with social sentiment analysis and copy trading features",
+      status: "active",
+      apiEndpoint: "https://api.crownedtrader.io/v2",
+      webhookUrl: "https://api.crownedtrader.io/hooks/tradesync",
+      syncAlerts: true,
+      syncSignals: true,
+      syncWatchlist: false,
+    },
+  ]);
+}
+
+async function seedSettings() {
+  await db.insert(systemSettings).values([
+    { key: "alert_system_enabled", value: "true", category: "alerts", label: "Alert System", description: "Master switch for the alert monitoring system", type: "boolean" },
+    { key: "alert_sound_enabled", value: "true", category: "alerts", label: "Alert Sounds", description: "Play audio notifications when alerts trigger", type: "boolean" },
+    { key: "alert_email_enabled", value: "false", category: "alerts", label: "Email Notifications", description: "Send email when alerts trigger", type: "boolean" },
+    { key: "alert_auto_pause", value: "true", category: "alerts", label: "Auto-Pause Triggered", description: "Automatically pause alerts after they trigger", type: "boolean" },
+    { key: "signal_system_enabled", value: "true", category: "signals", label: "Signal Engine", description: "Master switch for the signal analysis engine", type: "boolean" },
+    { key: "signal_auto_create_alerts", value: "false", category: "signals", label: "Auto-Create Alerts", description: "Automatically create alerts from new signals", type: "boolean" },
+    { key: "signal_confidence_threshold", value: "60", category: "signals", label: "Min Confidence Threshold", description: "Minimum confidence % to display signals", type: "number" },
+    { key: "signal_technical_enabled", value: "true", category: "signals", label: "Technical Signals", description: "Enable technical analysis signals", type: "boolean" },
+    { key: "signal_sentiment_enabled", value: "true", category: "signals", label: "Sentiment Signals", description: "Enable social sentiment signals", type: "boolean" },
+    { key: "signal_fundamental_enabled", value: "true", category: "signals", label: "Fundamental Signals", description: "Enable fundamental analysis signals", type: "boolean" },
+    { key: "signal_algorithmic_enabled", value: "true", category: "signals", label: "Algorithmic Signals", description: "Enable ML/algorithmic signals", type: "boolean" },
+    { key: "watchlist_auto_refresh", value: "true", category: "watchlist", label: "Auto-Refresh Prices", description: "Automatically refresh watchlist prices", type: "boolean" },
+    { key: "watchlist_refresh_interval", value: "30", category: "watchlist", label: "Refresh Interval (sec)", description: "How often to refresh watchlist prices", type: "number" },
+    { key: "watchlist_show_volume", value: "true", category: "watchlist", label: "Show Volume", description: "Display volume data in watchlist", type: "boolean" },
+    { key: "watchlist_show_market_cap", value: "true", category: "watchlist", label: "Show Market Cap", description: "Display market cap in watchlist", type: "boolean" },
+    { key: "system_logging_enabled", value: "true", category: "system", label: "Activity Logging", description: "Log all system events to the activity feed", type: "boolean" },
+    { key: "system_dark_mode", value: "true", category: "system", label: "Dark Mode Default", description: "Default to dark mode on first visit", type: "boolean" },
+    { key: "system_api_enabled", value: "true", category: "system", label: "API Access", description: "Allow external API access to TradeSync data", type: "boolean" },
+    { key: "system_webhook_enabled", value: "true", category: "system", label: "Webhook Delivery", description: "Send webhook notifications to connected apps", type: "boolean" },
+    { key: "trade_execution_enabled", value: "false", category: "trading", label: "Trade Execution", description: "Master switch for executing trades through connected brokers", type: "boolean" },
+    { key: "trade_paper_mode", value: "true", category: "trading", label: "Paper Trading Mode", description: "Execute trades in paper/simulation mode only", type: "boolean" },
+    { key: "trade_max_position_size", value: "10000", category: "trading", label: "Max Position Size ($)", description: "Maximum position size per trade", type: "number" },
+    { key: "trade_risk_limit", value: "2", category: "trading", label: "Risk Limit (%)", description: "Maximum risk per trade as % of portfolio", type: "number" },
+    { key: "trade_auto_stop_loss", value: "true", category: "trading", label: "Auto Stop-Loss", description: "Automatically set stop-loss on new trades", type: "boolean" },
+    { key: "trade_auto_take_profit", value: "false", category: "trading", label: "Auto Take-Profit", description: "Automatically set take-profit targets", type: "boolean" },
+  ]);
+}
+
+async function seedIntegrations() {
+  await db.insert(integrations).values([
+    {
+      type: "discord",
+      name: "Trading Alerts Channel",
+      status: "active",
+      config: { webhookUrl: "https://discord.com/api/webhooks/xxxx/yyyy", channelName: "#trading-alerts", serverId: "123456789" },
+      enabled: true,
+      notifyAlerts: true,
+      notifySignals: true,
+      notifyTrades: false,
+      notifySystem: false,
+      autoTrade: false,
+      paperTrade: false,
+    },
+    {
+      type: "discord",
+      name: "System Notifications",
+      status: "active",
+      config: { webhookUrl: "https://discord.com/api/webhooks/aaaa/bbbb", channelName: "#system-logs", serverId: "123456789" },
+      enabled: true,
+      notifyAlerts: false,
+      notifySignals: false,
+      notifyTrades: false,
+      notifySystem: true,
+      autoTrade: false,
+      paperTrade: false,
+    },
+    {
+      type: "ibkr",
+      name: "IBKR Paper Account",
+      status: "active",
+      config: { accountId: "DU12345678", host: "127.0.0.1", port: 7497, clientId: 1, accountType: "paper" },
+      enabled: true,
+      notifyAlerts: false,
+      notifySignals: false,
+      notifyTrades: true,
+      notifySystem: false,
+      autoTrade: false,
+      paperTrade: true,
+    },
+    {
+      type: "ibkr",
+      name: "IBKR Live Account",
+      status: "inactive",
+      config: { accountId: "U98765432", host: "127.0.0.1", port: 7496, clientId: 2, accountType: "live" },
+      enabled: false,
+      notifyAlerts: false,
+      notifySignals: false,
+      notifyTrades: true,
+      notifySystem: false,
+      autoTrade: false,
+      paperTrade: false,
     },
   ]);
 }

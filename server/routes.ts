@@ -1,11 +1,12 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertAlertSchema, insertSignalSchema, insertWatchlistSchema, insertConnectedAppSchema } from "@shared/schema";
+import { insertAlertSchema, insertSignalSchema, insertWatchlistSchema, insertConnectedAppSchema, insertSystemSettingSchema, insertIntegrationSchema } from "@shared/schema";
 
 const partialAlertSchema = insertAlertSchema.partial();
 const partialSignalSchema = insertSignalSchema.partial();
 const partialConnectedAppSchema = insertConnectedAppSchema.partial();
+const partialIntegrationSchema = insertIntegrationSchema.partial();
 
 export async function registerRoutes(
   httpServer: Server,
@@ -240,6 +241,74 @@ export async function registerRoutes(
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ message: "Failed to delete app" });
+    }
+  });
+
+  // System Settings
+  app.get("/api/settings", async (_req, res) => {
+    try {
+      const settings = await storage.getSystemSettings();
+      res.json(settings);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch settings" });
+    }
+  });
+
+  app.put("/api/settings", async (req, res) => {
+    try {
+      const parsed = insertSystemSettingSchema.parse(req.body);
+      const setting = await storage.upsertSystemSetting(parsed);
+      res.json(setting);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message || "Failed to update setting" });
+    }
+  });
+
+  // Integrations CRUD
+  app.get("/api/integrations", async (_req, res) => {
+    try {
+      const items = await storage.getIntegrations();
+      res.json(items);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch integrations" });
+    }
+  });
+
+  app.post("/api/integrations", async (req, res) => {
+    try {
+      const parsed = insertIntegrationSchema.parse(req.body);
+      const integration = await storage.createIntegration(parsed);
+      await storage.createActivity({
+        type: "integration_added",
+        title: `Integration added: ${parsed.name}`,
+        description: `${parsed.type} integration connected to TradeSync`,
+        symbol: null,
+        metadata: null,
+      });
+      res.status(201).json(integration);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message || "Invalid integration data" });
+    }
+  });
+
+  app.patch("/api/integrations/:id", async (req, res) => {
+    try {
+      const parsed = partialIntegrationSchema.parse(req.body);
+      const updated = await storage.updateIntegration(req.params.id, parsed);
+      if (!updated) return res.status(404).json({ message: "Integration not found" });
+      res.json(updated);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message || "Failed to update integration" });
+    }
+  });
+
+  app.delete("/api/integrations/:id", async (req, res) => {
+    try {
+      const deleted = await storage.deleteIntegration(req.params.id);
+      if (!deleted) return res.status(404).json({ message: "Integration not found" });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete integration" });
     }
   });
 
