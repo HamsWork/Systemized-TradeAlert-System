@@ -27,6 +27,7 @@ import {
   RefreshCw,
   Eye,
   EyeOff,
+  Settings2,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -194,6 +195,145 @@ function CreateAppDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
   );
 }
 
+function EditAppDialog({ app, open, onOpenChange }: { app: ConnectedApp; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const { toast } = useToast();
+
+  const form = useForm<InsertConnectedApp>({
+    resolver: zodResolver(insertConnectedAppSchema),
+    defaultValues: {
+      name: app.name,
+      slug: app.slug,
+      description: app.description ?? "",
+      status: app.status,
+      apiEndpoint: app.apiEndpoint ?? "",
+      apiKey: app.apiKey ?? "",
+      webhookUrl: app.webhookUrl ?? "",
+      syncSignals: app.syncSignals,
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: InsertConnectedApp) => {
+      const res = await apiRequest("PATCH", `/api/connected-apps/${app.id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/connected-apps"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/activity"] });
+      toast({ title: "App updated", description: "The app settings have been saved." });
+      onOpenChange(false);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Settings2 className="h-5 w-5 text-primary" />
+            Edit App Settings
+          </DialogTitle>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit((data) => updateMutation.mutate(data))} className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>App Name</FormLabel>
+                    <FormControl>
+                      <Input {...field} data-testid="input-edit-app-name" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="slug"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Slug</FormLabel>
+                    <FormControl>
+                      <Input {...field} data-testid="input-edit-app-slug" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Description</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} data-testid="input-edit-app-description" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <FormField
+                control={form.control}
+                name="apiEndpoint"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>API Endpoint</FormLabel>
+                    <FormControl>
+                      <Input placeholder="https://api.example.com/v1" {...field} value={field.value ?? ""} data-testid="input-edit-app-endpoint" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="webhookUrl"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Webhook URL</FormLabel>
+                    <FormControl>
+                      <Input placeholder="https://api.example.com/hooks" {...field} value={field.value ?? ""} data-testid="input-edit-app-webhook" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <div className="space-y-3 rounded-lg border p-3">
+              <p className="text-sm font-medium">Sync Settings</p>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm">
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  <span>Receive Signals</span>
+                </div>
+                <FormField
+                  control={form.control}
+                  name="syncSignals"
+                  render={({ field }) => (
+                    <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-edit-sync-signals" />
+                  )}
+                />
+              </div>
+            </div>
+            <Button type="submit" className="w-full" disabled={updateMutation.isPending} data-testid="button-save-app">
+              {updateMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ApiKeyDisplay({ app }: { app: ConnectedApp }) {
   const [visible, setVisible] = useState(false);
   const { toast } = useToast();
@@ -269,10 +409,11 @@ function ApiKeyDisplay({ app }: { app: ConnectedApp }) {
   );
 }
 
-function AppCard({ app, onDelete, onToggleStatus }: {
+function AppCard({ app, onDelete, onToggleStatus, onEdit }: {
   app: ConnectedApp;
   onDelete: (id: string) => void;
   onToggleStatus: (id: string, status: string) => void;
+  onEdit: (app: ConnectedApp) => void;
 }) {
   const isActive = app.status === "active";
 
@@ -337,6 +478,15 @@ function AppCard({ app, onDelete, onToggleStatus }: {
             <Button
               size="icon"
               variant="ghost"
+              onClick={() => onEdit(app)}
+              title="Edit Settings"
+              data-testid={`button-edit-app-${app.id}`}
+            >
+              <Settings2 className="h-4 w-4" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
               onClick={() => onToggleStatus(app.id, isActive ? "inactive" : "active")}
               title={isActive ? "Deactivate" : "Activate"}
               data-testid={`button-toggle-app-${app.id}`}
@@ -360,6 +510,7 @@ function AppCard({ app, onDelete, onToggleStatus }: {
 
 export default function ConnectedAppsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingApp, setEditingApp] = useState<ConnectedApp | null>(null);
   const [filter, setFilter] = useState<string>("all");
   const { toast } = useToast();
 
@@ -479,12 +630,20 @@ export default function ConnectedAppsPage() {
               app={app}
               onDelete={(id) => deleteMutation.mutate(id)}
               onToggleStatus={(id, status) => toggleMutation.mutate({ id, status })}
+              onEdit={(app) => setEditingApp(app)}
             />
           ))}
         </div>
       )}
 
       <CreateAppDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      {editingApp && (
+        <EditAppDialog
+          app={editingApp}
+          open={!!editingApp}
+          onOpenChange={(open) => { if (!open) setEditingApp(null); }}
+        />
+      )}
     </div>
   );
 }
