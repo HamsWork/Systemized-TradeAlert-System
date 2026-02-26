@@ -479,7 +479,7 @@ function IntegrationCard({ integration, onDelete, onEdit }: { integration: Integ
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
             <Badge variant={integration.enabled ? "default" : "secondary"} className="text-xs">
               {integration.enabled ? (
                 <><Wifi className="mr-1 h-3 w-3" />Connected</>
@@ -487,11 +487,15 @@ function IntegrationCard({ integration, onDelete, onEdit }: { integration: Integ
                 <><WifiOff className="mr-1 h-3 w-3" />Offline</>
               )}
             </Badge>
-            <Switch
-              checked={integration.enabled}
-              onCheckedChange={(checked) => handleToggle("enabled", checked)}
-              data-testid={`switch-integration-enabled-${integration.id}`}
-            />
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => handleToggle("enabled", !integration.enabled)}
+              data-testid={`button-toggle-connection-${integration.id}`}
+            >
+              {integration.enabled ? "Disconnect" : "Connect"}
+            </Button>
             <Button
               size="icon"
               variant="ghost"
