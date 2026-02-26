@@ -66,7 +66,7 @@ All routes prefixed with `/api`:
 - `GET /ibkr/positions`, `GET /ibkr/positions/:integrationId`, `POST /ibkr/positions`, `PATCH /ibkr/positions/:id`
 - `POST /ibkr/connect/:integrationId` - Connect to IBKR TWS/Gateway for an integration
 - `POST /ibkr/disconnect/:integrationId` - Disconnect from IBKR for an integration
-- `GET /ibkr/chart-data?symbol=X&secType=OPT&strike=N&expiration=DATE&right=C` - Historical chart data from IBKR (supports stocks and option contracts)
+- `GET /ibkr/chart-data?symbol=X&secType=OPT&strike=N&expiration=DATE&right=C` - Historical chart data from IBKR (backend only, frontend uses TradingView widget instead)
 - `GET /ibkr/status` - Get connection status of all IBKR integrations
 - `GET /dashboard/stats`
 - `GET/POST /alerts`, `GET/PATCH/DELETE /alerts/:id` (backend only, not exposed in frontend)
@@ -129,7 +129,7 @@ All routes prefixed with `/api`:
 - `client/src/pages/settings.tsx` - System settings controls by category
 - `client/src/pages/connected-apps.tsx` - Connected apps management with API key display
 - `client/src/pages/signals.tsx` - Signals page with source app badges (cards link to detail page)
-- `client/src/pages/signal-detail.tsx` - Signal detail dialog with trade chart (lightweight-charts, candlestick + area modes), IBKR historical data for stocks and option contracts, IBKR orders, activity feed
+- `client/src/pages/signal-detail.tsx` - Signal detail dialog with TradingView embedded chart (supports stocks and option contracts via OPRA symbol format), IBKR orders, activity feed
 - `client/src/pages/api-guide.tsx` - Interactive API guide with live code examples
 - `client/src/components/app-sidebar.tsx` - Navigation sidebar
 
