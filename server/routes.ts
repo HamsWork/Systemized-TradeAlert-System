@@ -242,9 +242,72 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Signal type not found" });
       }
 
+      const { ticker, instrumentType, direction, expiration, strike, entryPrice } = body;
+      let { tradePlan } = body;
+
+      if (!ticker) {
+        return res.status(400).json({ message: "ticker is required" });
+      }
+
+      const validInstruments = ["Options", "Shares", "LETF"];
+      if (!instrumentType || !validInstruments.includes(instrumentType)) {
+        return res.status(400).json({ message: `instrumentType is required and must be one of: ${validInstruments.join(", ")}` });
+      }
+
+      const validDirections = ["Long", "Short"];
+      if (!direction || !validDirections.includes(direction)) {
+        return res.status(400).json({ message: `direction is required and must be one of: ${validDirections.join(", ")}` });
+      }
+
+      if (instrumentType === "Options") {
+        if (!expiration) {
+          return res.status(400).json({ message: "expiration is required for Options" });
+        }
+        if (!strike) {
+          return res.status(400).json({ message: "strike is required for Options" });
+        }
+      }
+
+      if (tradePlan && typeof tradePlan === "string") {
+        try { tradePlan = JSON.parse(tradePlan); } catch { return res.status(400).json({ message: "tradePlan must be a valid JSON object" }); }
+      }
+
+      const signalDataObj: Record<string, any> = {
+        ticker,
+        instrument_type: instrumentType,
+        direction,
+        entry_price: entryPrice || null,
+      };
+
+      if (instrumentType === "Options") {
+        signalDataObj.expiration = expiration;
+        signalDataObj.strike = strike;
+      }
+
+      if (tradePlan && typeof tradePlan === "object") {
+        if (tradePlan.stopLoss) {
+          const sl = tradePlan.stopLoss;
+          if (sl.sl1) signalDataObj.stop_loss_1 = sl.sl1;
+          if (sl.sl2) signalDataObj.stop_loss_2 = sl.sl2;
+          if (sl.sl3) signalDataObj.stop_loss_3 = sl.sl3;
+        }
+        if (tradePlan.targetLevels) {
+          const tp = tradePlan.targetLevels;
+          if (tp.tp1) signalDataObj.take_profit_1 = tp.tp1;
+          if (tp.tp2) signalDataObj.take_profit_2 = tp.tp2;
+          if (tp.tp3) signalDataObj.take_profit_3 = tp.tp3;
+        }
+        if (tradePlan.raiseStopLevel) {
+          const rs = tradePlan.raiseStopLevel;
+          if (rs.method) signalDataObj.raise_stop_method = rs.method;
+          if (rs.value) signalDataObj.raise_stop_value = rs.value;
+        }
+        if (tradePlan.notes) signalDataObj.trade_plan = tradePlan.notes;
+      }
+
       const signalData = {
         signalTypeId,
-        data: body.data || {},
+        data: signalDataObj,
         discordChannelId: body.discordChannelId || null,
         status: "active",
         sourceAppId: connectedApp.id,
@@ -256,12 +319,11 @@ export async function registerRoutes(
 
       await storage.updateConnectedApp(connectedApp.id, { lastSyncAt: new Date() } as any);
 
-      const data = body.data || {};
       await storage.createActivity({
         type: "signal_ingested",
-        title: `Signal from ${connectedApp.name}: ${signalType.name} ${data.ticker || data.symbol || ""}`,
-        description: `${signalType.name} signal${data.ticker ? ` for ${data.ticker}` : ""}`,
-        symbol: data.ticker || data.symbol || null,
+        title: `Signal from ${connectedApp.name}: ${signalType.name} ${ticker}`,
+        description: `${signalType.name} signal for ${ticker} (${instrumentType})`,
+        symbol: ticker,
         metadata: { sourceApp: connectedApp.name, sourceAppId: connectedApp.id },
       });
 

@@ -283,7 +283,7 @@ function EndpointInteractive({ endpoint, baseUrl, authKey }: { endpoint: Endpoin
                       value={paramValues[param.name] || ""}
                       onChange={(e) => setParam(param.name, e.target.value)}
                       className="w-full bg-zinc-900/50 dark:bg-zinc-900/80 border-zinc-700/50 text-sm font-mono min-h-[120px]"
-                      placeholder={'{\n  "ticker": "AAPL",\n  "instrument_type": "Options",\n  "entry_price": "189.50"\n}'}
+                      placeholder={'{\n  "targetLevels": { "tp1": "195.00", "tp2": "200.00" },\n  "stopLoss": { "sl1": "182.00" },\n  "raiseStopLevel": { "method": "Move to Entry at TP1" },\n  "notes": "Breakout play"\n}'}
                       data-testid={`input-param-${param.name}`}
                     />
                   ) : param.enumValues ? (
@@ -491,12 +491,18 @@ const sections: SectionDef[] = [
       {
         method: "POST",
         path: "/api/ingest/signals",
-        description: "Push a trading signal from a connected app into TradeSync. Requires a valid API key from a connected app passed via Bearer token authentication. Signal data is a flexible JSON object based on the signal type's variables.",
+        description: "Push a trading signal from a connected app into TradeSync. Requires a valid API key from a connected app passed via Bearer token authentication.",
         auth: "Bearer Token",
         params: [
-          { name: "signalType", type: "string", required: false, description: "Signal type name (e.g., 'Common Trade Alert', 'Stop Loss Hit', 'Take Profit Hit'). Provide this or signalTypeId." },
-          { name: "signalTypeId", type: "string", required: false, description: "Signal type UUID. Alternative to signalType name. Provide this or signalType." },
-          { name: "data", type: "json", required: true, description: "JSON object with signal data matching the signal type's variables. For Common Trade Alert: { ticker, instrument_type, entry_price, trade_plan, stop_loss_1, take_profit_1, ... }" },
+          { name: "signalType", type: "string", required: false, description: "Signal type name (e.g., 'Common Trade Alert'). Provide this or signalTypeId." },
+          { name: "signalTypeId", type: "string", required: false, description: "Signal type UUID. Alternative to signalType name." },
+          { name: "ticker", type: "string", required: true, description: "Ticker symbol (e.g., 'AAPL', 'TSLA', 'SPY')." },
+          { name: "instrumentType", type: "string", required: true, description: "Instrument type.", enumValues: ["Options", "Shares", "LETF"] },
+          { name: "direction", type: "string", required: true, description: "Trade direction.", enumValues: ["Long", "Short"] },
+          { name: "expiration", type: "string", required: false, description: "Option expiration date (e.g., '2026-03-20'). Required for Options." },
+          { name: "strike", type: "string", required: false, description: "Option strike price (e.g., '190'). Required for Options." },
+          { name: "entryPrice", type: "string", required: false, description: "Entry price for the trade (e.g., '189.50')." },
+          { name: "tradePlan", type: "json", required: false, description: "Trade plan with target levels, stop losses, and raise stop settings." },
         ],
         responseExample: `{
   "success": true,
@@ -506,16 +512,16 @@ const sections: SectionDef[] = [
     "data": {
       "ticker": "AAPL",
       "instrument_type": "Options",
-      "option_type": "CALL",
-      "strike": "190",
-      "expiration": "2026-03-20",
+      "direction": "Long",
       "entry_price": "189.50",
-      "trade_plan": "Breakout above 188 resistance. Scale out at each TP.",
+      "expiration": "2026-03-20",
+      "strike": "190",
       "stop_loss_1": "182.00",
       "take_profit_1": "195.00",
       "take_profit_2": "200.00",
       "take_profit_3": "205.00",
-      "raise_stop_method": "Move to Entry at TP1"
+      "raise_stop_method": "Move to Entry at TP1",
+      "trade_plan": "Breakout above 188 resistance."
     },
     "status": "active",
     "sourceAppName": "Situ Trader",
@@ -535,10 +541,15 @@ const sections: SectionDef[] = [
     "data": {
       "ticker": "AAPL",
       "instrument_type": "Options",
+      "direction": "Long",
       "entry_price": "189.50",
-      "trade_plan": "Breakout play",
+      "expiration": "2026-03-20",
+      "strike": "190",
       "stop_loss_1": "182.00",
-      "take_profit_1": "195.00"
+      "take_profit_1": "195.00",
+      "take_profit_2": "200.00",
+      "raise_stop_method": "Move to Entry at TP1",
+      "trade_plan": "Breakout above 188 resistance."
     },
     "status": "active",
     "sourceAppName": "Situ Trader",
