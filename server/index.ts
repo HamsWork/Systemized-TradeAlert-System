@@ -64,7 +64,12 @@ app.use((req, res, next) => {
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+        if (Array.isArray(capturedJsonResponse)) {
+          logLine += ` :: ${capturedJsonResponse.length} items`;
+        } else if (typeof capturedJsonResponse === "object" && capturedJsonResponse !== null) {
+          const keys = Object.keys(capturedJsonResponse);
+          logLine += ` :: {${keys.join(", ")}}`;
+        }
       }
 
       log(logLine);
