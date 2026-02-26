@@ -15,14 +15,12 @@ import IntegrationsPage from "@/pages/integrations";
 import ConnectedAppsPage from "@/pages/connected-apps";
 import ApiGuidePage from "@/pages/api-guide";
 import IbkrPage from "@/pages/ibkr";
-import SignalDetailPage from "@/pages/signal-detail";
 import SettingsPage from "@/pages/settings";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
-      <Route path="/signals/:id" component={SignalDetailPage} />
       <Route path="/signals" component={SignalsPage} />
       <Route path="/activity" component={ActivityPage} />
       <Route path="/integrations" component={IntegrationsPage} />

@@ -45,9 +45,9 @@ import {
 import { type Signal, type SignalType, type InsertSignal } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
-import { useLocation } from "wouter";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
+import { SignalDetailDialog } from "@/pages/signal-detail";
 
 function renderTemplatePreview(template: string, data: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => data[key] || "");
@@ -357,9 +357,8 @@ function getDirectionBadge(direction: string | undefined) {
   );
 }
 
-function SignalCard({ signal, signalType, onDelete }: { signal: Signal; signalType?: SignalType; onDelete: (id: string) => void }) {
+function SignalCard({ signal, signalType, onDelete, onOpen }: { signal: Signal; signalType?: SignalType; onDelete: (id: string) => void; onOpen: (signal: Signal) => void }) {
   const [expanded, setExpanded] = useState(false);
-  const [, navigate] = useLocation();
   const data = (signal.data || {}) as Record<string, any>;
   const ticker = data.ticker || data.symbol || "";
   const typeName = signalType?.name || "Signal";
@@ -381,7 +380,7 @@ function SignalCard({ signal, signalType, onDelete }: { signal: Signal; signalTy
   const hasTradePlan = tpLevels.length > 0 || slLevels.length > 0 || raiseMethod || tradePlan;
 
   return (
-    <Card className="hover-elevate overflow-hidden cursor-pointer" onClick={() => navigate(`/signals/${signal.id}`)} data-testid={`card-signal-${signal.id}`}>
+    <Card className="hover-elevate overflow-hidden cursor-pointer" onClick={() => onOpen(signal)} data-testid={`card-signal-${signal.id}`}>
       <CardContent className="p-0">
         <div className="p-4">
           <div className="flex items-start justify-between gap-2">
@@ -532,6 +531,7 @@ function SignalCard({ signal, signalType, onDelete }: { signal: Signal; signalTy
 
 export default function SignalsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedSignal, setSelectedSignal] = useState<Signal | null>(null);
   const [filter, setFilter] = useState<string>("all");
   const { toast } = useToast();
 
@@ -622,12 +622,18 @@ export default function SignalsPage() {
               signal={signal}
               signalType={typeMap.get(signal.signalTypeId)}
               onDelete={(id) => deleteMutation.mutate(id)}
+              onOpen={(s) => setSelectedSignal(s)}
             />
           ))}
         </div>
       )}
 
       <CreateSignalDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      <SignalDetailDialog
+        signal={selectedSignal}
+        open={!!selectedSignal}
+        onOpenChange={(open) => { if (!open) setSelectedSignal(null); }}
+      />
     </div>
   );
 }

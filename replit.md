@@ -53,8 +53,7 @@ Variables support `showWhen` conditional visibility:
 ## Pages
 
 1. **Dashboard** (`/`) - System overview with signal pipeline flow card, stat cards, recent signals, activity feed, connections status, and positions summary
-2. **Signals** (`/signals`) - Full CRUD for trading signals with filtering, shows source app badges. Clicking a signal card opens the detail page.
-2b. **Signal Detail** (`/signals/:id`) - Trade chart (lightweight-charts) with entry/TP/SL price lines, related IBKR orders list, activity feed, and signal details sidebar
+2. **Signals** (`/signals`) - Full CRUD for trading signals with filtering, shows source app badges. Clicking a signal card opens a detail modal with trade chart (lightweight-charts), entry/TP/SL price lines, related IBKR orders, signal details sidebar, and activity feed
 3. **Activity** (`/activity`) - Complete activity log
 4. **Integrations** (`/integrations`) - Full CRUD for Discord channels and IBKR trading accounts with notification/trading toggles
 5. **Connected Apps** (`/connected-apps`) - Manage plugged-in trading apps with API key management (show/hide, copy, regenerate)
