@@ -69,10 +69,46 @@ All routes prefixed with `/api`:
 
 ## Key Files
 
-- `shared/schema.ts` - Data models and Zod validation schemas
+### Shared Schema (split by domain)
+- `shared/schema.ts` - Barrel file re-exporting all domain schemas
+- `shared/schema/users.ts` - Users table, insert schema, types
+- `shared/schema/alerts.ts` - Alerts table, insert schema, types
+- `shared/schema/signals.ts` - Signal types + signals tables, insert schemas, types
+- `shared/schema/activity.ts` - Activity log table, insert schema, types
+- `shared/schema/apps.ts` - Connected apps table, insert schema, types
+- `shared/schema/settings.ts` - System settings table, insert schema, types
+- `shared/schema/integrations.ts` - Integrations table, insert schema, types
+- `shared/schema/ibkr.ts` - IBKR orders + positions tables, insert schemas, types
+- `shared/schema/watchlist.ts` - Watchlist table
+
+### Server Storage (split by domain)
+- `server/storage.ts` - Barrel file re-exporting storage interface, class, and instance
+- `server/storage/interface.ts` - IStorage interface definition
+- `server/storage/users.ts` - User CRUD methods
+- `server/storage/alerts.ts` - Alert CRUD methods
+- `server/storage/signals.ts` - SignalType + Signal CRUD methods
+- `server/storage/activity.ts` - Activity log methods
+- `server/storage/apps.ts` - ConnectedApp CRUD methods
+- `server/storage/settings.ts` - SystemSettings methods
+- `server/storage/integrations.ts` - Integration CRUD methods
+- `server/storage/ibkr.ts` - IBKR orders/positions methods
+- `server/storage/dashboard.ts` - Dashboard stats method
+- `server/storage/index.ts` - DatabaseStorage class composing all domain methods
+
+### Server Routes (split by domain)
+- `server/routes.ts` - Barrel file re-exporting registerRoutes
+- `server/routes/dashboard.ts` - GET /api/dashboard/stats
+- `server/routes/alerts.ts` - /api/alerts CRUD routes
+- `server/routes/signals.ts` - /api/signals CRUD + /api/signal-types + /api/ingest/signals
+- `server/routes/activity.ts` - /api/activity
+- `server/routes/apps.ts` - /api/connected-apps CRUD + regenerate-key
+- `server/routes/settings.ts` - /api/settings
+- `server/routes/integrations.ts` - /api/integrations CRUD
+- `server/routes/ibkr.ts` - /api/ibkr/orders + /api/ibkr/positions
+- `server/routes/index.ts` - registerRoutes composing all domain route registrars
+
+### Other Key Files
 - `server/db.ts` - Database connection with keepAlive and error handling
-- `server/storage.ts` - Storage interface and DatabaseStorage implementation
-- `server/routes.ts` - API route handlers including signal ingestion
 - `server/seed.ts` - Seed data for all tables
 - `client/src/pages/dashboard.tsx` - Overview dashboard with signal pipeline flow, stats, recent signals, activity feed
 - `client/src/pages/settings.tsx` - System settings controls by category
