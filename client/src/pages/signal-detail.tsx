@@ -38,7 +38,8 @@ function buildTradingViewSymbol(params: {
   optionType?: string;
 }): string {
   if (params.instrumentType === "Options" && params.strike && params.expiration) {
-    const exp = params.expiration.replace(/-/g, "");
+    const clean = params.expiration.replace(/-/g, "");
+    const exp = clean.length === 8 ? clean.slice(2) : clean;
     const right = params.optionType?.toUpperCase().startsWith("P") ? "P" : "C";
     const strike = parseFloat(params.strike).toFixed(0);
     return `OPRA:${params.symbol.toUpperCase()}${exp}${right}${strike}`;
