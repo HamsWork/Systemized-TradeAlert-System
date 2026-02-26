@@ -83,6 +83,22 @@ export function registerIbkrRoutes(app: Express) {
     res.json({ success: true, status: "disconnected" });
   }));
 
+  app.get("/api/ibkr/chart-data", asyncHandler(async (req, res) => {
+    const { symbol, secType, strike, expiration, right, duration } = req.query;
+    if (!symbol || typeof symbol !== "string") {
+      return res.status(400).json({ message: "symbol query parameter is required" });
+    }
+    const bars = await ibkrSyncManager.fetchContractHistory({
+      symbol,
+      secType: (secType as string) || "STK",
+      strike: strike ? Number(strike) : undefined,
+      expiration: (expiration as string) || undefined,
+      right: (right as string) || undefined,
+      duration: (duration as string) || undefined,
+    });
+    res.json(bars);
+  }));
+
   app.get("/api/ibkr/status", asyncHandler(async (_req, res) => {
     const status = ibkrSyncManager.getConnectionStatus();
     const result: Record<string, boolean> = {};

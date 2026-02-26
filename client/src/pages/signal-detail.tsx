@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,20 +25,105 @@ import {
   ArrowDownRight,
   Package,
   Activity,
+  CandlestickChart,
 } from "lucide-react";
 import { type Signal, type IbkrOrder, type ActivityLogEntry } from "@shared/schema";
 import { formatDistanceToNow, format } from "date-fns";
-import { createChart, ColorType, AreaSeries } from "lightweight-charts";
+import { createChart, ColorType, AreaSeries, CandlestickSeries } from "lightweight-charts";
 
-function TradingChart({ symbol, orders, entryPrice, tpLevels, slLevels, direction }: {
+interface ChartBar {
+  time: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+function buildChartQueryUrl(params: {
+  symbol: string;
+  instrumentType?: string;
+  strike?: string;
+  expiration?: string;
+  optionType?: string;
+}): string {
+  const qs = new URLSearchParams();
+  qs.set("symbol", params.symbol);
+  if (params.instrumentType === "Options" && params.strike && params.expiration) {
+    qs.set("secType", "OPT");
+    qs.set("strike", params.strike);
+    qs.set("expiration", params.expiration);
+    const right = params.optionType?.toUpperCase().startsWith("P") ? "P" : "C";
+    qs.set("right", right);
+  }
+  return `/api/ibkr/chart-data?${qs.toString()}`;
+}
+
+function generateSyntheticData(entryPrice: number | undefined, tpLevels: number[], slLevels: number[], orders: IbkrOrder[], direction?: string): { time: string; value: number }[] {
+  const allPrices = [
+    ...(entryPrice ? [entryPrice] : []),
+    ...tpLevels,
+    ...slLevels,
+    ...orders.filter(o => o.avgFillPrice).map(o => o.avgFillPrice!),
+    ...orders.filter(o => o.lastPrice).map(o => o.lastPrice!),
+  ];
+  if (allPrices.length === 0) return [];
+
+  const mid = entryPrice || allPrices.reduce((a, b) => a + b, 0) / allPrices.length;
+  const spread = Math.max(...allPrices) - Math.min(...allPrices);
+  const range = Math.max(spread * 1.5, mid * 0.05);
+
+  const now = new Date();
+  const dataPoints = [];
+  for (let i = 30; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const noise = (Math.random() - 0.5) * range * 0.3;
+    const trend = direction === "Short"
+      ? mid + (range * 0.1 * (30 - i) / 30) - (range * 0.2 * i / 30)
+      : mid - (range * 0.1 * (30 - i) / 30) + (range * 0.2 * i / 30);
+    dataPoints.push({
+      time: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
+      value: Math.max(0.01, trend + noise),
+    });
+  }
+  return dataPoints;
+}
+
+function TradingChart({ symbol, orders, entryPrice, tpLevels, slLevels, direction, instrumentType, strike, expiration, optionType }: {
   symbol: string;
   orders: IbkrOrder[];
   entryPrice?: number;
   tpLevels: number[];
   slLevels: number[];
   direction?: string;
+  instrumentType?: string;
+  strike?: string;
+  expiration?: string;
+  optionType?: string;
 }) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
+  const [chartMode, setChartMode] = useState<"candle" | "area">("candle");
+
+  const chartUrl = useMemo(() => buildChartQueryUrl({ symbol, instrumentType, strike, expiration, optionType }), [symbol, instrumentType, strike, expiration, optionType]);
+
+  const barsQuery = useQuery<ChartBar[]>({
+    queryKey: ["/api/ibkr/chart-data", symbol, instrumentType, strike, expiration],
+    queryFn: async () => {
+      const res = await fetch(chartUrl);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!symbol,
+    staleTime: 60000,
+  });
+
+  const liveBars = barsQuery.data ?? [];
+  const hasLiveData = liveBars.length > 0;
+
+  useEffect(() => {
+    if (!hasLiveData) setChartMode("area");
+  }, [hasLiveData]);
 
   const priceLines = useMemo(() => {
     const lines: { price: number; color: string; title: string; lineStyle: number }[] = [];
@@ -66,6 +151,7 @@ function TradingChart({ symbol, orders, entryPrice, tpLevels, slLevels, directio
 
   useEffect(() => {
     if (!chartContainerRef.current) return;
+    if (barsQuery.isLoading) return;
 
     const isDark = document.documentElement.classList.contains("dark");
 
@@ -88,59 +174,67 @@ function TradingChart({ symbol, orders, entryPrice, tpLevels, slLevels, directio
       },
     });
 
-    const areaSeries = chart.addSeries(AreaSeries, {
-      lineColor: direction === "Short" ? "#ef4444" : "#3b82f6",
-      topColor: direction === "Short" ? "rgba(239,68,68,0.3)" : "rgba(59,130,246,0.3)",
-      bottomColor: direction === "Short" ? "rgba(239,68,68,0.02)" : "rgba(59,130,246,0.02)",
-      lineWidth: 2,
-    });
+    let series: any;
 
-    const allPrices = [
-      ...(entryPrice ? [entryPrice] : []),
-      ...tpLevels,
-      ...slLevels,
-      ...orders.filter(o => o.avgFillPrice).map(o => o.avgFillPrice!),
-      ...orders.filter(o => o.lastPrice).map(o => o.lastPrice!),
-    ];
-
-    if (allPrices.length > 0) {
-      const mid = entryPrice || allPrices.reduce((a, b) => a + b, 0) / allPrices.length;
-      const spread = Math.max(...allPrices) - Math.min(...allPrices);
-      const range = Math.max(spread * 1.5, mid * 0.05);
-
-      const now = new Date();
-      const dataPoints = [];
-      for (let i = 30; i >= 0; i--) {
-        const d = new Date(now);
-        d.setDate(d.getDate() - i);
-        const noise = (Math.random() - 0.5) * range * 0.3;
-        const trend = direction === "Short"
-          ? mid + (range * 0.1 * (30 - i) / 30) - (range * 0.2 * i / 30)
-          : mid - (range * 0.1 * (30 - i) / 30) + (range * 0.2 * i / 30);
-        dataPoints.push({
-          time: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
-          value: Math.max(0.01, trend + noise),
-        });
-      }
-      areaSeries.setData(dataPoints as any);
-
-      priceLines.forEach(pl => {
-        areaSeries.createPriceLine({
-          price: pl.price,
-          color: pl.color,
-          lineWidth: 1,
-          lineStyle: pl.lineStyle,
-          axisLabelVisible: true,
-          title: pl.title,
-        });
+    if (hasLiveData && chartMode === "candle") {
+      series = chart.addSeries(CandlestickSeries, {
+        upColor: "#22c55e",
+        downColor: "#ef4444",
+        borderUpColor: "#22c55e",
+        borderDownColor: "#ef4444",
+        wickUpColor: "#22c55e80",
+        wickDownColor: "#ef444480",
       });
+
+      const candleData = liveBars.map(bar => {
+        let t = bar.time;
+        if (/^\d{8}$/.test(t)) {
+          t = `${t.slice(0, 4)}-${t.slice(4, 6)}-${t.slice(6, 8)}`;
+        }
+        return { time: t, open: bar.open, high: bar.high, low: bar.low, close: bar.close };
+      });
+      series.setData(candleData as any);
     } else {
-      areaSeries.setData([
-        { time: "2026-02-20", value: 100 },
-        { time: "2026-02-21", value: 101 },
-        { time: "2026-02-26", value: 102 },
-      ] as any);
+      series = chart.addSeries(AreaSeries, {
+        lineColor: direction === "Short" ? "#ef4444" : "#3b82f6",
+        topColor: direction === "Short" ? "rgba(239,68,68,0.3)" : "rgba(59,130,246,0.3)",
+        bottomColor: direction === "Short" ? "rgba(239,68,68,0.02)" : "rgba(59,130,246,0.02)",
+        lineWidth: 2,
+      });
+
+      if (hasLiveData) {
+        const areaData = liveBars.map(bar => {
+          let t = bar.time;
+          if (/^\d{8}$/.test(t)) {
+            t = `${t.slice(0, 4)}-${t.slice(4, 6)}-${t.slice(6, 8)}`;
+          }
+          return { time: t, value: bar.close };
+        });
+        series.setData(areaData as any);
+      } else {
+        const synth = generateSyntheticData(entryPrice, tpLevels, slLevels, orders, direction);
+        if (synth.length > 0) {
+          series.setData(synth as any);
+        } else {
+          series.setData([
+            { time: "2026-02-20", value: 100 },
+            { time: "2026-02-21", value: 101 },
+            { time: "2026-02-26", value: 102 },
+          ] as any);
+        }
+      }
     }
+
+    priceLines.forEach(pl => {
+      series.createPriceLine({
+        price: pl.price,
+        color: pl.color,
+        lineWidth: 1,
+        lineStyle: pl.lineStyle,
+        axisLabelVisible: true,
+        title: pl.title,
+      });
+    });
 
     chart.timeScale().fitContent();
 
@@ -155,10 +249,58 @@ function TradingChart({ symbol, orders, entryPrice, tpLevels, slLevels, directio
       window.removeEventListener("resize", handleResize);
       chart.remove();
     };
-  }, [priceLines, direction, entryPrice, tpLevels, slLevels, orders]);
+  }, [priceLines, direction, entryPrice, tpLevels, slLevels, orders, liveBars, hasLiveData, chartMode, barsQuery.isLoading]);
+
+  const isOption = instrumentType === "Options";
+  const chartLabel = isOption && strike && expiration
+    ? `${symbol} $${strike} ${expiration}`
+    : symbol;
+
+  if (barsQuery.isLoading) {
+    return <Skeleton className="w-full h-[350px] rounded-lg" />;
+  }
 
   return (
-    <div ref={chartContainerRef} className="w-full rounded-lg overflow-hidden" data-testid="trading-chart" />
+    <div data-testid="trading-chart-wrapper">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          {isOption ? <CandlestickChart className="h-4 w-4 text-blue-500" /> : <BarChart3 className="h-4 w-4 text-muted-foreground" />}
+          <span className="text-sm font-medium" data-testid="text-chart-label">
+            {isOption ? "Option Contract" : "Trade Chart"}
+          </span>
+          <span className="text-xs text-muted-foreground font-mono" data-testid="text-chart-symbol">— {chartLabel}</span>
+          {hasLiveData && (
+            <Badge variant="outline" className="text-[10px] text-emerald-500 border-emerald-500/30" data-testid="badge-live-data">
+              LIVE
+            </Badge>
+          )}
+          {!hasLiveData && (
+            <Badge variant="outline" className="text-[10px] text-muted-foreground" data-testid="badge-simulated-data">
+              Simulated
+            </Badge>
+          )}
+        </div>
+        {hasLiveData && (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setChartMode("candle")}
+              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${chartMode === "candle" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              data-testid="button-chart-candle"
+            >
+              Candle
+            </button>
+            <button
+              onClick={() => setChartMode("area")}
+              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${chartMode === "area" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              data-testid="button-chart-area"
+            >
+              Area
+            </button>
+          </div>
+        )}
+      </div>
+      <div ref={chartContainerRef} className="w-full rounded-lg overflow-hidden" data-testid="trading-chart" />
+    </div>
   );
 }
 
@@ -310,11 +452,6 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
           <div className="space-y-4">
             <Card data-testid="card-chart">
               <CardContent className="p-3">
-                <div className="flex items-center gap-2 mb-3">
-                  <BarChart3 className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">Trade Chart</span>
-                  <span className="text-xs text-muted-foreground">— {ticker}</span>
-                </div>
                 <TradingChart
                   symbol={ticker}
                   orders={orders}
@@ -322,6 +459,10 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                   tpLevels={tpLevels}
                   slLevels={slLevels}
                   direction={direction}
+                  instrumentType={instrumentType}
+                  strike={strike}
+                  expiration={expiration}
+                  optionType={data.option_type}
                 />
                 <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground flex-wrap">
                   <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-blue-500 inline-block" /> Entry</span>

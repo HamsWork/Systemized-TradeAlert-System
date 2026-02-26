@@ -336,6 +336,39 @@ class IbkrSyncManager {
     return null;
   }
 
+  async fetchContractHistory(params: {
+    symbol: string;
+    secType?: string;
+    strike?: number;
+    expiration?: string;
+    right?: string;
+    duration?: string;
+  }): Promise<{ time: string; open: number; high: number; low: number; close: number; volume: number }[]> {
+    for (const [, client] of this.clients) {
+      if (!client.isConnected) continue;
+      try {
+        const reqId = this.mktDataReqCounter++;
+        const contract: any = {
+          symbol: params.symbol.toUpperCase(),
+          secType: params.secType || "STK",
+          exchange: "SMART",
+          currency: "USD",
+        };
+        if (params.secType === "OPT") {
+          if (params.strike) contract.strike = params.strike;
+          if (params.expiration) contract.lastTradeDateOrContractMonth = params.expiration.replace(/-/g, "");
+          if (params.right) contract.right = params.right.toUpperCase();
+        }
+        const duration = params.duration || "30 D";
+        const bars = await client.fetchHistoricalData(contract, reqId, duration);
+        if (bars.length > 0) return bars;
+      } catch (err: any) {
+        console.warn(`[IBKR Sync] Historical data fetch for ${params.symbol}: ${err.message}`);
+      }
+    }
+    return [];
+  }
+
   getConnectionStatus(): Map<string, boolean> {
     const status = new Map<string, boolean>();
     for (const [id, client] of this.clients) {

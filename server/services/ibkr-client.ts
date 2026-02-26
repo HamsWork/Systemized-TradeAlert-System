@@ -1,4 +1,4 @@
-import { IBApi, EventName, Contract, Order, OrderState, IBApiTickType, MarketDataType } from "@stoqey/ib";
+import { IBApi, EventName, Contract, Order, OrderState, IBApiTickType, MarketDataType, BarSizeSetting } from "@stoqey/ib";
 import type { Integration } from "@shared/schema";
 
 export interface IbkrConnectionConfig {
@@ -268,6 +268,58 @@ export class IbkrClient {
       this.ib.on(EventName.error, onError);
 
       this.ib.reqMktData(reqId, contract, "", false, false);
+    });
+  }
+
+  fetchHistoricalData(contract: Contract, reqId: number, durationStr: string = "30 D", barSize: BarSizeSetting = BarSizeSetting.DAYS_ONE): Promise<{ time: string; open: number; high: number; low: number; close: number; volume: number }[]> {
+    return new Promise((resolve) => {
+      const bars: { time: string; open: number; high: number; low: number; close: number; volume: number }[] = [];
+      const timeout = setTimeout(() => {
+        cleanup();
+        resolve(bars);
+      }, 15000);
+
+      const onHistoricalData = (_reqId: number, time: string, open: number, high: number, low: number, close: number, volume: number | any, ...rest: any[]) => {
+        if (_reqId !== reqId) return;
+        if (time.startsWith("finished") || open === -1) {
+          clearTimeout(timeout);
+          cleanup();
+          resolve(bars);
+          return;
+        }
+        const vol = typeof volume === "number" ? volume : Number(volume) || 0;
+        bars.push({ time, open, high, low, close, volume: vol });
+      };
+
+      const onError = (...args: any[]) => {
+        const errReqId = args[2] as number;
+        if (errReqId !== undefined && errReqId !== reqId) return;
+        clearTimeout(timeout);
+        cleanup();
+        resolve(bars);
+      };
+
+      const cleanup = () => {
+        this.ib.off(EventName.historicalData, onHistoricalData);
+        this.ib.off(EventName.error, onError);
+      };
+
+      this.ib.on(EventName.historicalData, onHistoricalData);
+      this.ib.on(EventName.error, onError);
+
+      const whatToShow = contract.secType === "OPT" ? "MIDPOINT" : "TRADES";
+
+      this.ib.reqHistoricalData(
+        reqId,
+        contract,
+        "",
+        durationStr,
+        barSize,
+        whatToShow,
+        1,
+        1,
+        false,
+      );
     });
   }
 
