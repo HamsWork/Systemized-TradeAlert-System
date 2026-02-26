@@ -61,7 +61,6 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  await seedDatabase().catch((err) => console.error("Seed error:", err));
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
@@ -102,4 +101,6 @@ app.use((req, res, next) => {
       log(`serving on port ${port}`);
     },
   );
+
+  seedDatabase().catch((err) => console.error("Seed error:", err));
 })();
