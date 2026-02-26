@@ -254,7 +254,7 @@ function OrdersTable({ orders, page, onPageChange }: { orders: IbkrOrder[]; page
               <TableHead className="text-xs font-medium text-right">Qty</TableHead>
               <TableHead className="text-xs font-medium text-right">Filled</TableHead>
               <TableHead className="text-xs font-medium text-right">Price</TableHead>
-              <TableHead className="text-xs font-medium text-right">Avg Fill</TableHead>
+              <TableHead className="text-xs font-medium text-right">Mkt Price</TableHead>
               <TableHead className="text-xs font-medium">Status</TableHead>
               <TableHead className="text-xs font-medium">Time</TableHead>
             </TableRow>
@@ -271,7 +271,7 @@ function OrdersTable({ orders, page, onPageChange }: { orders: IbkrOrder[]; page
                 <TableCell className="text-right text-sm font-mono">
                   {order.limitPrice ? formatCurrency(order.limitPrice) : order.stopPrice ? formatCurrency(order.stopPrice) : "MKT"}
                 </TableCell>
-                <TableCell className="text-right text-sm font-mono">{order.avgFillPrice ? formatCurrency(order.avgFillPrice) : "-"}</TableCell>
+                <TableCell className="text-right text-sm font-mono" data-testid={`text-mkt-price-${order.id}`}>{order.lastPrice ? formatCurrency(order.lastPrice) : "-"}</TableCell>
                 <TableCell><OrderStatusBadge status={order.status} /></TableCell>
                 <TableCell className="text-xs text-muted-foreground">
                   {formatRelativeTime(order.submittedAt)}

@@ -1,4 +1,4 @@
-import { IBApi, EventName, Contract, Order, OrderState } from "@stoqey/ib";
+import { IBApi, EventName, Contract, Order, OrderState, IBApiTickType } from "@stoqey/ib";
 import type { Integration } from "@shared/schema";
 
 export interface IbkrConnectionConfig {
@@ -212,6 +212,42 @@ export class IbkrClient {
 
       this.ib.on(EventName.pnlSingle, onPnlSingle);
       this.ib.reqPnLSingle(reqId, account, "", conId);
+    });
+  }
+
+  fetchMarketPrice(contract: Contract, reqId: number): Promise<number | null> {
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        cleanup();
+        this.ib.cancelMktData(reqId);
+        resolve(null);
+      }, 5000);
+
+      let lastPrice: number | null = null;
+
+      const onTickPrice = (_reqId: number, field: number, value: number) => {
+        if (_reqId !== reqId) return;
+        if (field === IBApiTickType.LAST || field === IBApiTickType.DELAYED_LAST || field === IBApiTickType.CLOSE) {
+          if (value > 0) lastPrice = value;
+        }
+      };
+
+      const onSnapshotEnd = (_reqId: number) => {
+        if (_reqId !== reqId) return;
+        clearTimeout(timeout);
+        cleanup();
+        this.ib.cancelMktData(reqId);
+        resolve(lastPrice);
+      };
+
+      const cleanup = () => {
+        this.ib.off(EventName.tickPrice, onTickPrice);
+        this.ib.off(EventName.tickSnapshotEnd, onSnapshotEnd);
+      };
+
+      this.ib.on(EventName.tickPrice, onTickPrice);
+      this.ib.on(EventName.tickSnapshotEnd, onSnapshotEnd);
+      this.ib.reqMktData(reqId, contract, "", true, false);
     });
   }
 

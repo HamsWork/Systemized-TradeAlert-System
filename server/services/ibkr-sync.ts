@@ -150,8 +150,12 @@ class IbkrSyncManager {
     }
   }
 
+  private mktDataReqCounter = 20000;
+
   private async syncOrders(integrationId: string, client: IbkrClient): Promise<void> {
     const openOrders = await client.fetchOpenOrders();
+
+    const ordersToUpdate: { orderId: string; contract: any; data: InsertIbkrOrder }[] = [];
 
     for (const oo of openOrders) {
       const secType = oo.contract.secType || "STK";
@@ -175,6 +179,7 @@ class IbkrSyncManager {
         stopPrice: oo.order.auxPrice ?? null,
         filledQuantity: oo.order.filledQuantity ?? 0,
         avgFillPrice: null,
+        lastPrice: existing?.lastPrice ?? null,
         status: mapOrderStatus(oo.orderState.status || "Submitted"),
         timeInForce: oo.order.tif || "DAY",
         commission: oo.orderState.commission != null && oo.orderState.commission < 1e9
@@ -184,6 +189,31 @@ class IbkrSyncManager {
       };
 
       await storage.upsertIbkrOrder(String(oo.orderId), integrationId, orderData);
+      ordersToUpdate.push({ orderId: String(oo.orderId), contract: oo.contract, data: orderData });
+    }
+
+    const seen = new Set<string>();
+    for (const item of ordersToUpdate) {
+      const contractKey = `${item.contract.symbol}_${item.contract.secType}_${item.contract.conId}`;
+      if (seen.has(contractKey)) continue;
+      seen.add(contractKey);
+
+      try {
+        const reqId = this.mktDataReqCounter++;
+        const price = await client.fetchMarketPrice(item.contract, reqId);
+        if (price != null) {
+          for (const o of ordersToUpdate.filter(x =>
+            `${x.contract.symbol}_${x.contract.secType}_${x.contract.conId}` === contractKey
+          )) {
+            await storage.upsertIbkrOrder(o.orderId, integrationId, {
+              ...o.data,
+              lastPrice: price,
+            });
+          }
+        }
+      } catch (err: any) {
+        console.warn(`[IBKR Sync] Market price fetch failed for ${item.data.symbol}: ${err.message}`);
+      }
     }
   }
 

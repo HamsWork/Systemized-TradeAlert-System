@@ -21,6 +21,7 @@ export const ibkrOrders = pgTable("ibkr_orders", {
   stopPrice: real("stop_price"),
   filledQuantity: real("filled_quantity").notNull().default(0),
   avgFillPrice: real("avg_fill_price"),
+  lastPrice: real("last_price"),
   status: text("status").notNull().default("submitted"),
   timeInForce: text("time_in_force").notNull().default("DAY"),
   commission: real("commission"),
