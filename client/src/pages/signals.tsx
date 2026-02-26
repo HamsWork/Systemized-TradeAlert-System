@@ -44,6 +44,7 @@ type SignalVariable = {
   type: string;
   required?: boolean;
   options?: string[];
+  showWhen?: { field: string; value?: string; values?: string[] };
 };
 
 function renderTemplatePreview(template: string, data: Record<string, string>): string {
@@ -98,7 +99,7 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
         <div className="space-y-4">
           <div>
             <label className="text-sm font-medium">Signal Type</label>
-            <Select value={selectedTypeId} onValueChange={(val) => { setSelectedTypeId(val); setSignalData({}); }}>
+            <Select value={selectedTypeId} onValueChange={(val) => { setSelectedTypeId(val); setSignalData({}); }} data-testid="select-signal-type-dropdown">
               <SelectTrigger data-testid="select-signal-type">
                 <SelectValue placeholder="Select signal type..." />
               </SelectTrigger>
@@ -122,14 +123,36 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
               </div>
 
               <div className="space-y-3">
-                {variables.map((v) => {
+                {variables.filter((v) => {
+                  if (!v.showWhen) return true;
+                  const currentVal = signalData[v.showWhen.field];
+                  if (v.showWhen.values) return v.showWhen.values.includes(currentVal);
+                  return currentVal === v.showWhen.value;
+                }).map((v) => {
+                  const handleChange = (name: string, value: string) => {
+                    setSignalData(prev => {
+                      const next = { ...prev, [name]: value };
+                      const dependents = variables.filter(vr => vr.showWhen?.field === name);
+                      dependents.forEach(dep => {
+                        if (!dep.showWhen) return;
+                        const matches = dep.showWhen.values
+                          ? dep.showWhen.values.includes(value)
+                          : dep.showWhen.value === value;
+                        if (!matches) {
+                          delete next[dep.name];
+                        }
+                      });
+                      return next;
+                    });
+                  };
+
                   if (v.type === "boolean") {
                     return (
                       <div key={v.name} className="flex items-center justify-between">
                         <label className="text-sm font-medium">{v.label}</label>
                         <Switch
                           checked={signalData[v.name] === "true"}
-                          onCheckedChange={(checked) => setSignalData(prev => ({ ...prev, [v.name]: checked ? "true" : "false" }))}
+                          onCheckedChange={(checked) => handleChange(v.name, checked ? "true" : "false")}
                           data-testid={`input-signal-${v.name}`}
                         />
                       </div>
@@ -140,7 +163,7 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                     return (
                       <div key={v.name}>
                         <label className="text-sm font-medium">{v.label}{v.required && <span className="text-red-500 ml-0.5">*</span>}</label>
-                        <Select value={signalData[v.name] || ""} onValueChange={(val) => setSignalData(prev => ({ ...prev, [v.name]: val }))}>
+                        <Select value={signalData[v.name] || ""} onValueChange={(val) => handleChange(v.name, val)}>
                           <SelectTrigger data-testid={`select-signal-${v.name}`}>
                             <SelectValue placeholder={`Select ${v.label.toLowerCase()}...`} />
                           </SelectTrigger>
@@ -162,7 +185,7 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                           placeholder={v.label}
                           className="resize-none"
                           value={signalData[v.name] || ""}
-                          onChange={(e) => setSignalData(prev => ({ ...prev, [v.name]: e.target.value }))}
+                          onChange={(e) => handleChange(v.name, e.target.value)}
                           data-testid={`input-signal-${v.name}`}
                         />
                       </div>
@@ -177,7 +200,7 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                         step={v.type === "number" ? "0.01" : undefined}
                         placeholder={v.label}
                         value={signalData[v.name] || ""}
-                        onChange={(e) => setSignalData(prev => ({ ...prev, [v.name]: e.target.value }))}
+                        onChange={(e) => handleChange(v.name, e.target.value)}
                         data-testid={`input-signal-${v.name}`}
                       />
                     </div>
@@ -255,10 +278,20 @@ function SignalCard({ signal, signalType, onDelete }: { signal: Signal; signalTy
               </div>
             )}
 
+            {data.trade_plan && (
+              <div className="mt-3 rounded-md bg-muted/50 px-3 py-2">
+                <p className="text-xs font-medium text-muted-foreground mb-1">Trade Plan</p>
+                <p className="text-sm whitespace-pre-wrap">{data.trade_plan}</p>
+              </div>
+            )}
+
             <div className="mt-3 flex items-center gap-3 flex-wrap text-xs text-muted-foreground">
               <Badge variant={signal.status === "active" ? "outline" : "secondary"} className="text-xs">
                 {signal.status}
               </Badge>
+              {data.instrument_type && (
+                <Badge variant="outline" className="text-xs">{data.instrument_type}</Badge>
+              )}
               {signal.sourceAppName && (
                 <Badge variant="outline" className="text-xs font-normal text-blue-500 border-blue-500/30" data-testid={`badge-source-${signal.id}`}>
                   <Puzzle className="mr-1 h-2.5 w-2.5" />

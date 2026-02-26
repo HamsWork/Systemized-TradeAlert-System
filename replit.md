@@ -16,9 +16,11 @@ Plugged-in apps → Send signals → TradeSync executes IBKR trades + sends Disc
 
 ## Data Model
 
-- **Signals**: Trading signals with direction (buy/sell), confidence scores, entry/target/stop-loss prices, source app tracking (sourceAppId, sourceAppName)
+- **Signal Types**: Template definitions with dynamic variables (including `showWhen` conditional visibility), Discord embed templates (title, description, fields, footer, color), and display settings
+- **Signals**: Trading signals linked to a signal type, with flexible JSON `data` field for all variable values, source app tracking (sourceAppId, sourceAppName)
+- **Common Trade Alert** signal type includes: ticker, instrument type (Options/Shares/LETF), conditional option fields (option_type, strike, expiration), conditional LETF fields (etf_ticker, leverage), entry price, trade plan, multiple stop loss levels (SL1-3), multiple take profit levels (TP1-3), raise stop loss method with value, and notes
 - **Activity Log**: System event feed tracking all actions
-- **Connected Apps**: Plugged-in trading applications with auto-generated API keys, Discord settings (Send Discord Messages toggle + Shares/Options/LETF webhook URLs), and IBKR settings (Execute IBKR Trades toggle + Client ID, Host IP, Port)
+- **Connected Apps**: Plugged-in trading applications with auto-generated API keys, Discord settings (Send Discord Messages toggle + Shares/Options/Leveraged ETF webhook URLs), and IBKR settings (Execute IBKR Trades toggle + Client ID, Host IP, Port)
 - **System Settings**: Key-value toggle/config store for system controls (signals, trading, system)
 - **Integrations**: Discord channels and IBKR trading accounts with per-integration notification and trading toggles
 - **IBKR Orders/Positions**: Trade execution records and open position tracking
@@ -28,9 +30,16 @@ Plugged-in apps → Send signals → TradeSync executes IBKR trades + sends Disc
 
 Connected apps push signals to TradeSync via `POST /api/ingest/signals` using their API key:
 - Auth: `Authorization: Bearer <api_key>` header
-- Body: `{ symbol, type, direction, confidence, entryPrice, targetPrice?, stopLoss?, notes? }`
+- Body: `{ signalTypeId or signalType (name), data: { ...variable values } }`
 - App must be active and have syncSignals enabled
 - Each signal is tagged with sourceAppId and sourceAppName
+
+## Signal Type Variables
+
+Variables support `showWhen` conditional visibility:
+- `{ field: "instrument_type", value: "Options" }` - show only when instrument_type is Options
+- `{ field: "raise_stop_method", values: ["Trail by %", "Trail by $", "Custom"] }` - show when any of the values match
+- Form automatically clears dependent field values when parent selection changes
 
 ## Pages
 
