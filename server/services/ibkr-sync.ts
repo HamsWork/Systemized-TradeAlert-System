@@ -187,10 +187,14 @@ class IbkrSyncManager {
     }
   }
 
+  private pnlReqCounter = 10000;
+
   private async syncPositions(integrationId: string, client: IbkrClient): Promise<void> {
     const livePositions = await client.fetchPositions();
 
     await storage.deleteIbkrPositionsByIntegration(integrationId);
+
+    const positionsToUpdate: { posKey: string; data: InsertIbkrPosition; account: string; conId: number | undefined }[] = [];
 
     for (const pos of livePositions) {
       if (pos.position === 0) continue;
@@ -208,6 +212,7 @@ class IbkrSyncManager {
         expiration: pos.contract.lastTradeDateOrContractMonth || null,
         strike: secType === "OPT" ? (pos.contract.strike ?? null) : null,
         right: secType === "OPT" ? (pos.contract.right || null) : null,
+        conId: pos.contract.conId ?? null,
         quantity: pos.position,
         avgCost: pos.avgCost,
         marketPrice: null,
@@ -219,6 +224,29 @@ class IbkrSyncManager {
       };
 
       await storage.upsertIbkrPosition(posKey, integrationId, posData);
+      positionsToUpdate.push({ posKey, data: posData, account: pos.account, conId: pos.contract.conId });
+    }
+
+    for (const item of positionsToUpdate) {
+      if (!item.conId) continue;
+      try {
+        const reqId = this.pnlReqCounter++;
+        const pnl = await client.fetchPnLSingle(item.account, item.conId, reqId);
+        if (pnl) {
+          const marketPrice = item.data.quantity !== 0 && pnl.marketValue !== 0
+            ? pnl.marketValue / item.data.quantity
+            : null;
+          await storage.upsertIbkrPosition(item.posKey, integrationId, {
+            ...item.data,
+            marketPrice,
+            marketValue: pnl.marketValue,
+            unrealizedPnl: pnl.unrealizedPnl,
+            realizedPnl: pnl.realizedPnl,
+          });
+        }
+      } catch (err: any) {
+        console.warn(`[IBKR Sync] PnL fetch failed for ${item.data.symbol}: ${err.message}`);
+      }
     }
   }
 

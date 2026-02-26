@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, real } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, real, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -39,6 +39,7 @@ export const ibkrPositions = pgTable("ibkr_positions", {
   expiration: text("expiration"),
   strike: real("strike"),
   right: text("right"),
+  conId: integer("con_id"),
   quantity: real("quantity").notNull(),
   avgCost: real("avg_cost").notNull(),
   marketPrice: real("market_price"),

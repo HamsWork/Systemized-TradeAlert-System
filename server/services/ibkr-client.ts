@@ -179,6 +179,42 @@ export class IbkrClient {
     });
   }
 
+  fetchPnLSingle(account: string, conId: number, reqId: number): Promise<{ marketPrice: number; marketValue: number; unrealizedPnl: number; realizedPnl: number } | null> {
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        cleanup();
+        resolve(null);
+      }, 5000);
+
+      const onPnlSingle = (
+        _reqId: number,
+        _pos: number,
+        dailyPnL: number,
+        unrealizedPnL: number,
+        realizedPnL: number,
+        value: number,
+      ) => {
+        if (_reqId !== reqId) return;
+        clearTimeout(timeout);
+        cleanup();
+        this.ib.cancelPnLSingle(reqId);
+        resolve({
+          marketPrice: 0,
+          marketValue: value,
+          unrealizedPnl: unrealizedPnL,
+          realizedPnl: realizedPnL,
+        });
+      };
+
+      const cleanup = () => {
+        this.ib.off(EventName.pnlSingle, onPnlSingle);
+      };
+
+      this.ib.on(EventName.pnlSingle, onPnlSingle);
+      this.ib.reqPnLSingle(reqId, account, "", conId);
+    });
+  }
+
   cancelPositions(): void {
     this.ib.cancelPositions();
   }
