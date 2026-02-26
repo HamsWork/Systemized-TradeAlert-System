@@ -27,6 +27,7 @@ import {
   Trash2,
   Target,
   Shield,
+  Puzzle,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -308,6 +309,12 @@ function SignalCard({ signal, onDelete }: { signal: Signal; onDelete: (id: strin
               <Badge variant={signal.status === "active" ? "outline" : "secondary"} className="text-xs">
                 {signal.status}
               </Badge>
+              {signal.sourceAppName && (
+                <Badge variant="outline" className="text-xs font-normal text-blue-500 border-blue-500/30" data-testid={`badge-source-${signal.id}`}>
+                  <Puzzle className="mr-1 h-2.5 w-2.5" />
+                  {signal.sourceAppName}
+                </Badge>
+              )}
               <span>
                 {signal.createdAt ? formatDistanceToNow(new Date(signal.createdAt), { addSuffix: true }) : ""}
               </span>

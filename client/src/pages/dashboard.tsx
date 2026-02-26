@@ -11,7 +11,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Bell,
   TrendingUp,
-  Eye,
   Activity,
   Zap,
   BarChart3,
@@ -242,7 +241,6 @@ function ConnectedAppsPanel({ apps }: { apps: ConnectedApp[] }) {
                       <div className="flex items-center gap-2 flex-wrap">
                         {app.syncAlerts && <Badge variant="outline" className="text-[10px] h-5"><Bell className="mr-0.5 h-2.5 w-2.5" />Alerts</Badge>}
                         {app.syncSignals && <Badge variant="outline" className="text-[10px] h-5"><TrendingUp className="mr-0.5 h-2.5 w-2.5" />Signals</Badge>}
-                        {app.syncWatchlist && <Badge variant="outline" className="text-[10px] h-5"><Eye className="mr-0.5 h-2.5 w-2.5" />Watch</Badge>}
                       </div>
                     </div>
                   </div>
@@ -473,7 +471,6 @@ export default function Dashboard() {
     triggeredAlerts: number;
     totalSignals: number;
     activeSignals: number;
-    watchlistCount: number;
   }>({ queryKey: ["/api/dashboard/stats"] });
 
   const settingsQuery = useQuery<SystemSetting[]>({ queryKey: ["/api/settings"] });
@@ -532,7 +529,6 @@ export default function Dashboard() {
           <div className="grid gap-4 lg:grid-cols-2">
             <SettingsPanel settings={settings} category="alerts" icon={Bell} title="Alert System Controls" />
             <SettingsPanel settings={settings} category="signals" icon={TrendingUp} title="Signal Engine Controls" />
-            <SettingsPanel settings={settings} category="watchlist" icon={Eye} title="Watchlist Controls" />
             <SettingsPanel settings={settings} category="system" icon={Cpu} title="System Settings" />
           </div>
         </TabsContent>

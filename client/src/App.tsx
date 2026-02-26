@@ -11,7 +11,6 @@ import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import AlertsPage from "@/pages/alerts";
 import SignalsPage from "@/pages/signals";
-import WatchlistPage from "@/pages/watchlist";
 import ActivityPage from "@/pages/activity";
 import ConnectedAppsPage from "@/pages/connected-apps";
 
@@ -21,7 +20,6 @@ function Router() {
       <Route path="/" component={Dashboard} />
       <Route path="/alerts" component={AlertsPage} />
       <Route path="/signals" component={SignalsPage} />
-      <Route path="/watchlist" component={WatchlistPage} />
       <Route path="/activity" component={ActivityPage} />
       <Route path="/connected-apps" component={ConnectedAppsPage} />
       <Route component={NotFound} />

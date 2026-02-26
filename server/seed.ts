@@ -1,6 +1,11 @@
 import { db } from "./db";
-import { alerts, signals, watchlist, activityLog, connectedApps, systemSettings, integrations } from "@shared/schema";
+import { alerts, signals, activityLog, connectedApps, systemSettings, integrations } from "@shared/schema";
 import { sql } from "drizzle-orm";
+import crypto from "crypto";
+
+function generateApiKey(): string {
+  return `ts_${crypto.randomBytes(24).toString("hex")}`;
+}
 
 export async function seedDatabase() {
   const existingAlerts = await db.select().from(alerts);
@@ -88,6 +93,7 @@ export async function seedDatabase() {
       stopLoss: 182.00,
       status: "active",
       notes: "Golden cross on daily chart. RSI at 55, room for upside. Volume confirming the move.",
+      sourceAppName: "Situ Trader",
     },
     {
       symbol: "TSLA",
@@ -99,6 +105,7 @@ export async function seedDatabase() {
       stopLoss: 260.00,
       status: "active",
       notes: "Bearish divergence on RSI. Social sentiment turning negative after earnings guidance.",
+      sourceAppName: "Crowned Trader",
     },
     {
       symbol: "MSFT",
@@ -110,6 +117,7 @@ export async function seedDatabase() {
       stopLoss: 400.00,
       status: "active",
       notes: "Strong cloud revenue growth. AI integration driving new revenue streams. Undervalued relative to peers.",
+      sourceAppName: "Situ Trader",
     },
     {
       symbol: "AMD",
@@ -121,59 +129,7 @@ export async function seedDatabase() {
       stopLoss: 155.00,
       status: "active",
       notes: "ML model detected bullish pattern. Momentum indicators aligning on multiple timeframes.",
-    },
-  ]);
-
-  await db.insert(watchlist).values([
-    {
-      symbol: "BTC",
-      name: "Bitcoin",
-      currentPrice: 68450.25,
-      change24h: 1250.50,
-      changePercent: 1.86,
-      volume: "42.3B",
-      marketCap: "1.34T",
-      sector: "Crypto",
-    },
-    {
-      symbol: "ETH",
-      name: "Ethereum",
-      currentPrice: 3485.50,
-      change24h: -45.20,
-      changePercent: -1.28,
-      volume: "18.7B",
-      marketCap: "418B",
-      sector: "Crypto",
-    },
-    {
-      symbol: "AAPL",
-      name: "Apple Inc.",
-      currentPrice: 189.72,
-      change24h: 2.15,
-      changePercent: 1.15,
-      volume: "52.1M",
-      marketCap: "2.95T",
-      sector: "Technology",
-    },
-    {
-      symbol: "NVDA",
-      name: "NVIDIA Corp.",
-      currentPrice: 875.30,
-      change24h: 18.45,
-      changePercent: 2.15,
-      volume: "38.9M",
-      marketCap: "2.16T",
-      sector: "Technology",
-    },
-    {
-      symbol: "TSLA",
-      name: "Tesla Inc.",
-      currentPrice: 248.90,
-      change24h: -5.30,
-      changePercent: -2.08,
-      volume: "89.2M",
-      marketCap: "791B",
-      sector: "Automotive",
+      sourceAppName: "Crowned Trader",
     },
   ]);
 
@@ -197,25 +153,18 @@ export async function seedDatabase() {
       metadata: null,
     },
     {
-      type: "signal_created",
-      title: "BUY signal: AAPL",
+      type: "signal_ingested",
+      title: "Signal from Situ Trader: BUY AAPL",
       description: "Technical signal at $189.50 with 78% confidence",
       symbol: "AAPL",
-      metadata: null,
+      metadata: { sourceApp: "Situ Trader" },
     },
     {
-      type: "watchlist_added",
-      title: "Added NVDA to watchlist",
-      description: "NVIDIA Corp. at $875.30",
-      symbol: "NVDA",
-      metadata: null,
-    },
-    {
-      type: "signal_created",
-      title: "SELL signal: TSLA",
+      type: "signal_ingested",
+      title: "Signal from Crowned Trader: SELL TSLA",
       description: "Sentiment signal at $248.90 with 65% confidence",
       symbol: "TSLA",
-      metadata: null,
+      metadata: { sourceApp: "Crowned Trader" },
     },
     {
       type: "alert_created",
@@ -235,10 +184,10 @@ async function seedApps() {
       description: "Advanced algorithmic trading platform with real-time market analysis and automated execution strategies",
       status: "active",
       apiEndpoint: "https://api.situtrader.com/v1",
+      apiKey: generateApiKey(),
       webhookUrl: "https://api.situtrader.com/webhooks/tradesync",
       syncAlerts: true,
       syncSignals: true,
-      syncWatchlist: true,
     },
     {
       name: "Crowned Trader",
@@ -246,10 +195,10 @@ async function seedApps() {
       description: "Community-driven trading signals platform with social sentiment analysis and copy trading features",
       status: "active",
       apiEndpoint: "https://api.crownedtrader.io/v2",
+      apiKey: generateApiKey(),
       webhookUrl: "https://api.crownedtrader.io/hooks/tradesync",
       syncAlerts: true,
       syncSignals: true,
-      syncWatchlist: false,
     },
   ]);
 }
@@ -261,19 +210,15 @@ async function seedSettings() {
     { key: "alert_email_enabled", value: "false", category: "alerts", label: "Email Notifications", description: "Send email when alerts trigger", type: "boolean" },
     { key: "alert_auto_pause", value: "true", category: "alerts", label: "Auto-Pause Triggered", description: "Automatically pause alerts after they trigger", type: "boolean" },
     { key: "signal_system_enabled", value: "true", category: "signals", label: "Signal Engine", description: "Master switch for the signal analysis engine", type: "boolean" },
-    { key: "signal_auto_create_alerts", value: "false", category: "signals", label: "Auto-Create Alerts", description: "Automatically create alerts from new signals", type: "boolean" },
-    { key: "signal_confidence_threshold", value: "60", category: "signals", label: "Min Confidence Threshold", description: "Minimum confidence % to display signals", type: "number" },
-    { key: "signal_technical_enabled", value: "true", category: "signals", label: "Technical Signals", description: "Enable technical analysis signals", type: "boolean" },
-    { key: "signal_sentiment_enabled", value: "true", category: "signals", label: "Sentiment Signals", description: "Enable social sentiment signals", type: "boolean" },
-    { key: "signal_fundamental_enabled", value: "true", category: "signals", label: "Fundamental Signals", description: "Enable fundamental analysis signals", type: "boolean" },
-    { key: "signal_algorithmic_enabled", value: "true", category: "signals", label: "Algorithmic Signals", description: "Enable ML/algorithmic signals", type: "boolean" },
-    { key: "watchlist_auto_refresh", value: "true", category: "watchlist", label: "Auto-Refresh Prices", description: "Automatically refresh watchlist prices", type: "boolean" },
-    { key: "watchlist_refresh_interval", value: "30", category: "watchlist", label: "Refresh Interval (sec)", description: "How often to refresh watchlist prices", type: "number" },
-    { key: "watchlist_show_volume", value: "true", category: "watchlist", label: "Show Volume", description: "Display volume data in watchlist", type: "boolean" },
-    { key: "watchlist_show_market_cap", value: "true", category: "watchlist", label: "Show Market Cap", description: "Display market cap in watchlist", type: "boolean" },
+    { key: "signal_auto_create_alerts", value: "false", category: "signals", label: "Auto-Create Alerts", description: "Automatically create alerts from incoming signals", type: "boolean" },
+    { key: "signal_confidence_threshold", value: "60", category: "signals", label: "Min Confidence Threshold", description: "Minimum confidence % to accept incoming signals", type: "number" },
+    { key: "signal_technical_enabled", value: "true", category: "signals", label: "Technical Signals", description: "Accept technical analysis signals from apps", type: "boolean" },
+    { key: "signal_sentiment_enabled", value: "true", category: "signals", label: "Sentiment Signals", description: "Accept social sentiment signals from apps", type: "boolean" },
+    { key: "signal_fundamental_enabled", value: "true", category: "signals", label: "Fundamental Signals", description: "Accept fundamental analysis signals from apps", type: "boolean" },
+    { key: "signal_algorithmic_enabled", value: "true", category: "signals", label: "Algorithmic Signals", description: "Accept ML/algorithmic signals from apps", type: "boolean" },
     { key: "system_logging_enabled", value: "true", category: "system", label: "Activity Logging", description: "Log all system events to the activity feed", type: "boolean" },
     { key: "system_dark_mode", value: "true", category: "system", label: "Dark Mode Default", description: "Default to dark mode on first visit", type: "boolean" },
-    { key: "system_api_enabled", value: "true", category: "system", label: "API Access", description: "Allow external API access to TradeSync data", type: "boolean" },
+    { key: "system_api_enabled", value: "true", category: "system", label: "API Access", description: "Allow external apps to push signals via API", type: "boolean" },
     { key: "system_webhook_enabled", value: "true", category: "system", label: "Webhook Delivery", description: "Send webhook notifications to connected apps", type: "boolean" },
     { key: "trade_execution_enabled", value: "false", category: "trading", label: "Trade Execution", description: "Master switch for executing trades through connected brokers", type: "boolean" },
     { key: "trade_paper_mode", value: "true", category: "trading", label: "Paper Trading Mode", description: "Execute trades in paper/simulation mode only", type: "boolean" },

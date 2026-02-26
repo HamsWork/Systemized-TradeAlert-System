@@ -34,6 +34,8 @@ export const signals = pgTable("signals", {
   stopLoss: real("stop_loss"),
   status: text("status").notNull().default("active"),
   notes: text("notes"),
+  sourceAppId: varchar("source_app_id"),
+  sourceAppName: text("source_app_name"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -71,7 +73,6 @@ export const connectedApps = pgTable("connected_apps", {
   webhookUrl: text("webhook_url"),
   syncAlerts: boolean("sync_alerts").notNull().default(true),
   syncSignals: boolean("sync_signals").notNull().default(true),
-  syncWatchlist: boolean("sync_watchlist").notNull().default(false),
   lastSyncAt: timestamp("last_sync_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -143,11 +144,6 @@ export const insertSignalSchema = createInsertSchema(signals).omit({
   createdAt: true,
 });
 
-export const insertWatchlistSchema = createInsertSchema(watchlist).omit({
-  id: true,
-  addedAt: true,
-});
-
 export const insertActivitySchema = createInsertSchema(activityLog).omit({
   id: true,
   createdAt: true,
@@ -159,7 +155,5 @@ export type Alert = typeof alerts.$inferSelect;
 export type InsertAlert = z.infer<typeof insertAlertSchema>;
 export type Signal = typeof signals.$inferSelect;
 export type InsertSignal = z.infer<typeof insertSignalSchema>;
-export type WatchlistItem = typeof watchlist.$inferSelect;
-export type InsertWatchlistItem = z.infer<typeof insertWatchlistSchema>;
 export type ActivityLogEntry = typeof activityLog.$inferSelect;
 export type InsertActivityLog = z.infer<typeof insertActivitySchema>;

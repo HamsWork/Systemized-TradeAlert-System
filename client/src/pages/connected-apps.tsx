@@ -21,9 +21,13 @@ import {
   Webhook,
   Bell,
   TrendingUp,
-  Eye,
   Power,
   PowerOff,
+  Key,
+  Copy,
+  RefreshCw,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -48,7 +52,6 @@ function CreateAppDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
       webhookUrl: "",
       syncAlerts: true,
       syncSignals: true,
-      syncWatchlist: false,
     },
   });
 
@@ -60,7 +63,7 @@ function CreateAppDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/connected-apps"] });
       queryClient.invalidateQueries({ queryKey: ["/api/activity"] });
-      toast({ title: "App connected", description: "The app has been plugged into TradeSync." });
+      toast({ title: "App connected", description: "The app has been plugged into TradeSync. An API key has been generated automatically." });
       form.reset();
       onOpenChange(false);
     },
@@ -158,19 +161,15 @@ function CreateAppDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
                 )}
               />
             </div>
-            <FormField
-              control={form.control}
-              name="apiKey"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>API Key</FormLabel>
-                  <FormControl>
-                    <Input type="password" placeholder="Optional API key" {...field} value={field.value ?? ""} data-testid="input-app-apikey" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="rounded-lg border border-dashed p-3 bg-muted/30">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Key className="h-4 w-4 text-amber-500" />
+                API Key
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                An API key will be auto-generated when you connect this app. The app will use this key to send signals to TradeSync.
+              </p>
+            </div>
             <div className="space-y-3 rounded-lg border p-3">
               <p className="text-sm font-medium">Sync Settings</p>
               <div className="flex items-center justify-between">
@@ -189,26 +188,13 @@ function CreateAppDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm">
                   <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                  <span>Sync Signals</span>
+                  <span>Receive Signals</span>
                 </div>
                 <FormField
                   control={form.control}
                   name="syncSignals"
                   render={({ field }) => (
                     <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-sync-signals" />
-                  )}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm">
-                  <Eye className="h-4 w-4 text-muted-foreground" />
-                  <span>Sync Watchlist</span>
-                </div>
-                <FormField
-                  control={form.control}
-                  name="syncWatchlist"
-                  render={({ field }) => (
-                    <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-sync-watchlist" />
                   )}
                 />
               </div>
@@ -220,6 +206,81 @@ function CreateAppDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
         </Form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ApiKeyDisplay({ app }: { app: ConnectedApp }) {
+  const [visible, setVisible] = useState(false);
+  const { toast } = useToast();
+
+  const regenerateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/connected-apps/${app.id}/regenerate-key`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/connected-apps"] });
+      toast({ title: "API key regenerated", description: "Make sure to update this key in your app." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const copyKey = () => {
+    if (app.apiKey) {
+      navigator.clipboard.writeText(app.apiKey);
+      toast({ title: "API key copied to clipboard" });
+    }
+  };
+
+  if (!app.apiKey) return null;
+
+  return (
+    <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3" data-testid={`api-key-section-${app.id}`}>
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+          <Key className="h-3.5 w-3.5" />
+          API Key
+        </div>
+        <div className="flex items-center gap-1">
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-6 w-6"
+            onClick={() => setVisible(!visible)}
+            data-testid={`button-toggle-key-${app.id}`}
+          >
+            {visible ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-6 w-6"
+            onClick={copyKey}
+            data-testid={`button-copy-key-${app.id}`}
+          >
+            <Copy className="h-3 w-3" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-6 w-6"
+            onClick={() => regenerateMutation.mutate()}
+            disabled={regenerateMutation.isPending}
+            data-testid={`button-regenerate-key-${app.id}`}
+          >
+            <RefreshCw className={`h-3 w-3 ${regenerateMutation.isPending ? "animate-spin" : ""}`} />
+          </Button>
+        </div>
+      </div>
+      <code className="block text-xs font-mono break-all bg-background/50 rounded px-2 py-1.5 select-all" data-testid={`text-api-key-${app.id}`}>
+        {visible ? app.apiKey : `${app.apiKey.slice(0, 6)}${"•".repeat(24)}${app.apiKey.slice(-4)}`}
+      </code>
+      <p className="mt-2 text-[10px] text-muted-foreground">
+        Use this key in your app's Authorization header: <code className="text-xs">Bearer {visible ? app.apiKey.slice(0, 10) + "..." : "ts_••••"}</code>
+      </p>
+    </div>
   );
 }
 
@@ -281,12 +342,9 @@ function AppCard({ app, onDelete, onToggleStatus }: {
                   <TrendingUp className="mr-1 h-3 w-3" />Signals
                 </Badge>
               )}
-              {app.syncWatchlist && (
-                <Badge variant="outline" className="text-xs font-normal">
-                  <Eye className="mr-1 h-3 w-3" />Watchlist
-                </Badge>
-              )}
             </div>
+
+            <ApiKeyDisplay app={app} />
 
             {app.lastSyncAt && (
               <p className="mt-2 text-xs text-muted-foreground">
@@ -373,7 +431,7 @@ export default function ConnectedAppsPage() {
             <h1 className="text-2xl font-bold tracking-tight">Connected Apps</h1>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Manage apps plugged into TradeSync
+            Manage apps plugged into TradeSync — each app gets an API key to send signals
           </p>
         </div>
         <Button onClick={() => setDialogOpen(true)} data-testid="button-open-connect-app">
@@ -381,6 +439,24 @@ export default function ConnectedAppsPage() {
           Connect App
         </Button>
       </div>
+
+      <Card className="border-dashed">
+        <CardContent className="p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
+              <Key className="h-4 w-4 text-blue-500" />
+            </div>
+            <div className="text-sm">
+              <p className="font-medium">Signal Ingestion API</p>
+              <p className="text-muted-foreground mt-0.5">
+                Connected apps can push signals to TradeSync using their API key. Send a POST to{" "}
+                <code className="text-xs bg-muted px-1 py-0.5 rounded" data-testid="text-ingest-endpoint">/api/ingest/signals</code>{" "}
+                with <code className="text-xs bg-muted px-1 py-0.5 rounded">Authorization: Bearer &lt;api_key&gt;</code>
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="flex items-center gap-2 flex-wrap">
         {["all", "active", "inactive"].map((f) => (

@@ -3,7 +3,6 @@ import {
   LayoutDashboard,
   Bell,
   TrendingUp,
-  Eye,
   Activity,
   Zap,
   Puzzle,
@@ -26,7 +25,6 @@ const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Alerts", url: "/alerts", icon: Bell },
   { title: "Signals", url: "/signals", icon: TrendingUp },
-  { title: "Watchlist", url: "/watchlist", icon: Eye },
   { title: "Activity", url: "/activity", icon: Activity },
   { title: "Connected Apps", url: "/connected-apps", icon: Puzzle },
 ];

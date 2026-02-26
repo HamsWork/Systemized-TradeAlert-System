@@ -2,12 +2,11 @@ import {
   type User, type InsertUser,
   type Alert, type InsertAlert,
   type Signal, type InsertSignal,
-  type WatchlistItem, type InsertWatchlistItem,
   type ActivityLogEntry, type InsertActivityLog,
   type ConnectedApp, type InsertConnectedApp,
   type SystemSetting, type InsertSystemSetting,
   type Integration, type InsertIntegration,
-  users, alerts, signals, watchlist, activityLog, connectedApps,
+  users, alerts, signals, activityLog, connectedApps,
   systemSettings, integrations,
 } from "@shared/schema";
 import { db } from "./db";
@@ -30,15 +29,12 @@ export interface IStorage {
   updateSignal(id: string, data: Partial<InsertSignal>): Promise<Signal | undefined>;
   deleteSignal(id: string): Promise<boolean>;
 
-  getWatchlist(): Promise<WatchlistItem[]>;
-  addToWatchlist(item: InsertWatchlistItem): Promise<WatchlistItem>;
-  removeFromWatchlist(id: string): Promise<boolean>;
-
   getActivityLog(): Promise<ActivityLogEntry[]>;
   createActivity(entry: InsertActivityLog): Promise<ActivityLogEntry>;
 
   getConnectedApps(): Promise<ConnectedApp[]>;
   getConnectedApp(id: string): Promise<ConnectedApp | undefined>;
+  getConnectedAppByApiKey(apiKey: string): Promise<ConnectedApp | undefined>;
   createConnectedApp(app: InsertConnectedApp): Promise<ConnectedApp>;
   updateConnectedApp(id: string, data: Partial<InsertConnectedApp>): Promise<ConnectedApp | undefined>;
   deleteConnectedApp(id: string): Promise<boolean>;
@@ -59,7 +55,6 @@ export interface IStorage {
     triggeredAlerts: number;
     totalSignals: number;
     activeSignals: number;
-    watchlistCount: number;
   }>;
 }
 
@@ -127,20 +122,6 @@ export class DatabaseStorage implements IStorage {
     return result.length > 0;
   }
 
-  async getWatchlist(): Promise<WatchlistItem[]> {
-    return db.select().from(watchlist).orderBy(desc(watchlist.addedAt));
-  }
-
-  async addToWatchlist(item: InsertWatchlistItem): Promise<WatchlistItem> {
-    const [created] = await db.insert(watchlist).values(item).returning();
-    return created;
-  }
-
-  async removeFromWatchlist(id: string): Promise<boolean> {
-    const result = await db.delete(watchlist).where(eq(watchlist.id, id)).returning();
-    return result.length > 0;
-  }
-
   async getActivityLog(): Promise<ActivityLogEntry[]> {
     return db.select().from(activityLog).orderBy(desc(activityLog.createdAt)).limit(50);
   }
@@ -156,6 +137,11 @@ export class DatabaseStorage implements IStorage {
 
   async getConnectedApp(id: string): Promise<ConnectedApp | undefined> {
     const [app] = await db.select().from(connectedApps).where(eq(connectedApps.id, id));
+    return app;
+  }
+
+  async getConnectedAppByApiKey(apiKey: string): Promise<ConnectedApp | undefined> {
+    const [app] = await db.select().from(connectedApps).where(eq(connectedApps.apiKey, apiKey));
     return app;
   }
 
@@ -220,7 +206,6 @@ export class DatabaseStorage implements IStorage {
   async getDashboardStats() {
     const allAlerts = await db.select().from(alerts);
     const allSignals = await db.select().from(signals);
-    const allWatchlist = await db.select().from(watchlist);
 
     return {
       totalAlerts: allAlerts.length,
@@ -228,7 +213,6 @@ export class DatabaseStorage implements IStorage {
       triggeredAlerts: allAlerts.filter(a => a.triggered).length,
       totalSignals: allSignals.length,
       activeSignals: allSignals.filter(s => s.status === "active").length,
-      watchlistCount: allWatchlist.length,
     };
   }
 }

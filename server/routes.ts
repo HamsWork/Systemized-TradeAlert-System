@@ -1,19 +1,23 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertAlertSchema, insertSignalSchema, insertWatchlistSchema, insertConnectedAppSchema, insertSystemSettingSchema, insertIntegrationSchema } from "@shared/schema";
+import { insertAlertSchema, insertSignalSchema, insertConnectedAppSchema, insertSystemSettingSchema, insertIntegrationSchema } from "@shared/schema";
+import crypto from "crypto";
 
 const partialAlertSchema = insertAlertSchema.partial();
 const partialSignalSchema = insertSignalSchema.partial();
 const partialConnectedAppSchema = insertConnectedAppSchema.partial();
 const partialIntegrationSchema = insertIntegrationSchema.partial();
 
+function generateApiKey(): string {
+  return `ts_${crypto.randomBytes(24).toString("hex")}`;
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
 
-  // Dashboard stats
   app.get("/api/dashboard/stats", async (_req, res) => {
     try {
       const stats = await storage.getDashboardStats();
@@ -23,7 +27,6 @@ export async function registerRoutes(
     }
   });
 
-  // Alerts CRUD
   app.get("/api/alerts", async (_req, res) => {
     try {
       const alerts = await storage.getAlerts();
@@ -81,7 +84,6 @@ export async function registerRoutes(
     }
   });
 
-  // Signals CRUD
   app.get("/api/signals", async (_req, res) => {
     try {
       const sigs = await storage.getSignals();
@@ -139,44 +141,62 @@ export async function registerRoutes(
     }
   });
 
-  // Watchlist CRUD
-  app.get("/api/watchlist", async (_req, res) => {
+  app.post("/api/ingest/signals", async (req, res) => {
     try {
-      const items = await storage.getWatchlist();
-      res.json(items);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch watchlist" });
-    }
-  });
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ message: "Missing or invalid Authorization header. Use: Bearer <api_key>" });
+      }
 
-  app.post("/api/watchlist", async (req, res) => {
-    try {
-      const parsed = insertWatchlistSchema.parse(req.body);
-      const item = await storage.addToWatchlist(parsed);
+      const apiKey = authHeader.slice(7);
+      const connectedApp = await storage.getConnectedAppByApiKey(apiKey);
+
+      if (!connectedApp) {
+        return res.status(401).json({ message: "Invalid API key" });
+      }
+
+      if (connectedApp.status !== "active") {
+        return res.status(403).json({ message: "App is inactive. Enable it in TradeSync to send signals." });
+      }
+
+      if (!connectedApp.syncSignals) {
+        return res.status(403).json({ message: "Signal sync is disabled for this app." });
+      }
+
+      const body = req.body;
+      const signalData = {
+        symbol: body.symbol,
+        type: body.type || "algorithmic",
+        direction: body.direction,
+        confidence: body.confidence,
+        entryPrice: body.entryPrice,
+        targetPrice: body.targetPrice || null,
+        stopLoss: body.stopLoss || null,
+        status: "active",
+        notes: body.notes || null,
+        sourceAppId: connectedApp.id,
+        sourceAppName: connectedApp.name,
+      };
+
+      const parsed = insertSignalSchema.parse(signalData);
+      const signal = await storage.createSignal(parsed);
+
+      await storage.updateConnectedApp(connectedApp.id, { lastSyncAt: new Date() } as any);
+
       await storage.createActivity({
-        type: "watchlist_added",
-        title: `Added ${parsed.symbol} to watchlist`,
-        description: `${parsed.name} at $${parsed.currentPrice}`,
+        type: "signal_ingested",
+        title: `Signal from ${connectedApp.name}: ${parsed.direction.toUpperCase()} ${parsed.symbol}`,
+        description: `${parsed.type} signal at $${parsed.entryPrice} with ${parsed.confidence}% confidence`,
         symbol: parsed.symbol,
-        metadata: null,
+        metadata: { sourceApp: connectedApp.name, sourceAppId: connectedApp.id },
       });
-      res.status(201).json(item);
+
+      res.status(201).json({ success: true, signal });
     } catch (error: any) {
-      res.status(400).json({ message: error.message || "Invalid watchlist data" });
+      res.status(400).json({ message: error.message || "Invalid signal data" });
     }
   });
 
-  app.delete("/api/watchlist/:id", async (req, res) => {
-    try {
-      const deleted = await storage.removeFromWatchlist(req.params.id);
-      if (!deleted) return res.status(404).json({ message: "Item not found" });
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ message: "Failed to remove from watchlist" });
-    }
-  });
-
-  // Activity Log
   app.get("/api/activity", async (_req, res) => {
     try {
       const log = await storage.getActivityLog();
@@ -186,7 +206,6 @@ export async function registerRoutes(
     }
   });
 
-  // Connected Apps CRUD
   app.get("/api/connected-apps", async (_req, res) => {
     try {
       const apps = await storage.getConnectedApps();
@@ -208,7 +227,11 @@ export async function registerRoutes(
 
   app.post("/api/connected-apps", async (req, res) => {
     try {
-      const parsed = insertConnectedAppSchema.parse(req.body);
+      const data = { ...req.body };
+      if (!data.apiKey) {
+        data.apiKey = generateApiKey();
+      }
+      const parsed = insertConnectedAppSchema.parse(data);
       const app = await storage.createConnectedApp(parsed);
       await storage.createActivity({
         type: "app_connected",
@@ -234,6 +257,17 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/connected-apps/:id/regenerate-key", async (req, res) => {
+    try {
+      const newKey = generateApiKey();
+      const updated = await storage.updateConnectedApp(req.params.id, { apiKey: newKey });
+      if (!updated) return res.status(404).json({ message: "App not found" });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to regenerate API key" });
+    }
+  });
+
   app.delete("/api/connected-apps/:id", async (req, res) => {
     try {
       const deleted = await storage.deleteConnectedApp(req.params.id);
@@ -244,7 +278,6 @@ export async function registerRoutes(
     }
   });
 
-  // System Settings
   app.get("/api/settings", async (_req, res) => {
     try {
       const settings = await storage.getSystemSettings();
@@ -264,7 +297,6 @@ export async function registerRoutes(
     }
   });
 
-  // Integrations CRUD
   app.get("/api/integrations", async (_req, res) => {
     try {
       const items = await storage.getIntegrations();
