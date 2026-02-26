@@ -316,6 +316,26 @@ class IbkrSyncManager {
     }
   }
 
+  async fetchSymbolPrice(symbol: string, secType: string = "STK"): Promise<number | null> {
+    for (const [, client] of this.clients) {
+      if (!client.isConnected) continue;
+      try {
+        const reqId = this.mktDataReqCounter++;
+        const contract: any = {
+          symbol: symbol.toUpperCase(),
+          secType,
+          exchange: "SMART",
+          currency: "USD",
+        };
+        const price = await client.fetchMarketPrice(contract, reqId);
+        if (price != null) return price;
+      } catch (err: any) {
+        console.warn(`[IBKR Sync] Price fetch for ${symbol}: ${err.message}`);
+      }
+    }
+    return null;
+  }
+
   getConnectionStatus(): Map<string, boolean> {
     const status = new Map<string, boolean>();
     for (const [id, client] of this.clients) {
