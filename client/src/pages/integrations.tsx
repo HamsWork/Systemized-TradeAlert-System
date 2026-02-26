@@ -36,6 +36,7 @@ import {
   Radio,
   Plus,
   Trash2,
+  Pencil,
   Landmark,
   Wifi,
   WifiOff,
@@ -436,7 +437,7 @@ function CreateIbkrDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
   );
 }
 
-function IntegrationCard({ integration, onDelete }: { integration: Integration; onDelete: (id: string) => void }) {
+function IntegrationCard({ integration, onDelete, onEdit }: { integration: Integration; onDelete: (id: string) => void; onEdit: (integration: Integration) => void }) {
   const { toast } = useToast();
   const config = integration.config as Record<string, any> | null;
 
@@ -500,6 +501,15 @@ function IntegrationCard({ integration, onDelete }: { integration: Integration; 
             >
               <Trash2 className="h-4 w-4" />
             </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8"
+              onClick={() => onEdit(integration)}
+              data-testid={`button-edit-integration-${integration.id}`}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
           </div>
         </div>
 
@@ -517,65 +527,40 @@ function IntegrationCard({ integration, onDelete }: { integration: Integration; 
           </div>
         )}
 
-        <div className="space-y-2 rounded-lg bg-muted/50 p-3">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Notification Channels</p>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs">Signals</span>
-              <Switch
-                checked={integration.notifySignals}
-                onCheckedChange={(checked) => handleToggle("notifySignals", checked)}
-                className="scale-75"
-                data-testid={`switch-integration-signals-${integration.id}`}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs">Trades</span>
-              <Switch
-                checked={integration.notifyTrades}
-                onCheckedChange={(checked) => handleToggle("notifyTrades", checked)}
-                className="scale-75"
-                data-testid={`switch-integration-trades-${integration.id}`}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs">System</span>
-              <Switch
-                checked={integration.notifySystem}
-                onCheckedChange={(checked) => handleToggle("notifySystem", checked)}
-                className="scale-75"
-                data-testid={`switch-integration-system-${integration.id}`}
-              />
+        {isDiscord && (
+          <div className="space-y-2 rounded-lg bg-muted/50 p-3">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Notification Channels</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs">Signals</span>
+                <Switch
+                  checked={integration.notifySignals}
+                  onCheckedChange={(checked) => handleToggle("notifySignals", checked)}
+                  className="scale-75"
+                  data-testid={`switch-integration-signals-${integration.id}`}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs">Trades</span>
+                <Switch
+                  checked={integration.notifyTrades}
+                  onCheckedChange={(checked) => handleToggle("notifyTrades", checked)}
+                  className="scale-75"
+                  data-testid={`switch-integration-trades-${integration.id}`}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs">System</span>
+                <Switch
+                  checked={integration.notifySystem}
+                  onCheckedChange={(checked) => handleToggle("notifySystem", checked)}
+                  className="scale-75"
+                  data-testid={`switch-integration-system-${integration.id}`}
+                />
+              </div>
             </div>
           </div>
-
-          {isIBKR && (
-            <>
-              <Separator className="my-2" />
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Trading Controls</p>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs">Auto-Trade</span>
-                  <Switch
-                    checked={integration.autoTrade}
-                    onCheckedChange={(checked) => handleToggle("autoTrade", checked)}
-                    className="scale-75"
-                    data-testid={`switch-integration-autotrade-${integration.id}`}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs">Paper Mode</span>
-                  <Switch
-                    checked={integration.paperTrade}
-                    onCheckedChange={(checked) => handleToggle("paperTrade", checked)}
-                    className="scale-75"
-                    data-testid={`switch-integration-paper-${integration.id}`}
-                  />
-                </div>
-              </div>
-            </>
-          )}
-        </div>
+        )}
 
         <p className="mt-3 text-[10px] text-muted-foreground">
           Added {integration.createdAt ? formatDistanceToNow(new Date(integration.createdAt), { addSuffix: true }) : "recently"}
@@ -585,9 +570,293 @@ function IntegrationCard({ integration, onDelete }: { integration: Integration; 
   );
 }
 
+function EditIntegrationDialog({ integration, open, onOpenChange }: { integration: Integration; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const { toast } = useToast();
+  const config = integration.config as Record<string, any> | null;
+  const isDiscord = integration.type === "discord";
+  const isIBKR = integration.type === "ibkr";
+
+  const discordForm = useForm<DiscordFormValues>({
+    resolver: zodResolver(discordFormSchema),
+    defaultValues: {
+      name: integration.name,
+      channelName: config?.channelName ?? "",
+      webhookUrl: config?.webhookUrl ?? "",
+      serverId: config?.serverId ?? "",
+      notifySignals: integration.notifySignals,
+      notifyTrades: integration.notifyTrades,
+      notifySystem: integration.notifySystem,
+    },
+  });
+
+  const ibkrForm = useForm<IbkrFormValues>({
+    resolver: zodResolver(ibkrFormSchema),
+    defaultValues: {
+      name: integration.name,
+      host: config?.host ?? "127.0.0.1",
+      port: config?.port ?? 7497,
+      clientId: config?.clientId ?? 1,
+      accountType: config?.accountType ?? "paper",
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: any) => {
+      let payload: Partial<InsertIntegration>;
+      if (isDiscord) {
+        payload = {
+          name: data.name,
+          config: {
+            channelName: data.channelName,
+            webhookUrl: data.webhookUrl,
+            serverId: data.serverId || null,
+          },
+          notifySignals: data.notifySignals,
+          notifyTrades: data.notifyTrades,
+          notifySystem: data.notifySystem,
+        };
+      } else {
+        payload = {
+          name: data.name,
+          config: {
+            host: data.host,
+            port: data.port,
+            clientId: data.clientId,
+            accountType: data.accountType,
+          },
+          paperTrade: data.accountType === "paper",
+        };
+      }
+      const res = await apiRequest("PATCH", `/api/integrations/${integration.id}`, payload);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
+      toast({ title: `${isDiscord ? "Discord channel" : "IBKR account"} updated` });
+      onOpenChange(false);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const Icon = isDiscord ? SiDiscord : Landmark;
+  const iconColor = isDiscord ? "text-indigo-500" : "text-purple-500";
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Icon className={`h-5 w-5 ${iconColor}`} />
+            Edit {isDiscord ? "Discord Channel" : "IBKR Account"}
+          </DialogTitle>
+          <DialogDescription>
+            Update the {isDiscord ? "Discord channel" : "IBKR account"} settings.
+          </DialogDescription>
+        </DialogHeader>
+
+        {isDiscord && (
+          <Form {...discordForm}>
+            <form onSubmit={discordForm.handleSubmit((data) => updateMutation.mutate(data))} className="space-y-4">
+              <FormField
+                control={discordForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Display Name</FormLabel>
+                    <FormControl>
+                      <Input {...field} data-testid="input-edit-discord-name" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <FormField
+                  control={discordForm.control}
+                  name="channelName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Channel Name</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-edit-discord-channel" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={discordForm.control}
+                  name="serverId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Server ID</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Optional" {...field} data-testid="input-edit-discord-server" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={discordForm.control}
+                name="webhookUrl"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Webhook URL</FormLabel>
+                    <FormControl>
+                      <Input {...field} data-testid="input-edit-discord-webhook" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="space-y-3 rounded-lg border p-3">
+                <p className="text-sm font-medium">Notification Settings</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>Signals</span>
+                    </div>
+                    <FormField
+                      control={discordForm.control}
+                      name="notifySignals"
+                      render={({ field }) => (
+                        <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-edit-discord-signals" />
+                      )}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>Trades</span>
+                    </div>
+                    <FormField
+                      control={discordForm.control}
+                      name="notifyTrades"
+                      render={({ field }) => (
+                        <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-edit-discord-trades" />
+                      )}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <Cpu className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>System</span>
+                    </div>
+                    <FormField
+                      control={discordForm.control}
+                      name="notifySystem"
+                      render={({ field }) => (
+                        <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-edit-discord-system" />
+                      )}
+                    />
+                  </div>
+                </div>
+              </div>
+              <Button type="submit" className="w-full" disabled={updateMutation.isPending} data-testid="button-save-edit-discord">
+                {updateMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </form>
+          </Form>
+        )}
+
+        {isIBKR && (
+          <Form {...ibkrForm}>
+            <form onSubmit={ibkrForm.handleSubmit((data) => updateMutation.mutate(data))} className="space-y-4">
+              <FormField
+                control={ibkrForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Display Name</FormLabel>
+                    <FormControl>
+                      <Input {...field} data-testid="input-edit-ibkr-name" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={ibkrForm.control}
+                name="accountType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Account Type</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-edit-ibkr-type">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="paper">Paper</SelectItem>
+                        <SelectItem value="live">Live</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-3 gap-3">
+                <FormField
+                  control={ibkrForm.control}
+                  name="host"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Host</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-edit-ibkr-host" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={ibkrForm.control}
+                  name="port"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Port</FormLabel>
+                      <FormControl>
+                        <Input type="number" {...field} data-testid="input-edit-ibkr-port" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={ibkrForm.control}
+                  name="clientId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Client ID</FormLabel>
+                      <FormControl>
+                        <Input type="number" {...field} data-testid="input-edit-ibkr-client" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={updateMutation.isPending} data-testid="button-save-edit-ibkr">
+                {updateMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </form>
+          </Form>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function IntegrationsPage() {
   const [discordDialogOpen, setDiscordDialogOpen] = useState(false);
   const [ibkrDialogOpen, setIbkrDialogOpen] = useState(false);
+  const [editingIntegration, setEditingIntegration] = useState<Integration | null>(null);
   const [filter, setFilter] = useState<string>("all");
   const { toast } = useToast();
 
@@ -739,7 +1008,7 @@ export default function IntegrationsPage() {
               </h3>
               <div className="grid gap-3 lg:grid-cols-2">
                 {discordIntegrations.map(i => (
-                  <IntegrationCard key={i.id} integration={i} onDelete={(id) => deleteMutation.mutate(id)} />
+                  <IntegrationCard key={i.id} integration={i} onDelete={(id) => deleteMutation.mutate(id)} onEdit={setEditingIntegration} />
                 ))}
               </div>
             </div>
@@ -752,7 +1021,7 @@ export default function IntegrationsPage() {
               </h3>
               <div className="grid gap-3 lg:grid-cols-2">
                 {ibkrIntegrations.map(i => (
-                  <IntegrationCard key={i.id} integration={i} onDelete={(id) => deleteMutation.mutate(id)} />
+                  <IntegrationCard key={i.id} integration={i} onDelete={(id) => deleteMutation.mutate(id)} onEdit={setEditingIntegration} />
                 ))}
               </div>
             </div>
@@ -762,6 +1031,13 @@ export default function IntegrationsPage() {
 
       <CreateDiscordDialog open={discordDialogOpen} onOpenChange={setDiscordDialogOpen} />
       <CreateIbkrDialog open={ibkrDialogOpen} onOpenChange={setIbkrDialogOpen} />
+      {editingIntegration && (
+        <EditIntegrationDialog
+          integration={editingIntegration}
+          open={!!editingIntegration}
+          onOpenChange={(open) => { if (!open) setEditingIntegration(null); }}
+        />
+      )}
     </div>
   );
 }
