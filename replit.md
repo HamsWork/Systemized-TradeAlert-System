@@ -15,6 +15,7 @@ A modular trading and alert system dashboard designed to be plugged into other a
 - **Signals**: Trading signals with direction (buy/sell), confidence scores, entry/target/stop-loss prices
 - **Watchlist**: Asset tracking with current prices, 24h changes, volume, market cap, sector
 - **Activity Log**: System event feed tracking all actions (alerts, signals, watchlist changes)
+- **Connected Apps**: Plugged-in trading applications with sync settings, API endpoints, and webhook configuration
 
 ## Pages
 
@@ -23,6 +24,7 @@ A modular trading and alert system dashboard designed to be plugged into other a
 3. **Signals** (`/signals`) - Full CRUD for trading signals with filtering
 4. **Watchlist** (`/watchlist`) - Table view of tracked assets
 5. **Activity** (`/activity`) - Complete activity log
+6. **Connected Apps** (`/connected-apps`) - Manage plugged-in trading apps (Situ Trader, Crowned Trader)
 
 ## API Routes
 
@@ -31,6 +33,7 @@ All routes prefixed with `/api`:
 - `GET/POST /signals`, `GET/PATCH/DELETE /signals/:id`
 - `GET/POST/DELETE /watchlist`, `DELETE /watchlist/:id`
 - `GET /activity`
+- `GET/POST /connected-apps`, `GET/PATCH/DELETE /connected-apps/:id`
 - `GET /dashboard/stats`
 
 ## Key Files

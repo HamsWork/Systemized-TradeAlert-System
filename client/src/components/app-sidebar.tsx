@@ -6,6 +6,7 @@ import {
   Eye,
   Activity,
   Zap,
+  Puzzle,
 } from "lucide-react";
 import {
   Sidebar,
@@ -27,6 +28,7 @@ const navItems = [
   { title: "Signals", url: "/signals", icon: TrendingUp },
   { title: "Watchlist", url: "/watchlist", icon: Eye },
   { title: "Activity", url: "/activity", icon: Activity },
+  { title: "Connected Apps", url: "/connected-apps", icon: Puzzle },
 ];
 
 export function AppSidebar() {

@@ -60,6 +60,31 @@ export const activityLog = pgTable("activity_log", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const connectedApps = pgTable("connected_apps", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  description: text("description").notNull(),
+  status: text("status").notNull().default("active"),
+  apiEndpoint: text("api_endpoint"),
+  apiKey: text("api_key"),
+  webhookUrl: text("webhook_url"),
+  syncAlerts: boolean("sync_alerts").notNull().default(true),
+  syncSignals: boolean("sync_signals").notNull().default(true),
+  syncWatchlist: boolean("sync_watchlist").notNull().default(false),
+  lastSyncAt: timestamp("last_sync_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertConnectedAppSchema = createInsertSchema(connectedApps).omit({
+  id: true,
+  createdAt: true,
+  lastSyncAt: true,
+});
+
+export type ConnectedApp = typeof connectedApps.$inferSelect;
+export type InsertConnectedApp = z.infer<typeof insertConnectedAppSchema>;
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,

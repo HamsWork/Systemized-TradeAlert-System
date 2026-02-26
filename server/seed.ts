@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { alerts, signals, watchlist, activityLog } from "@shared/schema";
+import { alerts, signals, watchlist, activityLog, connectedApps } from "@shared/schema";
 import { sql } from "drizzle-orm";
 
 export async function seedDatabase() {
@@ -158,6 +158,31 @@ export async function seedDatabase() {
       volume: "89.2M",
       marketCap: "791B",
       sector: "Automotive",
+    },
+  ]);
+
+  await db.insert(connectedApps).values([
+    {
+      name: "Situ Trader",
+      slug: "situ-trader",
+      description: "Advanced algorithmic trading platform with real-time market analysis and automated execution strategies",
+      status: "active",
+      apiEndpoint: "https://api.situtrader.com/v1",
+      webhookUrl: "https://api.situtrader.com/webhooks/tradesync",
+      syncAlerts: true,
+      syncSignals: true,
+      syncWatchlist: true,
+    },
+    {
+      name: "Crowned Trader",
+      slug: "crowned-trader",
+      description: "Community-driven trading signals platform with social sentiment analysis and copy trading features",
+      status: "active",
+      apiEndpoint: "https://api.crownedtrader.io/v2",
+      webhookUrl: "https://api.crownedtrader.io/hooks/tradesync",
+      syncAlerts: true,
+      syncSignals: true,
+      syncWatchlist: false,
     },
   ]);
 

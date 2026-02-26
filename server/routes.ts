@@ -1,10 +1,11 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertAlertSchema, insertSignalSchema, insertWatchlistSchema } from "@shared/schema";
+import { insertAlertSchema, insertSignalSchema, insertWatchlistSchema, insertConnectedAppSchema } from "@shared/schema";
 
 const partialAlertSchema = insertAlertSchema.partial();
 const partialSignalSchema = insertSignalSchema.partial();
+const partialConnectedAppSchema = insertConnectedAppSchema.partial();
 
 export async function registerRoutes(
   httpServer: Server,
@@ -181,6 +182,64 @@ export async function registerRoutes(
       res.json(log);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch activity log" });
+    }
+  });
+
+  // Connected Apps CRUD
+  app.get("/api/connected-apps", async (_req, res) => {
+    try {
+      const apps = await storage.getConnectedApps();
+      res.json(apps);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch connected apps" });
+    }
+  });
+
+  app.get("/api/connected-apps/:id", async (req, res) => {
+    try {
+      const app = await storage.getConnectedApp(req.params.id);
+      if (!app) return res.status(404).json({ message: "App not found" });
+      res.json(app);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch app" });
+    }
+  });
+
+  app.post("/api/connected-apps", async (req, res) => {
+    try {
+      const parsed = insertConnectedAppSchema.parse(req.body);
+      const app = await storage.createConnectedApp(parsed);
+      await storage.createActivity({
+        type: "app_connected",
+        title: `Connected app: ${parsed.name}`,
+        description: `${parsed.name} has been plugged into TradeSync`,
+        symbol: null,
+        metadata: null,
+      });
+      res.status(201).json(app);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message || "Invalid app data" });
+    }
+  });
+
+  app.patch("/api/connected-apps/:id", async (req, res) => {
+    try {
+      const parsed = partialConnectedAppSchema.parse(req.body);
+      const updated = await storage.updateConnectedApp(req.params.id, parsed);
+      if (!updated) return res.status(404).json({ message: "App not found" });
+      res.json(updated);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message || "Failed to update app" });
+    }
+  });
+
+  app.delete("/api/connected-apps/:id", async (req, res) => {
+    try {
+      const deleted = await storage.deleteConnectedApp(req.params.id);
+      if (!deleted) return res.status(404).json({ message: "App not found" });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete app" });
     }
   });
 

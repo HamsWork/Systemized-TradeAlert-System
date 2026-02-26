@@ -4,7 +4,8 @@ import {
   type Signal, type InsertSignal,
   type WatchlistItem, type InsertWatchlistItem,
   type ActivityLogEntry, type InsertActivityLog,
-  users, alerts, signals, watchlist, activityLog,
+  type ConnectedApp, type InsertConnectedApp,
+  users, alerts, signals, watchlist, activityLog, connectedApps,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc } from "drizzle-orm";
@@ -32,6 +33,12 @@ export interface IStorage {
 
   getActivityLog(): Promise<ActivityLogEntry[]>;
   createActivity(entry: InsertActivityLog): Promise<ActivityLogEntry>;
+
+  getConnectedApps(): Promise<ConnectedApp[]>;
+  getConnectedApp(id: string): Promise<ConnectedApp | undefined>;
+  createConnectedApp(app: InsertConnectedApp): Promise<ConnectedApp>;
+  updateConnectedApp(id: string, data: Partial<InsertConnectedApp>): Promise<ConnectedApp | undefined>;
+  deleteConnectedApp(id: string): Promise<boolean>;
 
   getDashboardStats(): Promise<{
     totalAlerts: number;
@@ -128,6 +135,30 @@ export class DatabaseStorage implements IStorage {
   async createActivity(entry: InsertActivityLog): Promise<ActivityLogEntry> {
     const [created] = await db.insert(activityLog).values(entry).returning();
     return created;
+  }
+
+  async getConnectedApps(): Promise<ConnectedApp[]> {
+    return db.select().from(connectedApps).orderBy(desc(connectedApps.createdAt));
+  }
+
+  async getConnectedApp(id: string): Promise<ConnectedApp | undefined> {
+    const [app] = await db.select().from(connectedApps).where(eq(connectedApps.id, id));
+    return app;
+  }
+
+  async createConnectedApp(app: InsertConnectedApp): Promise<ConnectedApp> {
+    const [created] = await db.insert(connectedApps).values(app).returning();
+    return created;
+  }
+
+  async updateConnectedApp(id: string, data: Partial<InsertConnectedApp>): Promise<ConnectedApp | undefined> {
+    const [updated] = await db.update(connectedApps).set(data).where(eq(connectedApps.id, id)).returning();
+    return updated;
+  }
+
+  async deleteConnectedApp(id: string): Promise<boolean> {
+    const result = await db.delete(connectedApps).where(eq(connectedApps.id, id)).returning();
+    return result.length > 0;
   }
 
   async getDashboardStats() {
