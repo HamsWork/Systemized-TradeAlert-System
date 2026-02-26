@@ -43,12 +43,14 @@ import {
   TrendingUp,
   BarChart3,
   Cpu,
+  Puzzle,
+  AlertTriangle,
 } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { insertIntegrationSchema, type Integration, type InsertIntegration } from "@shared/schema";
+import { insertIntegrationSchema, type Integration, type InsertIntegration, type ConnectedApp } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { z } from "zod";
@@ -437,9 +439,10 @@ function CreateIbkrDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
   );
 }
 
-function IntegrationCard({ integration, onDelete, onEdit }: { integration: Integration; onDelete: (id: string) => void; onEdit: (integration: Integration) => void }) {
+function IntegrationCard({ integration, onDelete, onEdit, connectedApps = [] }: { integration: Integration; onDelete: (id: string) => void; onEdit: (integration: Integration) => void; connectedApps?: ConnectedApp[] }) {
   const { toast } = useToast();
   const config = integration.config as Record<string, any> | null;
+  const [showDeleteWarning, setShowDeleteWarning] = useState(false);
 
   const updateMutation = useMutation({
     mutationFn: async (data: Partial<Integration>) => {
@@ -463,7 +466,22 @@ function IntegrationCard({ integration, onDelete, onEdit }: { integration: Integ
   const Icon = isDiscord ? SiDiscord : Landmark;
   const iconColor = isDiscord ? "text-indigo-500" : "text-purple-500";
 
+  const linkedApps = isIBKR ? connectedApps.filter(app => {
+    return app.ibkrHost === config?.host &&
+      app.ibkrPort === String(config?.port) &&
+      app.ibkrClientId === String(config?.clientId);
+  }) : [];
+
+  const handleDelete = () => {
+    if (linkedApps.length > 0) {
+      setShowDeleteWarning(true);
+    } else {
+      onDelete(integration.id);
+    }
+  };
+
   return (
+    <>
     <Card data-testid={`card-integration-${integration.id}`}>
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-2 mb-3">
@@ -484,7 +502,7 @@ function IntegrationCard({ integration, onDelete, onEdit }: { integration: Integ
               size="icon"
               variant="ghost"
               className="h-8 w-8"
-              onClick={() => onDelete(integration.id)}
+              onClick={handleDelete}
               data-testid={`button-delete-integration-${integration.id}`}
             >
               <Trash2 className="h-4 w-4" />
@@ -577,11 +595,69 @@ function IntegrationCard({ integration, onDelete, onEdit }: { integration: Integ
           </div>
         )}
 
+        {isIBKR && linkedApps.length > 0 && (
+          <div className="space-y-1.5 rounded-lg bg-muted/50 p-3">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Connected Apps</p>
+            <div className="space-y-1">
+              {linkedApps.map(app => (
+                <div key={app.id} className="flex items-center gap-2 text-xs" data-testid={`text-linked-app-${app.id}`}>
+                  <Puzzle className="h-3 w-3 text-primary" />
+                  <span className="font-medium">{app.name}</span>
+                  <Badge variant="outline" className="text-[10px] h-4 px-1">
+                    {app.executeIbkrTrades ? "Trading" : "Linked"}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <p className="mt-3 text-[10px] text-muted-foreground">
           Added {integration.createdAt ? formatDistanceToNow(new Date(integration.createdAt), { addSuffix: true }) : "recently"}
         </p>
       </CardContent>
     </Card>
+
+    <AlertDialog open={showDeleteWarning} onOpenChange={setShowDeleteWarning}>
+      <AlertDialogContent data-testid="alert-delete-ibkr-warning">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2 text-amber-500">
+            <AlertTriangle className="h-5 w-5" />
+            Connected Apps Warning
+          </AlertDialogTitle>
+          <AlertDialogDescription className="space-y-2">
+            <span className="block">
+              This IBKR account is currently used by <strong className="text-foreground">{linkedApps.length} connected app{linkedApps.length > 1 ? "s" : ""}</strong>:
+            </span>
+            <span className="block">
+              {linkedApps.map(app => (
+                <span key={app.id} className="flex items-center gap-1.5 py-0.5">
+                  <Puzzle className="h-3 w-3" />
+                  <strong className="text-foreground">{app.name}</strong>
+                </span>
+              ))}
+            </span>
+            <span className="block text-amber-400 font-medium">
+              Deleting this account will break the IBKR connection for these apps.
+            </span>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel data-testid="button-cancel-delete-ibkr">Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+            onClick={() => {
+              onDelete(integration.id);
+              setShowDeleteWarning(false);
+            }}
+            data-testid="button-confirm-delete-ibkr"
+          >
+            Delete Anyway
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
 
@@ -876,6 +952,8 @@ export default function IntegrationsPage() {
   const { toast } = useToast();
 
   const integrationsQuery = useQuery<Integration[]>({ queryKey: ["/api/integrations"] });
+  const connectedAppsQuery = useQuery<ConnectedApp[]>({ queryKey: ["/api/connected-apps"] });
+  const connectedApps = connectedAppsQuery.data ?? [];
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -1023,7 +1101,7 @@ export default function IntegrationsPage() {
               </h3>
               <div className="grid gap-3 lg:grid-cols-2">
                 {discordIntegrations.map(i => (
-                  <IntegrationCard key={i.id} integration={i} onDelete={(id) => deleteMutation.mutate(id)} onEdit={setEditingIntegration} />
+                  <IntegrationCard key={i.id} integration={i} onDelete={(id) => deleteMutation.mutate(id)} onEdit={setEditingIntegration} connectedApps={connectedApps} />
                 ))}
               </div>
             </div>
@@ -1036,7 +1114,7 @@ export default function IntegrationsPage() {
               </h3>
               <div className="grid gap-3 lg:grid-cols-2">
                 {ibkrIntegrations.map(i => (
-                  <IntegrationCard key={i.id} integration={i} onDelete={(id) => deleteMutation.mutate(id)} onEdit={setEditingIntegration} />
+                  <IntegrationCard key={i.id} integration={i} onDelete={(id) => deleteMutation.mutate(id)} onEdit={setEditingIntegration} connectedApps={connectedApps} />
                 ))}
               </div>
             </div>
