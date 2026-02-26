@@ -30,7 +30,7 @@ const navItems = [
   { title: "Activity", url: "/activity", icon: Activity },
   { title: "Integrations", url: "/integrations", icon: Radio },
   { title: "Connected Apps", url: "/connected-apps", icon: Puzzle },
-  { title: "IBKR Trading", url: "/ibkr", icon: Landmark },
+  { title: "IBKR", url: "/ibkr", icon: Landmark },
   { title: "API Guide", url: "/api-guide", icon: BookOpen },
   { title: "Settings", url: "/settings", icon: Settings2 },
 ];
