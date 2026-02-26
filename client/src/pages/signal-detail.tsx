@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -29,98 +29,201 @@ import {
 } from "lucide-react";
 import { type Signal, type IbkrOrder, type ActivityLogEntry } from "@shared/schema";
 import { formatDistanceToNow, format } from "date-fns";
+import { createChart, ColorType, CandlestickSeries, HistogramSeries } from "lightweight-charts";
 
-function buildTradingViewSymbol(params: {
+interface ChartBar {
+  time: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+function buildChartQueryUrl(params: {
   symbol: string;
   instrumentType?: string;
   strike?: string;
   expiration?: string;
   optionType?: string;
 }): string {
-  return params.symbol.toUpperCase();
+  const qs = new URLSearchParams();
+  qs.set("symbol", params.symbol);
+  if (params.instrumentType === "Options" && params.strike && params.expiration) {
+    qs.set("secType", "OPT");
+    qs.set("strike", params.strike);
+    qs.set("expiration", params.expiration);
+    const right = params.optionType?.toUpperCase().startsWith("P") ? "P" : "C";
+    qs.set("right", right);
+  }
+  return `/api/ibkr/chart-data?${qs.toString()}`;
 }
 
-function TradingViewChart({ symbol, instrumentType, strike, expiration, optionType }: {
+function TradeChart({ symbol, instrumentType, strike, expiration, optionType, entryPrice, tpLevels, slLevels, direction }: {
   symbol: string;
   instrumentType?: string;
   strike?: string;
   expiration?: string;
   optionType?: string;
+  entryPrice?: number;
+  tpLevels: number[];
+  slLevels: number[];
+  direction?: string;
 }) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const chartContainerRef = useRef<HTMLDivElement>(null);
 
-  const tvSymbol = useMemo(
-    () => buildTradingViewSymbol({ symbol, instrumentType, strike, expiration, optionType }),
+  const chartUrl = useMemo(
+    () => buildChartQueryUrl({ symbol, instrumentType, strike, expiration, optionType }),
     [symbol, instrumentType, strike, expiration, optionType],
   );
 
+  const barsQuery = useQuery<ChartBar[]>({
+    queryKey: ["/api/ibkr/chart-data", symbol, instrumentType, strike, expiration],
+    queryFn: async () => {
+      const res = await fetch(chartUrl);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!symbol,
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  const liveBars = barsQuery.data ?? [];
+  const hasLiveData = liveBars.length > 0;
+
   const isOption = instrumentType === "Options";
-  const chartLabel = isOption
-    ? `${symbol} (underlying)`
+  const chartLabel = isOption && strike && expiration
+    ? `${symbol} $${strike} ${expiration}`
     : symbol;
 
+  const priceLines = useMemo(() => {
+    const lines: { price: number; color: string; title: string; lineStyle: number }[] = [];
+    if (entryPrice) lines.push({ price: entryPrice, color: "#3b82f6", title: "Entry", lineStyle: 0 });
+    tpLevels.forEach((tp, i) => lines.push({ price: tp, color: "#10b981", title: `TP${i + 1}`, lineStyle: 2 }));
+    slLevels.forEach((sl, i) => lines.push({ price: sl, color: "#ef4444", title: `SL${i + 1}`, lineStyle: 2 }));
+    return lines;
+  }, [entryPrice, tpLevels, slLevels]);
+
   useEffect(() => {
-    if (!containerRef.current) return;
-    containerRef.current.innerHTML = "";
+    if (!chartContainerRef.current || barsQuery.isLoading) return;
 
-    const widgetContainer = document.createElement("div");
-    widgetContainer.className = "tradingview-widget-container";
-    widgetContainer.style.height = "100%";
-    widgetContainer.style.width = "100%";
+    const isDark = document.documentElement.classList.contains("dark");
 
-    const widgetInner = document.createElement("div");
-    widgetInner.className = "tradingview-widget-container__widget";
-    widgetInner.style.height = "calc(100% - 32px)";
-    widgetInner.style.width = "100%";
-    widgetContainer.appendChild(widgetInner);
-
-    containerRef.current.appendChild(widgetContainer);
-
-    const script = document.createElement("script");
-    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
-    script.type = "text/javascript";
-    script.async = true;
-    script.textContent = JSON.stringify({
-      autosize: true,
-      symbol: tvSymbol,
-      interval: "D",
-      timezone: "America/New_York",
-      theme: "dark",
-      style: "1",
-      locale: "en",
-      hide_top_toolbar: false,
-      hide_legend: false,
-      allow_symbol_change: false,
-      save_image: false,
-      calendar: false,
-      hide_volume: false,
-      support_host: "https://www.tradingview.com",
+    const chart = createChart(chartContainerRef.current, {
+      layout: {
+        background: { type: ColorType.Solid, color: isDark ? "#09090b" : "#ffffff" },
+        textColor: isDark ? "#a1a1aa" : "#71717a",
+      },
+      grid: {
+        vertLines: { color: isDark ? "#27272a" : "#f4f4f5" },
+        horzLines: { color: isDark ? "#27272a" : "#f4f4f5" },
+      },
+      width: chartContainerRef.current.clientWidth,
+      height: 350,
+      rightPriceScale: { borderColor: isDark ? "#3f3f46" : "#e4e4e7" },
+      timeScale: { borderColor: isDark ? "#3f3f46" : "#e4e4e7" },
+      crosshair: {
+        horzLine: { color: isDark ? "#52525b" : "#d4d4d8" },
+        vertLine: { color: isDark ? "#52525b" : "#d4d4d8" },
+      },
     });
 
-    widgetContainer.appendChild(script);
+    if (hasLiveData) {
+      const candleSeries = chart.addSeries(CandlestickSeries, {
+        upColor: "#22c55e",
+        downColor: "#ef4444",
+        borderUpColor: "#22c55e",
+        borderDownColor: "#ef4444",
+        wickUpColor: "#22c55e80",
+        wickDownColor: "#ef444480",
+      });
 
-    return () => {
-      if (containerRef.current) {
-        containerRef.current.innerHTML = "";
-      }
+      const candleData = liveBars.map(bar => {
+        let t = bar.time;
+        if (/^\d{8}$/.test(t)) t = `${t.slice(0, 4)}-${t.slice(4, 6)}-${t.slice(6, 8)}`;
+        return { time: t, open: bar.open, high: bar.high, low: bar.low, close: bar.close };
+      });
+      candleSeries.setData(candleData as any);
+
+      const volumeSeries = chart.addSeries(HistogramSeries, {
+        priceFormat: { type: "volume" },
+        priceScaleId: "",
+      });
+      chart.priceScale("").applyOptions({
+        scaleMargins: { top: 0.8, bottom: 0 },
+      });
+      const volumeData = liveBars.map(bar => {
+        let t = bar.time;
+        if (/^\d{8}$/.test(t)) t = `${t.slice(0, 4)}-${t.slice(4, 6)}-${t.slice(6, 8)}`;
+        return { time: t, value: bar.volume, color: bar.close >= bar.open ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)" };
+      });
+      volumeSeries.setData(volumeData as any);
+
+      priceLines.forEach(pl => {
+        candleSeries.createPriceLine({
+          price: pl.price,
+          color: pl.color,
+          lineWidth: 1,
+          lineStyle: pl.lineStyle,
+          axisLabelVisible: true,
+          title: pl.title,
+        });
+      });
+    }
+
+    chart.timeScale().fitContent();
+
+    const handleResize = () => {
+      if (chartContainerRef.current) chart.applyOptions({ width: chartContainerRef.current.clientWidth });
     };
-  }, [tvSymbol]);
+    window.addEventListener("resize", handleResize);
+    return () => { window.removeEventListener("resize", handleResize); chart.remove(); };
+  }, [liveBars, hasLiveData, priceLines, barsQuery.isLoading]);
+
+  if (barsQuery.isLoading) {
+    return (
+      <div data-testid="trading-chart-wrapper">
+        <Skeleton className="w-full h-[350px] rounded-lg" />
+        <p className="text-xs text-muted-foreground text-center mt-2">Fetching chart data from IBKR...</p>
+      </div>
+    );
+  }
 
   return (
     <div data-testid="trading-chart-wrapper">
-      <div className="flex items-center gap-2 mb-2">
-        {isOption ? <CandlestickChart className="h-4 w-4 text-blue-500" /> : <BarChart3 className="h-4 w-4 text-muted-foreground" />}
-        <span className="text-sm font-medium" data-testid="text-chart-label">
-          {isOption ? "Option Contract" : "Trade Chart"}
-        </span>
-        <span className="text-xs text-muted-foreground font-mono" data-testid="text-chart-symbol">— {chartLabel}</span>
-        {isOption && strike && expiration && (
-          <span className="text-[10px] text-muted-foreground">
-            ${strike} {expiration} {optionType?.toUpperCase().startsWith("P") ? "Put" : "Call"}
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          {isOption ? <CandlestickChart className="h-4 w-4 text-blue-500" /> : <BarChart3 className="h-4 w-4 text-muted-foreground" />}
+          <span className="text-sm font-medium" data-testid="text-chart-label">
+            {isOption ? "Option Contract" : "Trade Chart"}
           </span>
-        )}
+          <span className="text-xs text-muted-foreground font-mono" data-testid="text-chart-symbol">— {chartLabel}</span>
+          {hasLiveData ? (
+            <Badge variant="outline" className="text-[10px] text-emerald-500 border-emerald-500/30" data-testid="badge-live-data">
+              LIVE
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-[10px] text-muted-foreground" data-testid="badge-no-data">
+              No Data
+            </Badge>
+          )}
+        </div>
       </div>
-      <div ref={containerRef} className="w-full rounded-lg overflow-hidden" style={{ height: 400 }} data-testid="trading-chart" />
+      {hasLiveData ? (
+        <div ref={chartContainerRef} className="w-full rounded-lg overflow-hidden" data-testid="trading-chart" />
+      ) : (
+        <div className="w-full h-[350px] rounded-lg border border-dashed border-muted-foreground/20 flex items-center justify-center" data-testid="trading-chart-empty">
+          <p className="text-sm text-muted-foreground">No chart data available from IBKR</p>
+        </div>
+      )}
+      {hasLiveData && (
+        <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground flex-wrap">
+          <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-blue-500 inline-block" /> Entry</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-500 inline-block" /> Targets</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-red-500 inline-block" /> Stop Loss</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -273,12 +376,16 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
           <div className="space-y-4">
             <Card data-testid="card-chart">
               <CardContent className="p-3">
-                <TradingViewChart
+                <TradeChart
                   symbol={ticker}
                   instrumentType={instrumentType}
                   strike={strike}
                   expiration={expiration}
                   optionType={data.option_type}
+                  entryPrice={entryPrice}
+                  tpLevels={tpLevels}
+                  slLevels={slLevels}
+                  direction={direction}
                 />
               </CardContent>
             </Card>

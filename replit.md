@@ -129,7 +129,7 @@ All routes prefixed with `/api`:
 - `client/src/pages/settings.tsx` - System settings controls by category
 - `client/src/pages/connected-apps.tsx` - Connected apps management with API key display
 - `client/src/pages/signals.tsx` - Signals page with source app badges (cards link to detail page)
-- `client/src/pages/signal-detail.tsx` - Signal detail dialog with TradingView embedded chart (supports stocks and option contracts via OPRA symbol format), IBKR orders, activity feed
+- `client/src/pages/signal-detail.tsx` - Signal detail dialog with lightweight-charts candlestick chart (real-time IBKR data for stocks and option contracts), entry/TP/SL price lines, volume bars, IBKR orders, activity feed
 - `client/src/pages/api-guide.tsx` - Interactive API guide with live code examples
 - `client/src/components/app-sidebar.tsx` - Navigation sidebar
 

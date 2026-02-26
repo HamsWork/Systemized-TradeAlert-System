@@ -277,7 +277,7 @@ export class IbkrClient {
       const timeout = setTimeout(() => {
         cleanup();
         resolve(bars);
-      }, 15000);
+      }, 5000);
 
       const onHistoricalData = (_reqId: number, time: string, open: number, high: number, low: number, close: number, volume: number | any, ...rest: any[]) => {
         if (_reqId !== reqId) return;
