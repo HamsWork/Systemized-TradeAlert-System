@@ -37,13 +37,6 @@ function buildTradingViewSymbol(params: {
   expiration?: string;
   optionType?: string;
 }): string {
-  if (params.instrumentType === "Options" && params.strike && params.expiration) {
-    const clean = params.expiration.replace(/-/g, "");
-    const exp = clean.length === 8 ? clean.slice(2) : clean;
-    const right = params.optionType?.toUpperCase().startsWith("P") ? "P" : "C";
-    const strike = parseFloat(params.strike).toFixed(1);
-    return `OPRA:${params.symbol.toUpperCase()}${exp}${right}${strike}`;
-  }
   return params.symbol.toUpperCase();
 }
 
@@ -62,8 +55,8 @@ function TradingViewChart({ symbol, instrumentType, strike, expiration, optionTy
   );
 
   const isOption = instrumentType === "Options";
-  const chartLabel = isOption && strike && expiration
-    ? `${symbol} $${strike} ${expiration}`
+  const chartLabel = isOption
+    ? `${symbol} (underlying)`
     : symbol;
 
   useEffect(() => {
@@ -121,6 +114,11 @@ function TradingViewChart({ symbol, instrumentType, strike, expiration, optionTy
           {isOption ? "Option Contract" : "Trade Chart"}
         </span>
         <span className="text-xs text-muted-foreground font-mono" data-testid="text-chart-symbol">— {chartLabel}</span>
+        {isOption && strike && expiration && (
+          <span className="text-[10px] text-muted-foreground">
+            ${strike} {expiration} {optionType?.toUpperCase().startsWith("P") ? "Put" : "Call"}
+          </span>
+        )}
       </div>
       <div ref={containerRef} className="w-full rounded-lg overflow-hidden" style={{ height: 400 }} data-testid="trading-chart" />
     </div>
