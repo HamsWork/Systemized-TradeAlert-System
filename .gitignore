@@ -4,3 +4,23 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+
+# Replit
+.replit
+.cache/
+.config/
+.upm/
+.local/
+.breakpoints
+.nix/
+replit.nix
+.replit.nix
+
+# Replit generated config
+drizzle.config.ts
+postcss.config.js
+tailwind.config.ts
+vite.config.ts
+
+# Attached assets (user uploads)
+attached_assets/
