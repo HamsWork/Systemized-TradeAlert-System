@@ -1,7 +1,6 @@
 import { useLocation, Link } from "wouter";
 import {
   LayoutDashboard,
-  Bell,
   TrendingUp,
   Activity,
   Zap,
@@ -27,7 +26,6 @@ import { Badge } from "@/components/ui/badge";
 
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Alerts", url: "/alerts", icon: Bell },
   { title: "Signals", url: "/signals", icon: TrendingUp },
   { title: "Activity", url: "/activity", icon: Activity },
   { title: "Integrations", url: "/integrations", icon: Radio },
@@ -49,7 +47,7 @@ export function AppSidebar() {
           </div>
           <div>
             <h2 className="text-sm font-semibold tracking-tight" data-testid="text-app-title">TradeSync</h2>
-            <p className="text-xs text-muted-foreground">Alert System</p>
+            <p className="text-xs text-muted-foreground">Signal Execution System</p>
           </div>
         </div>
       </SidebarHeader>
@@ -63,7 +61,7 @@ export function AppSidebar() {
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild data-active={isActive}>
-                      <Link href={item.url} data-testid={`link-nav-${item.title.toLowerCase()}`}>
+                      <Link href={item.url} data-testid={`link-nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>
                         <item.icon className="h-4 w-4" />
                         <span>{item.title}</span>
                       </Link>

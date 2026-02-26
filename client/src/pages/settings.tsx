@@ -6,7 +6,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import {
-  Bell,
   TrendingUp,
   Cpu,
   Shield,
@@ -154,13 +153,6 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <SettingsPanel
-          settings={settings}
-          category="alerts"
-          icon={Bell}
-          title="Alert System"
-          description="Control alert monitoring behavior and notification triggers"
-        />
         <SettingsPanel
           settings={settings}
           category="signals"

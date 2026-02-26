@@ -4,7 +4,6 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ElementType } from "react";
 import {
-  Bell,
   TrendingUp,
   Activity,
   Zap,
@@ -14,10 +13,12 @@ import {
   ArrowDownRight,
   BarChart3,
   Layers,
+  ArrowRight,
+  MessageSquare,
 } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import { Link } from "wouter";
-import type { Alert, Signal, ConnectedApp, ActivityLogEntry, Integration, IbkrPosition } from "@shared/schema";
+import type { Signal, ConnectedApp, ActivityLogEntry, Integration, IbkrPosition, IbkrOrder } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 
 function StatCard({ title, value, subtitle, icon: Icon, accent, href }: {
@@ -43,40 +44,70 @@ function StatCard({ title, value, subtitle, icon: Icon, accent, href }: {
   return href ? <Link href={href}>{content}</Link> : content;
 }
 
-function RecentAlerts({ alerts }: { alerts: Alert[] }) {
-  const recent = alerts.slice(0, 5);
+function SignalFlowCard({ signals, orders, integrations }: { signals: Signal[]; orders: IbkrOrder[]; integrations: Integration[] }) {
+  const activeSignals = signals.filter(s => s.status === "active").length;
+  const recentSignals = signals.slice(0, 3);
+  const filledOrders = orders.filter(o => o.status === "filled").length;
+  const discordChannels = integrations.filter(i => i.type === "discord" && i.enabled).length;
+
   return (
-    <Card data-testid="card-recent-alerts">
+    <Card data-testid="card-signal-flow">
       <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Bell className="h-4 w-4 text-amber-500" />
-            Recent Alerts
-          </CardTitle>
-          <Link href="/alerts">
-            <span className="text-xs text-primary hover:underline cursor-pointer" data-testid="link-view-all-alerts">View all</span>
-          </Link>
-        </div>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Zap className="h-4 w-4 text-primary" />
+          Signal Pipeline
+        </CardTitle>
       </CardHeader>
       <CardContent>
-        {recent.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">No alerts yet</p>
-        ) : (
-          <div className="space-y-1">
-            {recent.map((alert) => (
-              <div key={alert.id} className="flex items-center justify-between gap-3 py-2 border-b last:border-b-0" data-testid={`recent-alert-${alert.id}`}>
-                <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <span className={`h-2 w-2 rounded-full shrink-0 ${alert.status === "active" ? "bg-emerald-500" : alert.triggered ? "bg-amber-500" : "bg-gray-400"}`} />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{alert.name}</p>
-                    <p className="text-xs text-muted-foreground">{alert.symbol} {alert.condition} ${alert.targetPrice}</p>
+        <div className="flex items-center justify-between gap-2 mb-4 py-3 px-4 rounded-lg bg-muted/50">
+          <div className="text-center flex-1">
+            <div className="flex items-center justify-center gap-1.5 mb-1">
+              <Puzzle className="h-3.5 w-3.5 text-blue-500" />
+              <span className="text-xs font-medium">Ingest</span>
+            </div>
+            <p className="text-lg font-bold" data-testid="text-flow-signals">{signals.length}</p>
+            <p className="text-[10px] text-muted-foreground">{activeSignals} active</p>
+          </div>
+          <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
+          <div className="text-center flex-1">
+            <div className="flex items-center justify-center gap-1.5 mb-1">
+              <Landmark className="h-3.5 w-3.5 text-purple-500" />
+              <span className="text-xs font-medium">Execute</span>
+            </div>
+            <p className="text-lg font-bold" data-testid="text-flow-orders">{orders.length}</p>
+            <p className="text-[10px] text-muted-foreground">{filledOrders} filled</p>
+          </div>
+          <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
+          <div className="text-center flex-1">
+            <div className="flex items-center justify-center gap-1.5 mb-1">
+              <SiDiscord className="h-3.5 w-3.5 text-indigo-500" />
+              <span className="text-xs font-medium">Notify</span>
+            </div>
+            <p className="text-lg font-bold" data-testid="text-flow-discord">{discordChannels}</p>
+            <p className="text-[10px] text-muted-foreground">channel{discordChannels !== 1 ? "s" : ""}</p>
+          </div>
+        </div>
+
+        {recentSignals.length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-2">Latest Signals</p>
+            <div className="space-y-1">
+              {recentSignals.map((signal) => {
+                const isBuy = signal.direction === "buy";
+                return (
+                  <div key={signal.id} className="flex items-center justify-between gap-2 py-1.5" data-testid={`flow-signal-${signal.id}`}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${isBuy ? "bg-emerald-500/10" : "bg-red-500/10"}`}>
+                        {isBuy ? <ArrowUpRight className="h-3 w-3 text-emerald-500" /> : <ArrowDownRight className="h-3 w-3 text-red-500" />}
+                      </div>
+                      <span className="text-sm font-medium">{signal.symbol}</span>
+                      <span className="text-xs text-muted-foreground capitalize">{signal.direction}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">{signal.confidence}%</span>
                   </div>
-                </div>
-                <Badge variant={alert.priority === "high" ? "destructive" : alert.priority === "medium" ? "default" : "secondary"} className="text-[10px] shrink-0">
-                  {alert.priority}
-                </Badge>
-              </div>
-            ))}
+                );
+              })}
+            </div>
           </div>
         )}
       </CardContent>
@@ -132,13 +163,14 @@ function RecentSignals({ signals }: { signals: Signal[] }) {
 
 function ActivityFeed({ activity }: { activity: ActivityLogEntry[] }) {
   const recent = activity.slice(0, 8);
-  const typeIcons: Record<string, { icon: React.ElementType; color: string }> = {
-    alert_created: { icon: Bell, color: "text-amber-500" },
+  const typeIcons: Record<string, { icon: ElementType; color: string }> = {
     signal_created: { icon: TrendingUp, color: "text-emerald-500" },
     signal_ingested: { icon: TrendingUp, color: "text-blue-500" },
     app_connected: { icon: Puzzle, color: "text-purple-500" },
     integration_added: { icon: Activity, color: "text-indigo-500" },
     ibkr_order: { icon: Landmark, color: "text-purple-500" },
+    discord_sent: { icon: MessageSquare, color: "text-indigo-500" },
+    trade_executed: { icon: Landmark, color: "text-emerald-500" },
   };
 
   return (
@@ -164,7 +196,7 @@ function ActivityFeed({ activity }: { activity: ActivityLogEntry[] }) {
               const Icon = config.icon;
               return (
                 <div key={entry.id} className="flex items-start gap-2.5 py-2 border-b last:border-b-0" data-testid={`activity-${entry.id}`}>
-                  <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted mt-0.5`}>
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted mt-0.5">
                     <Icon className={`h-3 w-3 ${config.color}`} />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -203,7 +235,6 @@ function ConnectionStatus({ apps, integrations }: { apps: ConnectedApp[]; integr
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
               {app.syncSignals && <Badge variant="outline" className="text-[9px] h-4"><TrendingUp className="mr-0.5 h-2 w-2" />Signals</Badge>}
-              {app.syncAlerts && <Badge variant="outline" className="text-[9px] h-4"><Bell className="mr-0.5 h-2 w-2" />Alerts</Badge>}
             </div>
           </div>
         ))}
@@ -305,14 +336,14 @@ export default function Dashboard() {
     activeSignals: number;
   }>({ queryKey: ["/api/dashboard/stats"] });
 
-  const alertsQuery = useQuery<Alert[]>({ queryKey: ["/api/alerts"] });
   const signalsQuery = useQuery<Signal[]>({ queryKey: ["/api/signals"] });
   const activityQuery = useQuery<ActivityLogEntry[]>({ queryKey: ["/api/activity"] });
   const appsQuery = useQuery<ConnectedApp[]>({ queryKey: ["/api/connected-apps"] });
   const integrationsQuery = useQuery<Integration[]>({ queryKey: ["/api/integrations"] });
   const positionsQuery = useQuery<IbkrPosition[]>({ queryKey: ["/api/ibkr/positions"] });
+  const ordersQuery = useQuery<IbkrOrder[]>({ queryKey: ["/api/ibkr/orders"] });
 
-  const isLoading = statsQuery.isLoading || alertsQuery.isLoading || signalsQuery.isLoading || activityQuery.isLoading;
+  const isLoading = statsQuery.isLoading || signalsQuery.isLoading || activityQuery.isLoading;
 
   if (isLoading) {
     return (
@@ -332,13 +363,14 @@ export default function Dashboard() {
   }
 
   const stats = statsQuery.data;
-  const alerts = alertsQuery.data ?? [];
   const signals = signalsQuery.data ?? [];
   const activity = activityQuery.data ?? [];
   const apps = appsQuery.data ?? [];
   const integrations = integrationsQuery.data ?? [];
   const positions = positionsQuery.data ?? [];
+  const orders = ordersQuery.data ?? [];
   const activeApps = apps.filter(a => a.status === "active").length;
+  const ibkrAccounts = integrations.filter(i => i.type === "ibkr").length;
 
   return (
     <div className="p-6 space-y-6" data-testid="page-dashboard">
@@ -348,19 +380,11 @@ export default function Dashboard() {
           <h1 className="text-2xl font-bold tracking-tight" data-testid="heading-dashboard">Dashboard</h1>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          Trading system overview and recent activity
+          Signal execution system overview and recent activity
         </p>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard
-          title="Active Alerts"
-          value={stats?.activeAlerts ?? 0}
-          subtitle={`${stats?.totalAlerts ?? 0} total`}
-          icon={Bell}
-          accent="text-amber-500"
-          href="/alerts"
-        />
         <StatCard
           title="Active Signals"
           value={stats?.activeSignals ?? 0}
@@ -378,6 +402,14 @@ export default function Dashboard() {
           href="/connected-apps"
         />
         <StatCard
+          title="IBKR Orders"
+          value={orders.length}
+          subtitle={`${orders.filter(o => o.status === "filled").length} filled`}
+          icon={Landmark}
+          accent="text-purple-500"
+          href="/ibkr"
+        />
+        <StatCard
           title="Positions"
           value={positions.length}
           subtitle={positions.length > 0 ? `$${positions.reduce((s, p) => s + (p.marketValue || 0), 0).toLocaleString()}` : "No open positions"}
@@ -388,7 +420,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-        <RecentAlerts alerts={alerts} />
+        <SignalFlowCard signals={signals} orders={orders} integrations={integrations} />
         <RecentSignals signals={signals} />
         <ActivityFeed activity={activity} />
       </div>

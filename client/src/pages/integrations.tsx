@@ -29,7 +29,6 @@ import {
   Landmark,
   Wifi,
   WifiOff,
-  Bell,
   TrendingUp,
   BarChart3,
   Cpu,
@@ -48,7 +47,6 @@ const discordFormSchema = z.object({
   channelName: z.string().min(1, "Channel name is required"),
   webhookUrl: z.string().min(1, "Webhook URL is required"),
   serverId: z.string().optional(),
-  notifyAlerts: z.boolean(),
   notifySignals: z.boolean(),
   notifyTrades: z.boolean(),
   notifySystem: z.boolean(),
@@ -80,7 +78,6 @@ function CreateDiscordDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       channelName: "",
       webhookUrl: "",
       serverId: "",
-      notifyAlerts: true,
       notifySignals: true,
       notifyTrades: false,
       notifySystem: false,
@@ -99,7 +96,7 @@ function CreateDiscordDialog({ open, onOpenChange }: { open: boolean; onOpenChan
           serverId: data.serverId || null,
         },
         enabled: true,
-        notifyAlerts: data.notifyAlerts,
+        notifyAlerts: false,
         notifySignals: data.notifySignals,
         notifyTrades: data.notifyTrades,
         notifySystem: data.notifySystem,
@@ -192,19 +189,6 @@ function CreateDiscordDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             <div className="space-y-3 rounded-lg border p-3">
               <p className="text-sm font-medium">Notification Settings</p>
               <div className="grid grid-cols-2 gap-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-sm">
-                    <Bell className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span>Alerts</span>
-                  </div>
-                  <FormField
-                    control={form.control}
-                    name="notifyAlerts"
-                    render={({ field }) => (
-                      <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-discord-alerts" />
-                    )}
-                  />
-                </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-sm">
                     <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
@@ -559,15 +543,6 @@ function IntegrationCard({ integration, onDelete }: { integration: Integration; 
         <div className="space-y-2 rounded-lg bg-muted/50 p-3">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Notification Channels</p>
           <div className="grid grid-cols-2 gap-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs">Alerts</span>
-              <Switch
-                checked={integration.notifyAlerts}
-                onCheckedChange={(checked) => handleToggle("notifyAlerts", checked)}
-                className="scale-75"
-                data-testid={`switch-integration-alerts-${integration.id}`}
-              />
-            </div>
             <div className="flex items-center justify-between">
               <span className="text-xs">Signals</span>
               <Switch

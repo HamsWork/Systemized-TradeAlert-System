@@ -19,7 +19,6 @@ import {
   Key,
   Shield,
   TrendingUp,
-  Bell,
   Puzzle,
   Settings2,
   ChevronDown,
@@ -565,79 +564,6 @@ const sections: SectionDef[] = [
     ],
   },
   {
-    id: "alerts",
-    title: "Alerts",
-    icon: Bell,
-    description: "Create and manage price alerts. Alerts trigger notifications when market conditions are met.",
-    endpoints: [
-      {
-        method: "GET",
-        path: "/api/alerts",
-        description: "List all price alerts, ordered by most recent first.",
-        params: [],
-        responseExample: `[
-  {
-    "id": "def-456",
-    "name": "BTC Breakout Watch",
-    "symbol": "BTC",
-    "condition": "above",
-    "targetPrice": 45000,
-    "status": "active",
-    "priority": "high"
-  }
-]`,
-      },
-      {
-        method: "GET",
-        path: "/api/alerts/:id",
-        description: "Get a specific alert by its unique ID.",
-        params: [
-          { name: "id", type: "string", required: true, description: "The unique alert ID." },
-        ],
-      },
-      {
-        method: "POST",
-        path: "/api/alerts",
-        description: "Create a new price alert.",
-        params: [
-          { name: "name", type: "string", required: true, description: "Alert display name" },
-          { name: "symbol", type: "string", required: true, description: "Trading symbol to monitor" },
-          { name: "condition", type: "string", required: true, description: "Trigger condition", enumValues: ["above", "below"] },
-          { name: "targetPrice", type: "number", required: true, description: "Price level to trigger the alert" },
-          { name: "status", type: "string", required: false, description: "Initial status (default: active)", enumValues: ["active", "paused"] },
-          { name: "priority", type: "string", required: false, description: "Priority level (default: medium)", enumValues: ["low", "medium", "high"] },
-        ],
-        responseExample: `{
-  "id": "def-456",
-  "name": "BTC Breakout Watch",
-  "symbol": "BTC",
-  "condition": "above",
-  "targetPrice": 45000,
-  "status": "active",
-  "priority": "high",
-  "triggered": false,
-  "createdAt": "2026-02-26T12:00:00.000Z"
-}`,
-      },
-      {
-        method: "PATCH",
-        path: "/api/alerts/:id",
-        description: "Update an existing alert. Send only the fields you want to change.",
-        params: [
-          { name: "id", type: "string", required: true, description: "Alert ID to update" },
-        ],
-      },
-      {
-        method: "DELETE",
-        path: "/api/alerts/:id",
-        description: "Delete an alert by ID.",
-        params: [
-          { name: "id", type: "string", required: true, description: "Alert ID to delete" },
-        ],
-      },
-    ],
-  },
-  {
     id: "apps",
     title: "Connected Apps",
     icon: Puzzle,
@@ -655,7 +581,6 @@ const sections: SectionDef[] = [
     "slug": "situ-trader",
     "status": "active",
     "apiKey": "ts_a1b2c3...",
-    "syncAlerts": true,
     "syncSignals": true
   }
 ]`,
@@ -670,7 +595,6 @@ const sections: SectionDef[] = [
           { name: "description", type: "string", required: true, description: "App description" },
           { name: "apiEndpoint", type: "string", required: false, description: "App's API endpoint URL" },
           { name: "webhookUrl", type: "string", required: false, description: "Webhook callback URL" },
-          { name: "syncAlerts", type: "boolean", required: false, description: "Sync alerts (default: true)" },
           { name: "syncSignals", type: "boolean", required: false, description: "Accept signals (default: true)" },
         ],
       },
@@ -816,12 +740,9 @@ const sections: SectionDef[] = [
       {
         method: "GET",
         path: "/api/dashboard/stats",
-        description: "Get dashboard summary statistics including alert and signal counts.",
+        description: "Get dashboard summary statistics including signal and trading data.",
         params: [],
         responseExample: `{
-  "totalAlerts": 5,
-  "activeAlerts": 4,
-  "triggeredAlerts": 0,
   "totalSignals": 6,
   "activeSignals": 6
 }`,
@@ -845,7 +766,7 @@ const sections: SectionDef[] = [
         params: [
           { name: "key", type: "string", required: true, description: "Setting key identifier" },
           { name: "value", type: "string", required: true, description: "Setting value" },
-          { name: "category", type: "string", required: true, description: "Category grouping", enumValues: ["alerts", "signals", "trading", "system"] },
+          { name: "category", type: "string", required: true, description: "Category grouping", enumValues: ["signals", "trading", "system"] },
           { name: "label", type: "string", required: true, description: "Display label for the setting" },
           { name: "type", type: "string", required: true, description: "Value type", enumValues: ["boolean", "number"] },
           { name: "description", type: "string", required: false, description: "Description of the setting" },

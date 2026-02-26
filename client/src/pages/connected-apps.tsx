@@ -19,7 +19,6 @@ import {
   Trash2,
   Globe,
   Webhook,
-  Bell,
   TrendingUp,
   Power,
   PowerOff,
@@ -50,7 +49,6 @@ function CreateAppDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
       apiEndpoint: "",
       apiKey: "",
       webhookUrl: "",
-      syncAlerts: true,
       syncSignals: true,
     },
   });
@@ -172,19 +170,6 @@ function CreateAppDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
             </div>
             <div className="space-y-3 rounded-lg border p-3">
               <p className="text-sm font-medium">Sync Settings</p>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm">
-                  <Bell className="h-4 w-4 text-muted-foreground" />
-                  <span>Sync Alerts</span>
-                </div>
-                <FormField
-                  control={form.control}
-                  name="syncAlerts"
-                  render={({ field }) => (
-                    <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-sync-alerts" />
-                  )}
-                />
-              </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm">
                   <TrendingUp className="h-4 w-4 text-muted-foreground" />
@@ -332,11 +317,6 @@ function AppCard({ app, onDelete, onToggleStatus }: {
             </div>
 
             <div className="mt-3 flex items-center gap-2 flex-wrap">
-              {app.syncAlerts && (
-                <Badge variant="outline" className="text-xs font-normal">
-                  <Bell className="mr-1 h-3 w-3" />Alerts
-                </Badge>
-              )}
               {app.syncSignals && (
                 <Badge variant="outline" className="text-xs font-normal">
                   <TrendingUp className="mr-1 h-3 w-3" />Signals

@@ -9,7 +9,6 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
-import AlertsPage from "@/pages/alerts";
 import SignalsPage from "@/pages/signals";
 import ActivityPage from "@/pages/activity";
 import IntegrationsPage from "@/pages/integrations";
@@ -22,7 +21,6 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
-      <Route path="/alerts" component={AlertsPage} />
       <Route path="/signals" component={SignalsPage} />
       <Route path="/activity" component={ActivityPage} />
       <Route path="/integrations" component={IntegrationsPage} />

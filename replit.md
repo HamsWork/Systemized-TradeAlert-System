@@ -1,6 +1,6 @@
-# TradeSync - Trading Alert System Dashboard
+# TradeSync - Signal Execution System Dashboard
 
-A modular, systemized trading and alert dashboard designed to be plugged directly into other applications. Built with full visibility into every system control, integration, and connection point.
+A modular trading dashboard where plugged-in apps send signals, which trigger IBKR trade execution and Discord notifications based on system settings. Built with full visibility into every system control, integration, and connection point.
 
 ## Architecture
 
@@ -10,14 +10,19 @@ A modular, systemized trading and alert dashboard designed to be plugged directl
 - **Styling**: Tailwind CSS with dark mode support (dark by default)
 - **Environment**: Loads `.env` via dotenv when not running in Replit (checks REPL_ID)
 
+## System Flow
+
+Plugged-in apps → Send signals → TradeSync executes IBKR trades + sends Discord notifications based on settings
+
 ## Data Model
 
-- **Alerts**: Price alerts with conditions (above/below/crosses), priority levels, and trigger tracking
 - **Signals**: Trading signals with direction (buy/sell), confidence scores, entry/target/stop-loss prices, source app tracking (sourceAppId, sourceAppName)
 - **Activity Log**: System event feed tracking all actions
-- **Connected Apps**: Plugged-in trading applications (Situ Trader, Crowned Trader) with auto-generated API keys and sync settings
-- **System Settings**: Key-value toggle/config store for all system controls (alerts, signals, trading, system)
+- **Connected Apps**: Plugged-in trading applications with auto-generated API keys and sync settings
+- **System Settings**: Key-value toggle/config store for system controls (signals, trading, system)
 - **Integrations**: Discord channels and IBKR trading accounts with per-integration notification and trading toggles
+- **IBKR Orders/Positions**: Trade execution records and open position tracking
+- **Alerts** (backend schema only, removed from frontend): Legacy alert schema retained in database
 
 ## Signal Ingestion API
 
@@ -29,20 +34,18 @@ Connected apps push signals to TradeSync via `POST /api/ingest/signals` using th
 
 ## Pages
 
-1. **Dashboard** (`/`) - System overview with stat cards, recent alerts, recent signals, activity feed, connections status, and positions summary
-2. **Alerts** (`/alerts`) - Full CRUD for price alerts with filtering
-3. **Signals** (`/signals`) - Full CRUD for trading signals with filtering, shows source app badges
-4. **Activity** (`/activity`) - Complete activity log
-5. **Integrations** (`/integrations`) - Full CRUD for Discord channels and IBKR trading accounts with notification/trading toggles
-6. **Connected Apps** (`/connected-apps`) - Manage plugged-in trading apps with API key management (show/hide, copy, regenerate)
-7. **API Guide** (`/api-guide`) - Full API documentation with interactive signal testing tool
-8. **IBKR Trading** (`/ibkr`) - Dedicated IBKR page with order status, open positions, and order history per connected app
-9. **Settings** (`/settings`) - System controls organized by category (alerts, signals, trading, system) with toggle switches and value inputs
+1. **Dashboard** (`/`) - System overview with signal pipeline flow card, stat cards, recent signals, activity feed, connections status, and positions summary
+2. **Signals** (`/signals`) - Full CRUD for trading signals with filtering, shows source app badges
+3. **Activity** (`/activity`) - Complete activity log
+4. **Integrations** (`/integrations`) - Full CRUD for Discord channels and IBKR trading accounts with notification/trading toggles
+5. **Connected Apps** (`/connected-apps`) - Manage plugged-in trading apps with API key management (show/hide, copy, regenerate)
+6. **API Guide** (`/api-guide`) - Interactive API documentation with Massive.com-style layout, live code generation, and query testing
+7. **IBKR Trading** (`/ibkr`) - Dedicated IBKR page with order status, open positions, and order history per connected app
+8. **Settings** (`/settings`) - System controls organized by category (signals, trading, system) with toggle switches and value inputs
 
 ## API Routes
 
 All routes prefixed with `/api`:
-- `GET/POST /alerts`, `GET/PATCH/DELETE /alerts/:id`
 - `GET/POST /signals`, `GET/PATCH/DELETE /signals/:id`
 - `POST /ingest/signals` - External signal ingestion (requires Bearer API key auth)
 - `GET /activity`
@@ -53,24 +56,24 @@ All routes prefixed with `/api`:
 - `GET /ibkr/orders`, `GET /ibkr/orders/:integrationId`, `POST /ibkr/orders`, `PATCH /ibkr/orders/:id`
 - `GET /ibkr/positions`, `GET /ibkr/positions/:integrationId`, `POST /ibkr/positions`, `PATCH /ibkr/positions/:id`
 - `GET /dashboard/stats`
+- `GET/POST /alerts`, `GET/PATCH/DELETE /alerts/:id` (backend only, not exposed in frontend)
 
 ## Key Files
 
-- `shared/schema.ts` - Data models and Zod validation schemas (users, alerts, signals, activityLog, connectedApps, systemSettings, integrations, ibkrOrders, ibkrPositions)
+- `shared/schema.ts` - Data models and Zod validation schemas
 - `server/db.ts` - Database connection with keepAlive and error handling
 - `server/storage.ts` - Storage interface and DatabaseStorage implementation
 - `server/routes.ts` - API route handlers including signal ingestion
 - `server/seed.ts` - Seed data for all tables
-- `client/src/pages/dashboard.tsx` - Overview dashboard with stats, recent items, activity feed
+- `client/src/pages/dashboard.tsx` - Overview dashboard with signal pipeline flow, stats, recent signals, activity feed
 - `client/src/pages/settings.tsx` - System settings controls by category
 - `client/src/pages/connected-apps.tsx` - Connected apps management with API key display
 - `client/src/pages/signals.tsx` - Signals page with source app badges
+- `client/src/pages/api-guide.tsx` - Interactive API guide with live code examples
 - `client/src/components/app-sidebar.tsx` - Navigation sidebar
-- `client/src/components/theme-provider.tsx` - Dark/light mode toggle
 
 ## System Settings Categories
 
-- **alerts**: Alert System, Alert Sounds, Email Notifications, Auto-Pause Triggered
-- **signals**: Signal Engine, Auto-Create Alerts, Confidence Threshold, Technical/Sentiment/Fundamental/Algorithmic toggles
+- **signals**: Signal Engine, Confidence Threshold, Technical/Sentiment/Fundamental/Algorithmic toggles
 - **system**: Activity Logging, Dark Mode Default, API Access, Webhook Delivery
 - **trading**: Trade Execution, Paper Mode, Max Position Size, Risk Limit, Auto Stop-Loss, Auto Take-Profit
