@@ -39,7 +39,7 @@ Plugged-in apps → Send signals → TradeSync executes IBKR trades + sends Disc
 
 Connected apps push signals to TradeSync via `POST /api/ingest/signals` using their API key:
 - Auth: `Authorization: Bearer <api_key>` header
-- Body: `{ signalTypeId or signalType (name), data: { ...variable values } }`
+- Body: `{ ticker, instrumentType, direction, entryPrice?, tradePlan?, ... }`
 - App must be active and have syncSignals enabled
 - Each signal is tagged with sourceAppId and sourceAppName
 

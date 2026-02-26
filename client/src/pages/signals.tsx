@@ -104,7 +104,7 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
   });
 
   const handleSubmit = () => {
-    if (!selectedTypeId || !ticker || !instrumentType || !direction) return;
+    if (!ticker || !instrumentType || !direction) return;
 
     const data: Record<string, any> = {
       ticker,
@@ -131,7 +131,7 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
     if (notes) data.trade_plan = notes;
 
     createMutation.mutate({
-      signalTypeId: selectedTypeId,
+      signalTypeId: selectedTypeId || null,
       data,
       status: "active",
     });
@@ -150,7 +150,7 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
         </DialogHeader>
         <div className="space-y-5">
           <div>
-            <Label className="text-sm font-medium mb-1.5 block">Signal Type</Label>
+            <Label className="text-sm font-medium mb-1.5 block">Signal Type <span className="text-muted-foreground font-normal">(optional)</span></Label>
             <Select value={selectedTypeId} onValueChange={(val) => { setSelectedTypeId(val); resetForm(); }} data-testid="select-signal-type-dropdown">
               <SelectTrigger data-testid="select-signal-type">
                 <SelectValue placeholder="Select signal type..." />
@@ -164,172 +164,170 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
           </div>
 
           {selectedType && (
-            <>
-              <div className="rounded-lg p-3 text-xs" style={{ backgroundColor: selectedType.color + "12", borderLeft: `3px solid ${selectedType.color}` }}>
-                <span className="font-semibold text-sm" style={{ color: selectedType.color }}>{selectedType.name}</span>
-              </div>
-
-              <Separator />
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2 sm:col-span-1">
-                  <Label className="text-sm font-medium mb-1.5 block">Ticker <span className="text-red-500">*</span></Label>
-                  <Input
-                    value={ticker}
-                    onChange={(e) => setTicker(e.target.value.toUpperCase())}
-                    placeholder="AAPL"
-                    className="font-mono"
-                    data-testid="input-signal-ticker"
-                  />
-                </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <Label className="text-sm font-medium mb-1.5 block">Instrument Type <span className="text-red-500">*</span></Label>
-                  <Select value={instrumentType} onValueChange={(v) => { setInstrumentType(v); setExpiration(""); setStrike(""); }}>
-                    <SelectTrigger data-testid="select-signal-instrumentType">
-                      <SelectValue placeholder="Select..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Options">Options</SelectItem>
-                      <SelectItem value="Shares">Shares</SelectItem>
-                      <SelectItem value="LETF">Leveraged ETF</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-sm font-medium mb-1.5 block">Direction <span className="text-red-500">*</span></Label>
-                  <Select value={direction} onValueChange={setDirection}>
-                    <SelectTrigger data-testid="select-signal-direction">
-                      <SelectValue placeholder="Select..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Long">Long</SelectItem>
-                      <SelectItem value="Short">Short</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium mb-1.5 block">Entry Price</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={entryPrice}
-                    onChange={(e) => setEntryPrice(e.target.value)}
-                    placeholder="0.00"
-                    className="font-mono"
-                    data-testid="input-signal-entryPrice"
-                  />
-                </div>
-              </div>
-
-              {instrumentType === "Options" && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-sm font-medium mb-1.5 block">Expiration <span className="text-red-500">*</span></Label>
-                    <Input
-                      type="date"
-                      value={expiration}
-                      onChange={(e) => setExpiration(e.target.value)}
-                      data-testid="input-signal-expiration"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium mb-1.5 block">Strike <span className="text-red-500">*</span></Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={strike}
-                      onChange={(e) => setStrike(e.target.value)}
-                      placeholder="0.00"
-                      className="font-mono"
-                      data-testid="input-signal-strike"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <Separator />
-
-              <div className="rounded-lg border border-zinc-700/40 bg-zinc-900/20 overflow-hidden">
-                <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-700/30 bg-zinc-800/20">
-                  <Braces className="h-3.5 w-3.5 text-primary/70" />
-                  <span className="text-sm font-semibold">Trade Plan</span>
-                </div>
-                <div className="p-3 space-y-3">
-                  <div>
-                    <Label className="text-xs font-medium text-muted-foreground mb-1.5 block flex items-center gap-1.5">
-                      <Crosshair className="h-3 w-3" />
-                      Target Levels
-                    </Label>
-                    <div className="grid grid-cols-3 gap-2">
-                      <Input type="number" step="0.01" value={tp1} onChange={(e) => setTp1(e.target.value)} placeholder="TP1" className="font-mono text-sm h-8" data-testid="input-signal-tp1" />
-                      <Input type="number" step="0.01" value={tp2} onChange={(e) => setTp2(e.target.value)} placeholder="TP2" className="font-mono text-sm h-8" data-testid="input-signal-tp2" />
-                      <Input type="number" step="0.01" value={tp3} onChange={(e) => setTp3(e.target.value)} placeholder="TP3" className="font-mono text-sm h-8" data-testid="input-signal-tp3" />
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label className="text-xs font-medium text-muted-foreground mb-1.5 block flex items-center gap-1.5">
-                      <ShieldAlert className="h-3 w-3" />
-                      Stop Loss Levels
-                    </Label>
-                    <div className="grid grid-cols-3 gap-2">
-                      <Input type="number" step="0.01" value={sl1} onChange={(e) => setSl1(e.target.value)} placeholder="SL1" className="font-mono text-sm h-8" data-testid="input-signal-sl1" />
-                      <Input type="number" step="0.01" value={sl2} onChange={(e) => setSl2(e.target.value)} placeholder="SL2" className="font-mono text-sm h-8" data-testid="input-signal-sl2" />
-                      <Input type="number" step="0.01" value={sl3} onChange={(e) => setSl3(e.target.value)} placeholder="SL3" className="font-mono text-sm h-8" data-testid="input-signal-sl3" />
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label className="text-xs font-medium text-muted-foreground mb-1.5 block flex items-center gap-1.5">
-                      <TrendingUp className="h-3 w-3" />
-                      Raise Stop Level
-                    </Label>
-                    <div className={`grid ${showRaiseValue ? "grid-cols-2" : "grid-cols-1"} gap-2`}>
-                      <Select value={raiseMethod} onValueChange={setRaiseMethod}>
-                        <SelectTrigger className="h-8 text-sm" data-testid="select-signal-raiseMethod">
-                          <SelectValue placeholder="Method..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {["None", "Trail by %", "Trail by $", "Move to Entry at TP1", "Move to TP1 at TP2", "Custom"].map(m => (
-                            <SelectItem key={m} value={m}>{m}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {showRaiseValue && (
-                        <Input value={raiseValue} onChange={(e) => setRaiseValue(e.target.value)} placeholder="Value" className="font-mono text-sm h-8" data-testid="input-signal-raiseValue" />
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label className="text-xs font-medium text-muted-foreground mb-1.5 block flex items-center gap-1.5">
-                      <FileText className="h-3 w-3" />
-                      Notes
-                    </Label>
-                    <Textarea
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      placeholder="Trade thesis, plan details..."
-                      className="resize-none text-sm min-h-[60px]"
-                      data-testid="input-signal-notes"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <Button
-                className="w-full"
-                disabled={!selectedTypeId || !ticker || !instrumentType || !direction || createMutation.isPending}
-                onClick={handleSubmit}
-                data-testid="button-create-signal"
-              >
-                {createMutation.isPending ? "Creating..." : "Create Signal"}
-              </Button>
-            </>
+            <div className="rounded-lg p-3 text-xs" style={{ backgroundColor: selectedType.color + "12", borderLeft: `3px solid ${selectedType.color}` }}>
+              <span className="font-semibold text-sm" style={{ color: selectedType.color }}>{selectedType.name}</span>
+            </div>
           )}
+
+          <Separator />
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2 sm:col-span-1">
+              <Label className="text-sm font-medium mb-1.5 block">Ticker <span className="text-red-500">*</span></Label>
+              <Input
+                value={ticker}
+                onChange={(e) => setTicker(e.target.value.toUpperCase())}
+                placeholder="AAPL"
+                className="font-mono"
+                data-testid="input-signal-ticker"
+              />
+            </div>
+            <div className="col-span-2 sm:col-span-1">
+              <Label className="text-sm font-medium mb-1.5 block">Instrument Type <span className="text-red-500">*</span></Label>
+              <Select value={instrumentType} onValueChange={(v) => { setInstrumentType(v); setExpiration(""); setStrike(""); }}>
+                <SelectTrigger data-testid="select-signal-instrumentType">
+                  <SelectValue placeholder="Select..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Options">Options</SelectItem>
+                  <SelectItem value="Shares">Shares</SelectItem>
+                  <SelectItem value="LETF">Leveraged ETF</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-sm font-medium mb-1.5 block">Direction <span className="text-red-500">*</span></Label>
+              <Select value={direction} onValueChange={setDirection}>
+                <SelectTrigger data-testid="select-signal-direction">
+                  <SelectValue placeholder="Select..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Long">Long</SelectItem>
+                  <SelectItem value="Short">Short</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-sm font-medium mb-1.5 block">Entry Price</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={entryPrice}
+                onChange={(e) => setEntryPrice(e.target.value)}
+                placeholder="0.00"
+                className="font-mono"
+                data-testid="input-signal-entryPrice"
+              />
+            </div>
+          </div>
+
+          {instrumentType === "Options" && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-sm font-medium mb-1.5 block">Expiration <span className="text-red-500">*</span></Label>
+                <Input
+                  type="date"
+                  value={expiration}
+                  onChange={(e) => setExpiration(e.target.value)}
+                  data-testid="input-signal-expiration"
+                />
+              </div>
+              <div>
+                <Label className="text-sm font-medium mb-1.5 block">Strike <span className="text-red-500">*</span></Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={strike}
+                  onChange={(e) => setStrike(e.target.value)}
+                  placeholder="0.00"
+                  className="font-mono"
+                  data-testid="input-signal-strike"
+                />
+              </div>
+            </div>
+          )}
+
+          <Separator />
+
+          <div className="rounded-lg border border-zinc-700/40 bg-zinc-900/20 overflow-hidden">
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-700/30 bg-zinc-800/20">
+              <Braces className="h-3.5 w-3.5 text-primary/70" />
+              <span className="text-sm font-semibold">Trade Plan</span>
+            </div>
+            <div className="p-3 space-y-3">
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground mb-1.5 block flex items-center gap-1.5">
+                  <Crosshair className="h-3 w-3" />
+                  Target Levels
+                </Label>
+                <div className="grid grid-cols-3 gap-2">
+                  <Input type="number" step="0.01" value={tp1} onChange={(e) => setTp1(e.target.value)} placeholder="TP1" className="font-mono text-sm h-8" data-testid="input-signal-tp1" />
+                  <Input type="number" step="0.01" value={tp2} onChange={(e) => setTp2(e.target.value)} placeholder="TP2" className="font-mono text-sm h-8" data-testid="input-signal-tp2" />
+                  <Input type="number" step="0.01" value={tp3} onChange={(e) => setTp3(e.target.value)} placeholder="TP3" className="font-mono text-sm h-8" data-testid="input-signal-tp3" />
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground mb-1.5 block flex items-center gap-1.5">
+                  <ShieldAlert className="h-3 w-3" />
+                  Stop Loss Levels
+                </Label>
+                <div className="grid grid-cols-3 gap-2">
+                  <Input type="number" step="0.01" value={sl1} onChange={(e) => setSl1(e.target.value)} placeholder="SL1" className="font-mono text-sm h-8" data-testid="input-signal-sl1" />
+                  <Input type="number" step="0.01" value={sl2} onChange={(e) => setSl2(e.target.value)} placeholder="SL2" className="font-mono text-sm h-8" data-testid="input-signal-sl2" />
+                  <Input type="number" step="0.01" value={sl3} onChange={(e) => setSl3(e.target.value)} placeholder="SL3" className="font-mono text-sm h-8" data-testid="input-signal-sl3" />
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground mb-1.5 block flex items-center gap-1.5">
+                  <TrendingUp className="h-3 w-3" />
+                  Raise Stop Level
+                </Label>
+                <div className={`grid ${showRaiseValue ? "grid-cols-2" : "grid-cols-1"} gap-2`}>
+                  <Select value={raiseMethod} onValueChange={setRaiseMethod}>
+                    <SelectTrigger className="h-8 text-sm" data-testid="select-signal-raiseMethod">
+                      <SelectValue placeholder="Method..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["None", "Trail by %", "Trail by $", "Move to Entry at TP1", "Move to TP1 at TP2", "Custom"].map(m => (
+                        <SelectItem key={m} value={m}>{m}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {showRaiseValue && (
+                    <Input value={raiseValue} onChange={(e) => setRaiseValue(e.target.value)} placeholder="Value" className="font-mono text-sm h-8" data-testid="input-signal-raiseValue" />
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground mb-1.5 block flex items-center gap-1.5">
+                  <FileText className="h-3 w-3" />
+                  Notes
+                </Label>
+                <Textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Trade thesis, plan details..."
+                  className="resize-none text-sm min-h-[60px]"
+                  data-testid="input-signal-notes"
+                />
+              </div>
+            </div>
+          </div>
+
+          <Button
+            className="w-full"
+            disabled={!ticker || !instrumentType || !direction || createMutation.isPending}
+            onClick={handleSubmit}
+            data-testid="button-create-signal"
+          >
+            {createMutation.isPending ? "Creating..." : "Create Signal"}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

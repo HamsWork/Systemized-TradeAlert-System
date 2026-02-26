@@ -20,7 +20,7 @@ export const signalTypes = pgTable("signal_types", {
 
 export const signals = pgTable("signals", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  signalTypeId: varchar("signal_type_id").notNull(),
+  signalTypeId: varchar("signal_type_id"),
   data: jsonb("data").notNull().default({}),
   discordChannelId: varchar("discord_channel_id"),
   status: text("status").notNull().default("active"),

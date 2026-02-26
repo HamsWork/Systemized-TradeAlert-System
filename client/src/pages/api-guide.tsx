@@ -569,8 +569,6 @@ const sections: SectionDef[] = [
         description: "Push a trading signal into TradeSync. Optionally include a Bearer token to link the signal to a connected app. Without an API key, the signal is processed as Manual.",
         auth: "Bearer Token (Optional)",
         params: [
-          { name: "signalType", type: "string", required: false, description: "Signal type name (e.g., 'Common Trade Alert'). Provide this or signalTypeId." },
-          { name: "signalTypeId", type: "string", required: false, description: "Signal type UUID. Alternative to signalType name." },
           { name: "ticker", type: "string", required: true, description: "Ticker symbol (e.g., 'AAPL', 'TSLA', 'SPY')." },
           { name: "instrumentType", type: "string", required: true, description: "Instrument type.", enumValues: ["Options", "Shares", "LETF"] },
           { name: "direction", type: "string", required: true, description: "Trade direction.", enumValues: ["Long", "Short"] },
@@ -622,7 +620,6 @@ Full example:
   "success": true,
   "signal": {
     "id": "abc-123",
-    "signalTypeId": "type-456",
     "data": {
       "ticker": "AAPL",
       "instrument_type": "Options",
@@ -651,7 +648,6 @@ Full example:
         responseExample: `[
   {
     "id": "abc-123",
-    "signalTypeId": "type-456",
     "data": {
       "ticker": "AAPL",
       "instrument_type": "Options",
@@ -684,8 +680,7 @@ Full example:
         path: "/api/signals",
         description: "Create a signal manually (internal use, no API key required).",
         params: [
-          { name: "signalTypeId", type: "string", required: true, description: "ID of the signal type to use" },
-          { name: "data", type: "json", required: true, description: "JSON object with signal data matching the signal type's variables" },
+          { name: "data", type: "json", required: true, description: "JSON object with signal data (ticker, instrument_type, direction, entry_price, etc.)" },
           { name: "status", type: "string", required: false, description: "Signal status", enumValues: ["active", "closed", "expired"] },
         ],
       },

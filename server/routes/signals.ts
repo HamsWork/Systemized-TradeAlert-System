@@ -57,14 +57,16 @@ export function registerSignalRoutes(app: Express) {
 
   app.post("/api/signals", asyncHandler(async (req, res) => {
     const parsed = insertSignalSchema.parse(req.body);
-    const signalType = await storage.getSignalType(parsed.signalTypeId);
+    const signalType = parsed.signalTypeId ? await storage.getSignalType(parsed.signalTypeId) : null;
     const signal = await storage.createSignal(parsed);
     const data = parsed.data as Record<string, any>;
+    const ticker = data.ticker || data.symbol || "";
+    const typeName = signalType?.name;
     await storage.createActivity({
       type: "signal_created",
-      title: `Signal: ${signalType?.name || "Unknown"} - ${data.ticker || data.symbol || ""}`,
-      description: `${signalType?.name || "Signal"} created${data.ticker ? ` for ${data.ticker}` : ""}`,
-      symbol: data.ticker || data.symbol || null,
+      title: typeName ? `Signal: ${typeName} - ${ticker}` : `Signal: ${ticker}`,
+      description: typeName ? `${typeName} created for ${ticker}` : `Signal created for ${ticker}`,
+      symbol: ticker || null,
       metadata: null,
     });
     res.status(201).json(signal);
@@ -105,21 +107,6 @@ export function registerSignalRoutes(app: Express) {
     }
 
     const body = req.body;
-
-    let signalTypeId = body.signalTypeId;
-    if (!signalTypeId && body.signalType) {
-      const st = await storage.getSignalTypeByName(body.signalType);
-      if (st) signalTypeId = st.id;
-    }
-
-    if (!signalTypeId) {
-      return res.status(400).json({ message: "signalTypeId or signalType (name) is required" });
-    }
-
-    const signalType = await storage.getSignalType(signalTypeId);
-    if (!signalType) {
-      return res.status(400).json({ message: "Signal type not found" });
-    }
 
     const { ticker, instrumentType, direction, expiration, strike, entryPrice } = body;
     let { tradePlan } = body;
@@ -188,7 +175,7 @@ export function registerSignalRoutes(app: Express) {
     const sourceId = connectedApp ? connectedApp.id : null;
 
     const signalData = {
-      signalTypeId,
+      signalTypeId: null,
       data: signalDataObj,
       discordChannelId: body.discordChannelId || null,
       status: "active",
@@ -205,8 +192,8 @@ export function registerSignalRoutes(app: Express) {
 
     await storage.createActivity({
       type: "signal_ingested",
-      title: `Signal from ${sourceName}: ${signalType.name} ${ticker}`,
-      description: `${signalType.name} signal for ${ticker} (${instrumentType})`,
+      title: `Signal from ${sourceName}: ${ticker} ${direction}`,
+      description: `${instrumentType} signal for ${ticker} (${direction})`,
       symbol: ticker,
       metadata: { sourceApp: sourceName, sourceAppId: sourceId },
     });

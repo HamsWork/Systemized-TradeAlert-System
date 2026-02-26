@@ -81,7 +81,7 @@ function getWebhookForInstrument(app: ConnectedApp, instrumentType: string): str
 
 export async function sendSignalDiscordAlert(
   signal: Signal,
-  signalType: SignalType,
+  signalType: SignalType | null,
   app: ConnectedApp,
 ): Promise<boolean> {
   const data = signal.data as Record<string, any>;
@@ -157,7 +157,7 @@ export async function sendSignalDiscordAlert(
 
   fields.push({
     name: "📡 Source",
-    value: `${app.name} via ${signalType.name}`,
+    value: `${app.name}${signalType ? ` via ${signalType.name}` : ""}`,
     inline: false,
   });
 
