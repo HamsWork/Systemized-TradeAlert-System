@@ -313,7 +313,7 @@ export default function IbkrPage() {
             <Landmark className="h-5 w-5 text-purple-500" />
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-tight" data-testid="heading-ibkr">IBKR Trading</h1>
+            <h1 className="text-xl font-bold tracking-tight" data-testid="heading-ibkr">IBKR</h1>
             <p className="text-sm text-muted-foreground">
               {ibkrIntegrations.length} account{ibkrIntegrations.length !== 1 ? "s" : ""} connected
             </p>
