@@ -4,6 +4,14 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { seedDatabase } from "./seed";
 
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught exception:", err.message);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled rejection:", reason);
+});
+
 const app = express();
 const httpServer = createServer(app);
 
