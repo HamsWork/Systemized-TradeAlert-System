@@ -14,6 +14,7 @@ export const ibkrOrders = pgTable("ibkr_orders", {
   expiration: text("expiration"),
   strike: real("strike"),
   right: text("right"),
+  conId: integer("con_id"),
   side: text("side").notNull(),
   orderType: text("order_type").notNull(),
   quantity: real("quantity").notNull(),

@@ -61,6 +61,7 @@ export class DatabaseStorage implements IStorage {
   createIbkrOrder = ibkrMethods.createIbkrOrder;
   updateIbkrOrder = ibkrMethods.updateIbkrOrder;
   upsertIbkrOrder = ibkrMethods.upsertIbkrOrder;
+  updateIbkrOrderPrice = ibkrMethods.updateIbkrOrderPrice;
 
   getIbkrPositions = ibkrMethods.getIbkrPositions;
   getIbkrPositionsByIntegration = ibkrMethods.getIbkrPositionsByIntegration;

@@ -74,6 +74,12 @@ export const ibkrMethods = {
     return created;
   },
 
+  async updateIbkrOrderPrice(orderId: string, integrationId: string, price: number): Promise<void> {
+    await db.update(ibkrOrders)
+      .set({ lastPrice: price })
+      .where(and(eq(ibkrOrders.orderId, orderId), eq(ibkrOrders.integrationId, integrationId)));
+  },
+
   async deleteIbkrPositionsByIntegration(integrationId: string): Promise<void> {
     await db.delete(ibkrPositions).where(eq(ibkrPositions.integrationId, integrationId));
   },

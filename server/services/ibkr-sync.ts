@@ -151,6 +151,7 @@ class IbkrSyncManager {
   }
 
   private mktDataReqCounter = 20000;
+  private mktPriceUpdateRunning = false;
 
   private async syncOrders(integrationId: string, client: IbkrClient): Promise<void> {
     const openOrders = await client.fetchOpenOrders();
@@ -172,6 +173,7 @@ class IbkrSyncManager {
         expiration: oo.contract.lastTradeDateOrContractMonth || null,
         strike: secType === "OPT" ? (oo.contract.strike ?? null) : null,
         right: secType === "OPT" ? (oo.contract.right || null) : null,
+        conId: oo.contract.conId ?? null,
         side: oo.order.action?.toLowerCase() === "sell" ? "sell" : "buy",
         orderType: mapOrderType(oo.order.orderType || "MKT"),
         quantity: oo.order.totalQuantity || 0,
@@ -192,27 +194,61 @@ class IbkrSyncManager {
       ordersToUpdate.push({ orderId: String(oo.orderId), contract: oo.contract, data: orderData });
     }
 
-    const seen = new Set<string>();
-    for (const item of ordersToUpdate) {
-      const contractKey = `${item.contract.symbol}_${item.contract.secType}_${item.contract.conId}`;
-      if (seen.has(contractKey)) continue;
-      seen.add(contractKey);
+    this.updateMarketPrices(integrationId, client).catch(err =>
+      console.warn(`[IBKR Sync] Background market price update error: ${err.message}`)
+    );
+  }
 
+  private async updateMarketPrices(integrationId: string, client: IbkrClient): Promise<void> {
+    if (this.mktPriceUpdateRunning) return;
+    this.mktPriceUpdateRunning = true;
+    try {
+      await this.doUpdateMarketPrices(integrationId, client);
+    } finally {
+      this.mktPriceUpdateRunning = false;
+    }
+  }
+
+  private async doUpdateMarketPrices(integrationId: string, client: IbkrClient): Promise<void> {
+    const allOrders = await storage.getIbkrOrdersByIntegration(integrationId);
+    if (allOrders.length === 0) return;
+
+    const contractMap = new Map<string, { contract: any; orderIds: string[] }>();
+    for (const order of allOrders) {
+      const key = order.conId
+        ? `conId_${order.conId}`
+        : `${order.symbol}_${order.secType}_${order.expiration || ""}_${order.strike || ""}_${order.right || ""}`;
+
+      if (!contractMap.has(key)) {
+        const contract: any = {
+          symbol: order.symbol,
+          secType: order.secType || "STK",
+          exchange: "SMART",
+          currency: "USD",
+        };
+        if (order.conId) contract.conId = order.conId;
+        if (order.secType === "OPT") {
+          contract.lastTradeDateOrContractMonth = order.expiration || "";
+          contract.strike = order.strike || 0;
+          contract.right = order.right || "";
+        }
+        contractMap.set(key, { contract, orderIds: [] });
+      }
+      contractMap.get(key)!.orderIds.push(order.orderId);
+    }
+
+    for (const [key, { contract, orderIds }] of contractMap) {
       try {
         const reqId = this.mktDataReqCounter++;
-        const price = await client.fetchMarketPrice(item.contract, reqId);
+        const price = await client.fetchMarketPrice(contract, reqId);
         if (price != null) {
-          for (const o of ordersToUpdate.filter(x =>
-            `${x.contract.symbol}_${x.contract.secType}_${x.contract.conId}` === contractKey
-          )) {
-            await storage.upsertIbkrOrder(o.orderId, integrationId, {
-              ...o.data,
-              lastPrice: price,
-            });
+          console.log(`[IBKR Sync] Got price for ${contract.symbol}: $${price}`);
+          for (const orderId of orderIds) {
+            await storage.updateIbkrOrderPrice(orderId, integrationId, price);
           }
         }
       } catch (err: any) {
-        console.warn(`[IBKR Sync] Market price fetch failed for ${item.data.symbol}: ${err.message}`);
+        console.warn(`[IBKR Sync] Market price fetch failed for ${contract.symbol}: ${err.message}`);
       }
     }
   }

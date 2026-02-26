@@ -1,4 +1,4 @@
-import { IBApi, EventName, Contract, Order, OrderState, IBApiTickType } from "@stoqey/ib";
+import { IBApi, EventName, Contract, Order, OrderState, IBApiTickType, MarketDataType } from "@stoqey/ib";
 import type { Integration } from "@shared/schema";
 
 export interface IbkrConnectionConfig {
@@ -69,7 +69,8 @@ export class IbkrClient {
       this.ib.once(EventName.connected, () => {
         clearTimeout(timeout);
         this.connected = true;
-        console.log(`[IBKR] Connected to ${this.config.host}:${this.config.port} (client ${this.config.clientId})`);
+        this.ib.reqMarketDataType(MarketDataType.DELAYED_FROZEN);
+        console.log(`[IBKR] Connected to ${this.config.host}:${this.config.port} (client ${this.config.clientId}), market data type set to DELAYED`);
         resolve();
       });
 
@@ -218,36 +219,55 @@ export class IbkrClient {
   fetchMarketPrice(contract: Contract, reqId: number): Promise<number | null> {
     return new Promise((resolve) => {
       const timeout = setTimeout(() => {
-        cleanup();
-        this.ib.cancelMktData(reqId);
-        resolve(null);
-      }, 5000);
+        doResolve();
+      }, 3000);
 
       let lastPrice: number | null = null;
 
-      const onTickPrice = (_reqId: number, field: number, value: number) => {
-        if (_reqId !== reqId) return;
-        if (field === IBApiTickType.LAST || field === IBApiTickType.DELAYED_LAST || field === IBApiTickType.CLOSE) {
-          if (value > 0) lastPrice = value;
-        }
-      };
-
-      const onSnapshotEnd = (_reqId: number) => {
-        if (_reqId !== reqId) return;
+      let resolved = false;
+      const doResolve = () => {
+        if (resolved) return;
+        resolved = true;
         clearTimeout(timeout);
         cleanup();
         this.ib.cancelMktData(reqId);
         resolve(lastPrice);
       };
 
+      const onTickPrice = (_reqId: number, field: number, value: number) => {
+        if (_reqId !== reqId) return;
+        const isLast = field === IBApiTickType.LAST || field === IBApiTickType.DELAYED_LAST;
+        const isClose = field === IBApiTickType.CLOSE || field === IBApiTickType.DELAYED_CLOSE;
+        const isBidAsk = field === IBApiTickType.BID || field === IBApiTickType.ASK ||
+                         field === IBApiTickType.DELAYED_BID || field === IBApiTickType.DELAYED_ASK;
+        if ((isLast || isClose || isBidAsk) && value > 0) {
+          if (isLast || lastPrice === null) lastPrice = value;
+          if (isLast) doResolve();
+        }
+      };
+
+      const onSnapshotEnd = (_reqId: number) => {
+        if (_reqId !== reqId) return;
+        doResolve();
+      };
+
+      const onError = (...args: any[]) => {
+        const errReqId = args[2] as number;
+        if (errReqId !== undefined && errReqId !== reqId) return;
+        doResolve();
+      };
+
       const cleanup = () => {
         this.ib.off(EventName.tickPrice, onTickPrice);
         this.ib.off(EventName.tickSnapshotEnd, onSnapshotEnd);
+        this.ib.off(EventName.error, onError);
       };
 
       this.ib.on(EventName.tickPrice, onTickPrice);
       this.ib.on(EventName.tickSnapshotEnd, onSnapshotEnd);
-      this.ib.reqMktData(reqId, contract, "", true, false);
+      this.ib.on(EventName.error, onError);
+
+      this.ib.reqMktData(reqId, contract, "", false, false);
     });
   }
 

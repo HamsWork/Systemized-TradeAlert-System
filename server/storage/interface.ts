@@ -61,6 +61,7 @@ export interface IStorage {
   createIbkrOrder(order: InsertIbkrOrder): Promise<IbkrOrder>;
   updateIbkrOrder(id: string, data: Partial<InsertIbkrOrder>): Promise<IbkrOrder | undefined>;
   upsertIbkrOrder(orderId: string, integrationId: string, data: InsertIbkrOrder): Promise<IbkrOrder>;
+  updateIbkrOrderPrice(orderId: string, integrationId: string, price: number): Promise<void>;
 
   getIbkrPositions(): Promise<IbkrPosition[]>;
   getIbkrPositionsByIntegration(integrationId: string): Promise<IbkrPosition[]>;
