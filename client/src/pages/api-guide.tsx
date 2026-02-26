@@ -31,6 +31,8 @@ import {
   Maximize2,
   Lock,
   RotateCcw,
+  Braces,
+  Info,
 } from "lucide-react";
 import type { ConnectedApp } from "@shared/schema";
 
@@ -269,27 +271,19 @@ function EndpointInteractive({ endpoint, baseUrl, authKey }: { endpoint: Endpoin
         {params.length === 0 ? (
           <p className="text-sm text-muted-foreground py-4">No parameters for this endpoint.</p>
         ) : (
-          <div className="space-y-5">
-            {params.map((param) => (
-              <div key={param.name} data-testid={`param-${param.name}`}>
-                <div className={`flex items-center ${param.type === "json" ? "flex-col items-start" : "justify-between"} gap-3 mb-1.5`}>
+          <div className="space-y-4">
+            {params.filter(p => p.type !== "json").map((param) => (
+              <div key={param.name} data-testid={`param-${param.name}`} className="group">
+                <div className="flex items-center justify-between gap-3 mb-1">
                   <div className="flex items-center gap-2">
-                    <code className="text-sm font-mono font-semibold">{param.name}</code>
-                    <Badge variant="secondary" className="text-[10px] font-normal px-1.5 py-0">{param.type}</Badge>
-                    {param.required && <span className="text-[10px] text-red-400 font-medium">required</span>}
+                    <code className="text-sm font-mono font-semibold text-foreground/90">{param.name}</code>
+                    <Badge variant="secondary" className="text-[10px] font-normal px-1.5 py-0 bg-zinc-800/60 text-zinc-400">{param.type}</Badge>
+                    {param.required && <span className="text-[10px] text-red-400/90 font-medium uppercase tracking-wider">required</span>}
                   </div>
-                  {param.type === "json" ? (
-                    <Textarea
-                      value={paramValues[param.name] || ""}
-                      onChange={(e) => setParam(param.name, e.target.value)}
-                      className="w-full bg-zinc-900/50 dark:bg-zinc-900/80 border-zinc-700/50 text-sm font-mono min-h-[120px]"
-                      placeholder={'{\n  "targetLevels": { "tp1": "195.00", "tp2": "200.00" },\n  "stopLoss": { "sl1": "182.00" },\n  "raiseStopLevel": { "method": "Move to Entry at TP1" },\n  "notes": "Breakout play"\n}'}
-                      data-testid={`input-param-${param.name}`}
-                    />
-                  ) : param.enumValues ? (
+                  {param.enumValues ? (
                     <Select value={paramValues[param.name] || ""} onValueChange={(v) => setParam(param.name, v)}>
-                      <SelectTrigger className="w-[200px] bg-zinc-900/50 dark:bg-zinc-900/80 border-zinc-700/50 text-sm" data-testid={`select-param-${param.name}`}>
-                        <SelectValue placeholder="Select" />
+                      <SelectTrigger className="w-[180px] h-8 bg-zinc-900/40 dark:bg-zinc-900/60 border-zinc-700/40 text-sm focus:ring-1 focus:ring-primary/30 transition-colors" data-testid={`select-param-${param.name}`}>
+                        <SelectValue placeholder="Select..." />
                       </SelectTrigger>
                       <SelectContent>
                         {param.enumValues.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
@@ -299,13 +293,43 @@ function EndpointInteractive({ endpoint, baseUrl, authKey }: { endpoint: Endpoin
                     <Input
                       value={paramValues[param.name] || ""}
                       onChange={(e) => setParam(param.name, e.target.value)}
-                      className="w-[200px] bg-zinc-900/50 dark:bg-zinc-900/80 border-zinc-700/50 text-sm"
+                      className="w-[180px] h-8 bg-zinc-900/40 dark:bg-zinc-900/60 border-zinc-700/40 text-sm focus:ring-1 focus:ring-primary/30 transition-colors"
                       placeholder=""
                       data-testid={`input-param-${param.name}`}
                     />
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">{param.description}</p>
+                <p className="text-xs text-muted-foreground/70 leading-relaxed pl-0.5">{param.description}</p>
+              </div>
+            ))}
+
+            {params.filter(p => p.type === "json").map((param) => (
+              <div key={param.name} data-testid={`param-${param.name}`} className="mt-2">
+                <div className="rounded-lg border border-zinc-700/40 bg-zinc-900/30 dark:bg-zinc-900/50 overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-700/30 bg-zinc-800/20">
+                    <div className="flex items-center gap-2">
+                      <Braces className="h-3.5 w-3.5 text-primary/70" />
+                      <code className="text-sm font-mono font-semibold text-foreground/90">{param.name}</code>
+                      <Badge variant="secondary" className="text-[10px] font-normal px-1.5 py-0 bg-primary/10 text-primary/80 border-primary/20">json</Badge>
+                      {param.required && <span className="text-[10px] text-red-400/90 font-medium uppercase tracking-wider">required</span>}
+                    </div>
+                  </div>
+                  <div className="p-3">
+                    <Textarea
+                      value={paramValues[param.name] || ""}
+                      onChange={(e) => setParam(param.name, e.target.value)}
+                      className="w-full bg-zinc-950/60 dark:bg-zinc-950/80 border-zinc-700/30 text-sm font-mono min-h-[140px] resize-y leading-relaxed focus:ring-1 focus:ring-primary/30 placeholder:text-zinc-600 transition-colors"
+                      placeholder={'{\n  "targetLevels": {\n    "tp1": "195.00",\n    "tp2": "200.00",\n    "tp3": "205.00"\n  },\n  "stopLoss": {\n    "sl1": "182.00",\n    "sl2": "178.00"\n  },\n  "raiseStopLevel": {\n    "method": "Move to Entry at TP1",\n    "value": "189.50"\n  },\n  "notes": "Breakout above resistance"\n}'}
+                      data-testid={`input-param-${param.name}`}
+                    />
+                  </div>
+                  <div className="px-4 py-2 border-t border-zinc-700/20 bg-zinc-800/10">
+                    <div className="flex items-start gap-1.5">
+                      <Info className="h-3 w-3 text-muted-foreground/50 mt-0.5 shrink-0" />
+                      <p className="text-[11px] text-muted-foreground/60 leading-relaxed">{param.description}</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
