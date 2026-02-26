@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import { Link } from "wouter";
-import type { Signal, ConnectedApp, ActivityLogEntry, Integration, IbkrPosition, IbkrOrder } from "@shared/schema";
+import type { Signal, SignalType, ConnectedApp, ActivityLogEntry, Integration, IbkrPosition, IbkrOrder } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 
 function StatCard({ title, value, subtitle, icon: Icon, accent, href }: {
@@ -93,17 +93,19 @@ function SignalFlowCard({ signals, orders, integrations }: { signals: Signal[]; 
             <p className="text-xs font-medium text-muted-foreground mb-2">Latest Signals</p>
             <div className="space-y-1">
               {recentSignals.map((signal) => {
-                const isBuy = signal.direction === "buy";
+                const data = (signal.data || {}) as Record<string, any>;
+                const ticker = data.ticker || data.symbol || "";
                 return (
                   <div key={signal.id} className="flex items-center justify-between gap-2 py-1.5" data-testid={`flow-signal-${signal.id}`}>
                     <div className="flex items-center gap-2 min-w-0">
-                      <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${isBuy ? "bg-emerald-500/10" : "bg-red-500/10"}`}>
-                        {isBuy ? <ArrowUpRight className="h-3 w-3 text-emerald-500" /> : <ArrowDownRight className="h-3 w-3 text-red-500" />}
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10">
+                        <TrendingUp className="h-3 w-3 text-primary" />
                       </div>
-                      <span className="text-sm font-medium">{signal.symbol}</span>
-                      <span className="text-xs text-muted-foreground capitalize">{signal.direction}</span>
+                      <span className="text-sm font-medium">{ticker}</span>
                     </div>
-                    <span className="text-xs text-muted-foreground">{signal.confidence}%</span>
+                    {signal.sourceAppName && (
+                      <span className="text-xs text-muted-foreground">{signal.sourceAppName}</span>
+                    )}
                   </div>
                 );
               })}
@@ -115,8 +117,9 @@ function SignalFlowCard({ signals, orders, integrations }: { signals: Signal[]; 
   );
 }
 
-function RecentSignals({ signals }: { signals: Signal[] }) {
+function RecentSignals({ signals, signalTypes }: { signals: Signal[]; signalTypes: SignalType[] }) {
   const recent = signals.slice(0, 5);
+  const typeMap = new Map(signalTypes.map(st => [st.id, st]));
   return (
     <Card data-testid="card-recent-signals">
       <CardHeader className="pb-2">
@@ -136,16 +139,19 @@ function RecentSignals({ signals }: { signals: Signal[] }) {
         ) : (
           <div className="space-y-1">
             {recent.map((signal) => {
-              const isBuy = signal.direction === "buy";
+              const data = (signal.data || {}) as Record<string, any>;
+              const ticker = data.ticker || data.symbol || "";
+              const st = typeMap.get(signal.signalTypeId);
+              const color = st?.color || "#6b7280";
               return (
                 <div key={signal.id} className="flex items-center justify-between gap-3 py-2 border-b last:border-b-0" data-testid={`recent-signal-${signal.id}`}>
                   <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${isBuy ? "bg-emerald-500/10" : "bg-red-500/10"}`}>
-                      {isBuy ? <ArrowUpRight className="h-3.5 w-3.5 text-emerald-500" /> : <ArrowDownRight className="h-3.5 w-3.5 text-red-500" />}
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md" style={{ backgroundColor: color + "15" }}>
+                      <TrendingUp className="h-3.5 w-3.5" style={{ color }} />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium">{signal.symbol} <span className="text-xs text-muted-foreground capitalize">{signal.direction}</span></p>
-                      <p className="text-xs text-muted-foreground">${signal.entryPrice} &middot; {signal.confidence}% confidence</p>
+                      <p className="text-sm font-medium">{ticker} <span className="text-xs text-muted-foreground">{st?.name || ""}</span></p>
+                      {data.entry_price && <p className="text-xs text-muted-foreground">${data.entry_price}</p>}
                     </div>
                   </div>
                   {signal.sourceAppName && (
@@ -338,6 +344,7 @@ export default function Dashboard() {
   }>({ queryKey: ["/api/dashboard/stats"] });
 
   const signalsQuery = useQuery<Signal[]>({ queryKey: ["/api/signals"] });
+  const signalTypesQuery = useQuery<SignalType[]>({ queryKey: ["/api/signal-types"] });
   const activityQuery = useQuery<ActivityLogEntry[]>({ queryKey: ["/api/activity"] });
   const appsQuery = useQuery<ConnectedApp[]>({ queryKey: ["/api/connected-apps"] });
   const integrationsQuery = useQuery<Integration[]>({ queryKey: ["/api/integrations"] });
@@ -365,6 +372,7 @@ export default function Dashboard() {
 
   const stats = statsQuery.data;
   const signals = signalsQuery.data ?? [];
+  const signalTypesList = signalTypesQuery.data ?? [];
   const activity = activityQuery.data ?? [];
   const apps = appsQuery.data ?? [];
   const integrations = integrationsQuery.data ?? [];
@@ -422,7 +430,7 @@ export default function Dashboard() {
 
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
         <SignalFlowCard signals={signals} orders={orders} integrations={integrations} />
-        <RecentSignals signals={signals} />
+        <RecentSignals signals={signals} signalTypes={signalTypesList} />
         <ActivityFeed activity={activity} />
       </div>
 

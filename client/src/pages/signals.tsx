@@ -22,41 +22,46 @@ import {
 } from "@/components/ui/select";
 import {
   TrendingUp,
-  TrendingDown,
   Plus,
   Trash2,
-  Target,
-  Shield,
   Puzzle,
+  CircleDot,
+  OctagonX,
+  Target,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { insertSignalSchema, type Signal, type InsertSignal } from "@shared/schema";
+import { type Signal, type SignalType, insertSignalSchema, type InsertSignal } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Switch } from "@/components/ui/switch";
+
+type SignalVariable = {
+  name: string;
+  label: string;
+  type: string;
+  required?: boolean;
+  options?: string[];
+};
+
+function renderTemplatePreview(template: string, data: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => data[key] || "");
+}
 
 function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { toast } = useToast();
+  const [selectedTypeId, setSelectedTypeId] = useState<string>("");
+  const [signalData, setSignalData] = useState<Record<string, string>>({});
 
-  const form = useForm<InsertSignal>({
-    resolver: zodResolver(insertSignalSchema),
-    defaultValues: {
-      symbol: "",
-      type: "technical",
-      direction: "buy",
-      confidence: 50,
-      entryPrice: 0,
-      targetPrice: 0,
-      stopLoss: 0,
-      status: "active",
-      notes: "",
-    },
-  });
+  const typesQuery = useQuery<SignalType[]>({ queryKey: ["/api/signal-types"] });
+  const signalTypes = typesQuery.data ?? [];
+  const selectedType = signalTypes.find(t => t.id === selectedTypeId);
 
   const createMutation = useMutation({
-    mutationFn: async (data: InsertSignal) => {
-      const res = await apiRequest("POST", "/api/signals", data);
+    mutationFn: async (payload: InsertSignal) => {
+      const res = await apiRequest("POST", "/api/signals", payload);
       return res.json();
     },
     onSuccess: () => {
@@ -64,7 +69,8 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       queryClient.invalidateQueries({ queryKey: ["/api/activity"] });
       toast({ title: "Signal created" });
-      form.reset();
+      setSignalData({});
+      setSelectedTypeId("");
       onOpenChange(false);
     },
     onError: (error: Error) => {
@@ -72,192 +78,149 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
     },
   });
 
+  const handleSubmit = () => {
+    if (!selectedTypeId) return;
+    createMutation.mutate({
+      signalTypeId: selectedTypeId,
+      data: signalData,
+      status: "active",
+    });
+  };
+
+  const variables = (selectedType?.variables || []) as SignalVariable[];
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create Signal</DialogTitle>
         </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit((data) => createMutation.mutate(data))} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <FormField
-                control={form.control}
-                name="symbol"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Symbol</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., AAPL" {...field} data-testid="input-signal-symbol" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-medium">Signal Type</label>
+            <Select value={selectedTypeId} onValueChange={(val) => { setSelectedTypeId(val); setSignalData({}); }}>
+              <SelectTrigger data-testid="select-signal-type">
+                <SelectValue placeholder="Select signal type..." />
+              </SelectTrigger>
+              <SelectContent>
+                {signalTypes.map(st => (
+                  <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {selectedType && (
+            <>
+              <div className="rounded-md p-2 text-xs" style={{ backgroundColor: selectedType.color + "15", borderLeft: `3px solid ${selectedType.color}` }}>
+                <span className="font-medium" style={{ color: selectedType.color }}>{selectedType.name}</span>
+                {selectedType.descriptionTemplate && (
+                  <p className="text-muted-foreground mt-0.5">
+                    {renderTemplatePreview(selectedType.descriptionTemplate, signalData)}
+                  </p>
                 )}
-              />
-              <FormField
-                control={form.control}
-                name="direction"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Direction</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-signal-direction">
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="buy">Buy (Long)</SelectItem>
-                        <SelectItem value="sell">Sell (Short)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <FormField
-                control={form.control}
-                name="type"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Type</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-signal-type">
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="technical">Technical</SelectItem>
-                        <SelectItem value="fundamental">Fundamental</SelectItem>
-                        <SelectItem value="sentiment">Sentiment</SelectItem>
-                        <SelectItem value="algorithmic">Algorithmic</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="confidence"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Confidence (%)</FormLabel>
-                    <FormControl>
+              </div>
+
+              <div className="space-y-3">
+                {variables.map((v) => {
+                  if (v.type === "boolean") {
+                    return (
+                      <div key={v.name} className="flex items-center justify-between">
+                        <label className="text-sm font-medium">{v.label}</label>
+                        <Switch
+                          checked={signalData[v.name] === "true"}
+                          onCheckedChange={(checked) => setSignalData(prev => ({ ...prev, [v.name]: checked ? "true" : "false" }))}
+                          data-testid={`input-signal-${v.name}`}
+                        />
+                      </div>
+                    );
+                  }
+
+                  if (v.type === "select" && v.options) {
+                    return (
+                      <div key={v.name}>
+                        <label className="text-sm font-medium">{v.label}{v.required && <span className="text-red-500 ml-0.5">*</span>}</label>
+                        <Select value={signalData[v.name] || ""} onValueChange={(val) => setSignalData(prev => ({ ...prev, [v.name]: val }))}>
+                          <SelectTrigger data-testid={`select-signal-${v.name}`}>
+                            <SelectValue placeholder={`Select ${v.label.toLowerCase()}...`} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {v.options.map(opt => (
+                              <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    );
+                  }
+
+                  if (v.type === "text") {
+                    return (
+                      <div key={v.name}>
+                        <label className="text-sm font-medium">{v.label}{v.required && <span className="text-red-500 ml-0.5">*</span>}</label>
+                        <Textarea
+                          placeholder={v.label}
+                          className="resize-none"
+                          value={signalData[v.name] || ""}
+                          onChange={(e) => setSignalData(prev => ({ ...prev, [v.name]: e.target.value }))}
+                          data-testid={`input-signal-${v.name}`}
+                        />
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={v.name}>
+                      <label className="text-sm font-medium">{v.label}{v.required && <span className="text-red-500 ml-0.5">*</span>}</label>
                       <Input
-                        type="number"
-                        min="0"
-                        max="100"
-                        {...field}
-                        onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                        data-testid="input-signal-confidence"
+                        type={v.type === "number" ? "number" : v.type === "date" ? "date" : "text"}
+                        step={v.type === "number" ? "0.01" : undefined}
+                        placeholder={v.label}
+                        value={signalData[v.name] || ""}
+                        onChange={(e) => setSignalData(prev => ({ ...prev, [v.name]: e.target.value }))}
+                        data-testid={`input-signal-${v.name}`}
                       />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <FormField
-                control={form.control}
-                name="entryPrice"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Entry</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        {...field}
-                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                        data-testid="input-signal-entry"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="targetPrice"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Target</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        {...field}
-                        value={field.value ?? ""}
-                        onChange={(e) => field.onChange(parseFloat(e.target.value) || null)}
-                        data-testid="input-signal-target"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="stopLoss"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Stop Loss</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        {...field}
-                        value={field.value ?? ""}
-                        onChange={(e) => field.onChange(parseFloat(e.target.value) || null)}
-                        data-testid="input-signal-stoploss"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Notes</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Signal analysis notes..."
-                      className="resize-none"
-                      {...field}
-                      value={field.value ?? ""}
-                      data-testid="input-signal-notes"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-create-signal">
-              {createMutation.isPending ? "Creating..." : "Create Signal"}
-            </Button>
-          </form>
-        </Form>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          <Button
+            className="w-full"
+            disabled={!selectedTypeId || createMutation.isPending}
+            onClick={handleSubmit}
+            data-testid="button-create-signal"
+          >
+            {createMutation.isPending ? "Creating..." : "Create Signal"}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );
 }
 
-function SignalCard({ signal, onDelete }: { signal: Signal; onDelete: (id: string) => void }) {
-  const isBuy = signal.direction === "buy";
-  const confidenceColor =
-    signal.confidence >= 75 ? "text-emerald-500" : signal.confidence >= 50 ? "text-amber-500" : "text-red-500";
+function getSignalIcon(typeName: string) {
+  if (typeName.toLowerCase().includes("stop loss")) return <OctagonX className="h-4 w-4 text-red-500" />;
+  if (typeName.toLowerCase().includes("take profit")) return <Target className="h-4 w-4 text-blue-500" />;
+  return <CircleDot className="h-4 w-4 text-emerald-500" />;
+}
+
+function SignalCard({ signal, signalType, onDelete }: { signal: Signal; signalType?: SignalType; onDelete: (id: string) => void }) {
+  const data = (signal.data || {}) as Record<string, any>;
+  const ticker = data.ticker || data.symbol || "";
+  const typeName = signalType?.name || "Signal";
+  const color = signalType?.color || "#6b7280";
+  const fieldsTemplate = (signalType?.fieldsTemplate || []) as Array<{ name: string; value: string; inline?: boolean }>;
+
+  const renderedFields = fieldsTemplate
+    .map(f => ({
+      name: f.name,
+      value: renderTemplatePreview(f.value, data),
+      inline: f.inline,
+    }))
+    .filter(f => f.value && f.value !== "$" && f.value.trim() !== "");
 
   return (
     <Card className="hover-elevate" data-testid={`card-signal-${signal.id}`}>
@@ -265,47 +228,34 @@ function SignalCard({ signal, onDelete }: { signal: Signal; onDelete: (id: strin
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              {isBuy ? (
-                <TrendingUp className="h-4 w-4 text-emerald-500" />
-              ) : (
-                <TrendingDown className="h-4 w-4 text-red-500" />
-              )}
-              <span className="font-semibold text-lg">{signal.symbol}</span>
-              <Badge variant={isBuy ? "default" : "destructive"} className="text-xs">
-                {signal.direction.toUpperCase()}
-              </Badge>
-              <Badge variant="outline" className="text-xs">
-                {signal.type}
+              {getSignalIcon(typeName)}
+              {ticker && <span className="font-semibold text-lg">{ticker}</span>}
+              <Badge
+                className="text-xs border"
+                style={{ backgroundColor: color + "20", color, borderColor: color + "40" }}
+              >
+                {typeName}
               </Badge>
             </div>
 
-            <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
-              <div>
-                <p className="text-xs text-muted-foreground">Entry</p>
-                <p className="font-medium">${signal.entryPrice.toFixed(2)}</p>
+            {signalType?.descriptionTemplate && (
+              <p className="mt-1 text-sm text-muted-foreground">
+                {renderTemplatePreview(signalType.descriptionTemplate, data)}
+              </p>
+            )}
+
+            {renderedFields.length > 0 && (
+              <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
+                {renderedFields.map((f, i) => (
+                  <div key={i}>
+                    <p className="text-xs text-muted-foreground">{f.name}</p>
+                    <p className="font-medium">{f.value}</p>
+                  </div>
+                ))}
               </div>
-              {signal.targetPrice && (
-                <div>
-                  <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Target className="h-3 w-3" /> Target
-                  </p>
-                  <p className="font-medium text-emerald-500">${signal.targetPrice.toFixed(2)}</p>
-                </div>
-              )}
-              {signal.stopLoss && (
-                <div>
-                  <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Shield className="h-3 w-3" /> Stop
-                  </p>
-                  <p className="font-medium text-red-500">${signal.stopLoss.toFixed(2)}</p>
-                </div>
-              )}
-            </div>
+            )}
 
             <div className="mt-3 flex items-center gap-3 flex-wrap text-xs text-muted-foreground">
-              <span className={`font-medium ${confidenceColor}`}>
-                {signal.confidence}% confidence
-              </span>
               <Badge variant={signal.status === "active" ? "outline" : "secondary"} className="text-xs">
                 {signal.status}
               </Badge>
@@ -320,9 +270,9 @@ function SignalCard({ signal, onDelete }: { signal: Signal; onDelete: (id: strin
               </span>
             </div>
 
-            {signal.notes && (
+            {data.notes && (
               <p className="mt-2 text-xs text-muted-foreground border-t border-border/50 pt-2">
-                {signal.notes}
+                {data.notes}
               </p>
             )}
           </div>
@@ -346,6 +296,7 @@ export default function SignalsPage() {
   const { toast } = useToast();
 
   const signalsQuery = useQuery<Signal[]>({ queryKey: ["/api/signals"] });
+  const typesQuery = useQuery<SignalType[]>({ queryKey: ["/api/signal-types"] });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -358,7 +309,7 @@ export default function SignalsPage() {
     },
   });
 
-  if (signalsQuery.isLoading) {
+  if (signalsQuery.isLoading || typesQuery.isLoading) {
     return (
       <div className="space-y-4 p-6">
         <Skeleton className="h-8 w-32" />
@@ -372,6 +323,8 @@ export default function SignalsPage() {
   }
 
   const signals = signalsQuery.data ?? [];
+  const signalTypes = typesQuery.data ?? [];
+  const typeMap = new Map(signalTypes.map(st => [st.id, st]));
   const filtered = filter === "all" ? signals : signals.filter((s) => s.status === filter);
 
   return (
@@ -427,7 +380,12 @@ export default function SignalsPage() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-1 lg:grid-cols-2">
           {filtered.map((signal) => (
-            <SignalCard key={signal.id} signal={signal} onDelete={(id) => deleteMutation.mutate(id)} />
+            <SignalCard
+              key={signal.id}
+              signal={signal}
+              signalType={typeMap.get(signal.signalTypeId)}
+              onDelete={(id) => deleteMutation.mutate(id)}
+            />
           ))}
         </div>
       )}

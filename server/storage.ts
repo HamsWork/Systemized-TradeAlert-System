@@ -1,6 +1,7 @@
 import {
   type User, type InsertUser,
   type Alert, type InsertAlert,
+  type SignalType, type InsertSignalType,
   type Signal, type InsertSignal,
   type ActivityLogEntry, type InsertActivityLog,
   type ConnectedApp, type InsertConnectedApp,
@@ -8,7 +9,7 @@ import {
   type Integration, type InsertIntegration,
   type IbkrOrder, type InsertIbkrOrder,
   type IbkrPosition, type InsertIbkrPosition,
-  users, alerts, signals, activityLog, connectedApps,
+  users, alerts, signalTypes, signals, activityLog, connectedApps,
   systemSettings, integrations, ibkrOrders, ibkrPositions,
 } from "@shared/schema";
 import { db } from "./db";
@@ -24,6 +25,13 @@ export interface IStorage {
   createAlert(alert: InsertAlert): Promise<Alert>;
   updateAlert(id: string, data: Partial<InsertAlert>): Promise<Alert | undefined>;
   deleteAlert(id: string): Promise<boolean>;
+
+  getSignalTypes(): Promise<SignalType[]>;
+  getSignalType(id: string): Promise<SignalType | undefined>;
+  getSignalTypeByName(name: string): Promise<SignalType | undefined>;
+  createSignalType(signalType: InsertSignalType): Promise<SignalType>;
+  updateSignalType(id: string, data: Partial<InsertSignalType>): Promise<SignalType | undefined>;
+  deleteSignalType(id: string): Promise<boolean>;
 
   getSignals(): Promise<Signal[]>;
   getSignal(id: string): Promise<Signal | undefined>;
@@ -107,6 +115,35 @@ export class DatabaseStorage implements IStorage {
 
   async deleteAlert(id: string): Promise<boolean> {
     const result = await db.delete(alerts).where(eq(alerts.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getSignalTypes(): Promise<SignalType[]> {
+    return db.select().from(signalTypes).orderBy(desc(signalTypes.createdAt));
+  }
+
+  async getSignalType(id: string): Promise<SignalType | undefined> {
+    const [st] = await db.select().from(signalTypes).where(eq(signalTypes.id, id));
+    return st;
+  }
+
+  async getSignalTypeByName(name: string): Promise<SignalType | undefined> {
+    const [st] = await db.select().from(signalTypes).where(eq(signalTypes.name, name));
+    return st;
+  }
+
+  async createSignalType(signalType: InsertSignalType): Promise<SignalType> {
+    const [created] = await db.insert(signalTypes).values(signalType).returning();
+    return created;
+  }
+
+  async updateSignalType(id: string, data: Partial<InsertSignalType>): Promise<SignalType | undefined> {
+    const [updated] = await db.update(signalTypes).set({ ...data, updatedAt: new Date() }).where(eq(signalTypes.id, id)).returning();
+    return updated;
+  }
+
+  async deleteSignalType(id: string): Promise<boolean> {
+    const result = await db.delete(signalTypes).where(eq(signalTypes.id, id)).returning();
     return result.length > 0;
   }
 

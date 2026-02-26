@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { alerts, signals, activityLog, connectedApps, systemSettings, integrations, ibkrOrders, ibkrPositions } from "@shared/schema";
+import { alerts, signalTypes, signals, activityLog, connectedApps, systemSettings, integrations, ibkrOrders, ibkrPositions } from "@shared/schema";
 import { sql } from "drizzle-orm";
 import crypto from "crypto";
 
@@ -12,170 +12,168 @@ export async function seedDatabase() {
   const existingSettings = await db.select().from(systemSettings);
   const existingIntegrations = await db.select().from(integrations);
   const existingApps = await db.select().from(connectedApps);
-
+  const existingSignalTypes = await db.select().from(signalTypes);
   const existingIbkrOrders = await db.select().from(ibkrOrders);
-  const needsIbkrSeed = existingIbkrOrders.length === 0;
 
   const needsAlertSeed = existingAlerts.length === 0;
   const needsSettingsSeed = existingSettings.length === 0;
   const needsIntegrationsSeed = existingIntegrations.length === 0;
   const needsAppsSeed = existingApps.length === 0;
+  const needsSignalTypesSeed = existingSignalTypes.length === 0;
+  const needsIbkrSeed = existingIbkrOrders.length === 0;
 
-  if (!needsAlertSeed && !needsSettingsSeed && !needsIntegrationsSeed && !needsAppsSeed && !needsIbkrSeed) {
+  if (!needsAlertSeed && !needsSettingsSeed && !needsIntegrationsSeed && !needsAppsSeed && !needsSignalTypesSeed && !needsIbkrSeed) {
     return;
   }
 
-  if (!needsAlertSeed) {
-    if (needsSettingsSeed) await seedSettings();
-    if (needsIntegrationsSeed) await seedIntegrations();
-    if (needsAppsSeed) await seedApps();
-    if (needsIbkrSeed) await seedIbkrData();
-    return;
-  }
+  if (needsSignalTypesSeed) await seedSignalTypes();
+  if (needsSettingsSeed) await seedSettings();
+  if (needsIntegrationsSeed) await seedIntegrations();
+  if (needsAppsSeed) await seedApps();
+  if (needsIbkrSeed) await seedIbkrData();
 
-  await db.insert(alerts).values([
+  if (needsAlertSeed) {
+    await db.insert(alerts).values([
+      { name: "BTC Breakout Watch", symbol: "BTC", condition: "above", targetPrice: 72000, currentPrice: 68450.25, status: "active", priority: "high", triggered: false },
+      { name: "ETH Support Level", symbol: "ETH", condition: "below", targetPrice: 3200, currentPrice: 3485.50, status: "active", priority: "medium", triggered: false },
+      { name: "AAPL Earnings Play", symbol: "AAPL", condition: "above", targetPrice: 195, currentPrice: 189.72, status: "active", priority: "medium", triggered: false },
+      { name: "NVDA Resistance Break", symbol: "NVDA", condition: "above", targetPrice: 950, currentPrice: 875.30, status: "active", priority: "high", triggered: false },
+      { name: "SPY Correction Alert", symbol: "SPY", condition: "below", targetPrice: 480, currentPrice: 512.45, status: "paused", priority: "low", triggered: false },
+    ]);
+
+    await seedSignals();
+
+    await db.insert(activityLog).values([
+      { type: "system", title: "System initialized", description: "TradeSync signal execution system started and connected to data feeds", symbol: null, metadata: null },
+      { type: "alert_created", title: "Alert created: BTC Breakout Watch", description: "Price above $72,000 on BTC", symbol: "BTC", metadata: null },
+      { type: "signal_ingested", title: "Signal from Situ Trader: Entry AAPL", description: "Common Trade Alert for AAPL", symbol: "AAPL", metadata: { sourceApp: "Situ Trader" } },
+      { type: "signal_ingested", title: "Signal from Crowned Trader: Stop Loss TSLA", description: "Stop Loss Hit for TSLA", symbol: "TSLA", metadata: { sourceApp: "Crowned Trader" } },
+      { type: "alert_created", title: "Alert created: ETH Support Level", description: "Price below $3,200 on ETH", symbol: "ETH", metadata: null },
+    ]);
+  }
+}
+
+async function seedSignalTypes() {
+  await db.insert(signalTypes).values([
     {
-      name: "BTC Breakout Watch",
-      symbol: "BTC",
-      condition: "above",
-      targetPrice: 72000,
-      currentPrice: 68450.25,
-      status: "active",
-      priority: "high",
-      triggered: false,
+      name: "Common Trade Alert",
+      variables: [
+        { name: "ticker", label: "Ticker", type: "string", required: true },
+        { name: "option_type", label: "Option Type", type: "select", options: ["CALL", "PUT"], required: false },
+        { name: "strike", label: "Strike Price", type: "number", required: false },
+        { name: "expiration", label: "Expiration", type: "date", required: false },
+        { name: "entry_price", label: "Entry Price", type: "number", required: true },
+        { name: "stop_loss", label: "Stop Loss", type: "number", required: false },
+        { name: "take_profit_1", label: "Take Profit 1", type: "number", required: false },
+        { name: "take_profit_2", label: "Take Profit 2", type: "number", required: false },
+        { name: "take_profit_3", label: "Take Profit 3", type: "number", required: false },
+        { name: "is_shares", label: "Shares Trade", type: "boolean", required: false },
+        { name: "notes", label: "Notes", type: "text", required: false },
+      ],
+      titleTemplate: "{{ticker}} Trade Alert",
+      descriptionTemplate: "{{ticker}} {{option_type}} {{strike}} {{expiration}} @ {{entry_price}}",
+      color: "#22c55e",
+      fieldsTemplate: [
+        { name: "Ticker", value: "{{ticker}}", inline: true },
+        { name: "Entry", value: "${{entry_price}}", inline: true },
+        { name: "Stop Loss", value: "${{stop_loss}}", inline: true },
+        { name: "TP1", value: "${{take_profit_1}}", inline: true },
+        { name: "TP2", value: "${{take_profit_2}}", inline: true },
+        { name: "TP3", value: "${{take_profit_3}}", inline: true },
+      ],
+      footerTemplate: "TradeSync Signal",
+      showTitle: true,
+      showDescription: true,
     },
     {
-      name: "ETH Support Level",
-      symbol: "ETH",
-      condition: "below",
-      targetPrice: 3200,
-      currentPrice: 3485.50,
-      status: "active",
-      priority: "medium",
-      triggered: false,
+      name: "Stop Loss Hit",
+      variables: [
+        { name: "ticker", label: "Ticker", type: "string", required: true },
+        { name: "exit_price", label: "Exit Price", type: "number", required: true },
+        { name: "loss_amount", label: "Loss Amount", type: "number", required: false },
+        { name: "notes", label: "Notes", type: "text", required: false },
+      ],
+      titleTemplate: "{{ticker}} Stop Loss Hit",
+      descriptionTemplate: "Stop loss triggered on {{ticker}} at ${{exit_price}}",
+      color: "#ef4444",
+      fieldsTemplate: [
+        { name: "Ticker", value: "{{ticker}}", inline: true },
+        { name: "Exit Price", value: "${{exit_price}}", inline: true },
+        { name: "Loss", value: "${{loss_amount}}", inline: true },
+      ],
+      footerTemplate: "TradeSync Signal",
+      showTitle: true,
+      showDescription: true,
     },
     {
-      name: "AAPL Earnings Play",
-      symbol: "AAPL",
-      condition: "above",
-      targetPrice: 195,
-      currentPrice: 189.72,
-      status: "active",
-      priority: "medium",
-      triggered: false,
-    },
-    {
-      name: "NVDA Resistance Break",
-      symbol: "NVDA",
-      condition: "above",
-      targetPrice: 950,
-      currentPrice: 875.30,
-      status: "active",
-      priority: "high",
-      triggered: false,
-    },
-    {
-      name: "SPY Correction Alert",
-      symbol: "SPY",
-      condition: "below",
-      targetPrice: 480,
-      currentPrice: 512.45,
-      status: "paused",
-      priority: "low",
-      triggered: false,
+      name: "Take Profit Hit",
+      variables: [
+        { name: "ticker", label: "Ticker", type: "string", required: true },
+        { name: "tp_level", label: "TP Level", type: "select", options: ["TP1", "TP2", "TP3"], required: true },
+        { name: "exit_price", label: "Exit Price", type: "number", required: true },
+        { name: "profit_amount", label: "Profit Amount", type: "number", required: false },
+        { name: "notes", label: "Notes", type: "text", required: false },
+      ],
+      titleTemplate: "{{ticker}} {{tp_level}} Hit",
+      descriptionTemplate: "{{tp_level}} hit on {{ticker}} at ${{exit_price}}",
+      color: "#3b82f6",
+      fieldsTemplate: [
+        { name: "Ticker", value: "{{ticker}}", inline: true },
+        { name: "TP Level", value: "{{tp_level}}", inline: true },
+        { name: "Exit Price", value: "${{exit_price}}", inline: true },
+        { name: "Profit", value: "${{profit_amount}}", inline: true },
+      ],
+      footerTemplate: "TradeSync Signal",
+      showTitle: true,
+      showDescription: true,
     },
   ]);
+}
+
+async function seedSignals() {
+  const allTypes = await db.select().from(signalTypes);
+  const entryType = allTypes.find(t => t.name === "Common Trade Alert");
+  const slType = allTypes.find(t => t.name === "Stop Loss Hit");
+  const tpType = allTypes.find(t => t.name === "Take Profit Hit");
+
+  if (!entryType || !slType || !tpType) return;
 
   await db.insert(signals).values([
     {
-      symbol: "AAPL",
-      type: "technical",
-      direction: "buy",
-      confidence: 78,
-      entryPrice: 189.50,
-      targetPrice: 205.00,
-      stopLoss: 182.00,
+      signalTypeId: entryType.id,
+      data: { ticker: "AAPL", option_type: "CALL", strike: "190", expiration: "2026-03-20", entry_price: "189.50", stop_loss: "182.00", take_profit_1: "195.00", take_profit_2: "200.00", take_profit_3: "205.00", notes: "Golden cross on daily chart. RSI at 55, room for upside." },
       status: "active",
-      notes: "Golden cross on daily chart. RSI at 55, room for upside. Volume confirming the move.",
       sourceAppName: "Situ Trader",
     },
     {
-      symbol: "TSLA",
-      type: "sentiment",
-      direction: "sell",
-      confidence: 65,
-      entryPrice: 248.90,
-      targetPrice: 220.00,
-      stopLoss: 260.00,
+      signalTypeId: slType.id,
+      data: { ticker: "TSLA", exit_price: "230.00", loss_amount: "950.00", notes: "Bearish divergence on RSI. Social sentiment turned negative." },
       status: "active",
-      notes: "Bearish divergence on RSI. Social sentiment turning negative after earnings guidance.",
       sourceAppName: "Crowned Trader",
     },
     {
-      symbol: "MSFT",
-      type: "fundamental",
-      direction: "buy",
-      confidence: 85,
-      entryPrice: 415.20,
-      targetPrice: 450.00,
-      stopLoss: 400.00,
+      signalTypeId: entryType.id,
+      data: { ticker: "MSFT", is_shares: "true", entry_price: "415.20", stop_loss: "400.00", take_profit_1: "430.00", take_profit_2: "445.00", take_profit_3: "450.00", notes: "Strong cloud revenue growth. AI integration driving new revenue." },
       status: "active",
-      notes: "Strong cloud revenue growth. AI integration driving new revenue streams. Undervalued relative to peers.",
       sourceAppName: "Situ Trader",
     },
     {
-      symbol: "AMD",
-      type: "algorithmic",
-      direction: "buy",
-      confidence: 72,
-      entryPrice: 165.80,
-      targetPrice: 190.00,
-      stopLoss: 155.00,
+      signalTypeId: tpType.id,
+      data: { ticker: "AMD", tp_level: "TP1", exit_price: "175.00", profit_amount: "460.00", notes: "First target hit on AMD position." },
       status: "active",
-      notes: "ML model detected bullish pattern. Momentum indicators aligning on multiple timeframes.",
       sourceAppName: "Crowned Trader",
     },
-  ]);
-
-  await seedApps();
-  await seedSettings();
-  await seedIntegrations();
-
-  await db.insert(activityLog).values([
     {
-      type: "system",
-      title: "System initialized",
-      description: "TradeSync alert system started and connected to data feeds",
-      symbol: null,
-      metadata: null,
+      signalTypeId: entryType.id,
+      data: { ticker: "NVDA", option_type: "CALL", strike: "900", expiration: "2026-04-17", entry_price: "875.30", stop_loss: "850.00", take_profit_1: "920.00", take_profit_2: "950.00", notes: "ML model detected bullish pattern. Momentum aligning." },
+      status: "active",
+      sourceAppName: "Crowned Trader",
     },
     {
-      type: "alert_created",
-      title: "Alert created: BTC Breakout Watch",
-      description: "Price above $72,000 on BTC",
-      symbol: "BTC",
-      metadata: null,
-    },
-    {
-      type: "signal_ingested",
-      title: "Signal from Situ Trader: BUY AAPL",
-      description: "Technical signal at $189.50 with 78% confidence",
-      symbol: "AAPL",
-      metadata: { sourceApp: "Situ Trader" },
-    },
-    {
-      type: "signal_ingested",
-      title: "Signal from Crowned Trader: SELL TSLA",
-      description: "Sentiment signal at $248.90 with 65% confidence",
-      symbol: "TSLA",
-      metadata: { sourceApp: "Crowned Trader" },
-    },
-    {
-      type: "alert_created",
-      title: "Alert created: ETH Support Level",
-      description: "Price below $3,200 on ETH",
-      symbol: "ETH",
-      metadata: null,
+      signalTypeId: entryType.id,
+      data: { ticker: "META", option_type: "PUT", strike: "500", expiration: "2026-03-28", entry_price: "510.00", stop_loss: "525.00", take_profit_1: "490.00", take_profit_2: "475.00", notes: "Bearish reversal pattern on 4H chart." },
+      status: "active",
+      sourceAppName: "Situ Trader",
     },
   ]);
 }
@@ -209,10 +207,6 @@ async function seedApps() {
 
 async function seedSettings() {
   await db.insert(systemSettings).values([
-    { key: "alert_system_enabled", value: "true", category: "alerts", label: "Alert System", description: "Master switch for the alert monitoring system", type: "boolean" },
-    { key: "alert_sound_enabled", value: "true", category: "alerts", label: "Alert Sounds", description: "Play audio notifications when alerts trigger", type: "boolean" },
-    { key: "alert_email_enabled", value: "false", category: "alerts", label: "Email Notifications", description: "Send email when alerts trigger", type: "boolean" },
-    { key: "alert_auto_pause", value: "true", category: "alerts", label: "Auto-Pause Triggered", description: "Automatically pause alerts after they trigger", type: "boolean" },
     { key: "signal_system_enabled", value: "true", category: "signals", label: "Signal Engine", description: "Master switch for the signal analysis engine", type: "boolean" },
     { key: "signal_auto_create_alerts", value: "false", category: "signals", label: "Auto-Create Alerts", description: "Automatically create alerts from incoming signals", type: "boolean" },
     { key: "signal_confidence_threshold", value: "60", category: "signals", label: "Min Confidence Threshold", description: "Minimum confidence % to accept incoming signals", type: "number" },
@@ -236,56 +230,24 @@ async function seedSettings() {
 async function seedIntegrations() {
   await db.insert(integrations).values([
     {
-      type: "discord",
-      name: "Trading Alerts Channel",
-      status: "active",
+      type: "discord", name: "Trading Alerts Channel", status: "active",
       config: { webhookUrl: "https://discord.com/api/webhooks/xxxx/yyyy", channelName: "#trading-alerts", serverId: "123456789" },
-      enabled: true,
-      notifyAlerts: true,
-      notifySignals: true,
-      notifyTrades: false,
-      notifySystem: false,
-      autoTrade: false,
-      paperTrade: false,
+      enabled: true, notifyAlerts: true, notifySignals: true, notifyTrades: false, notifySystem: false, autoTrade: false, paperTrade: false,
     },
     {
-      type: "discord",
-      name: "System Notifications",
-      status: "active",
+      type: "discord", name: "System Notifications", status: "active",
       config: { webhookUrl: "https://discord.com/api/webhooks/aaaa/bbbb", channelName: "#system-logs", serverId: "123456789" },
-      enabled: true,
-      notifyAlerts: false,
-      notifySignals: false,
-      notifyTrades: false,
-      notifySystem: true,
-      autoTrade: false,
-      paperTrade: false,
+      enabled: true, notifyAlerts: false, notifySignals: false, notifyTrades: false, notifySystem: true, autoTrade: false, paperTrade: false,
     },
     {
-      type: "ibkr",
-      name: "IBKR Paper Account",
-      status: "active",
+      type: "ibkr", name: "IBKR Paper Account", status: "active",
       config: { accountId: "DU12345678", host: "127.0.0.1", port: 7497, clientId: 1, accountType: "paper" },
-      enabled: true,
-      notifyAlerts: false,
-      notifySignals: false,
-      notifyTrades: true,
-      notifySystem: false,
-      autoTrade: false,
-      paperTrade: true,
+      enabled: true, notifyAlerts: false, notifySignals: false, notifyTrades: true, notifySystem: false, autoTrade: false, paperTrade: true,
     },
     {
-      type: "ibkr",
-      name: "IBKR Live Account",
-      status: "inactive",
+      type: "ibkr", name: "IBKR Live Account", status: "inactive",
       config: { accountId: "U98765432", host: "127.0.0.1", port: 7496, clientId: 2, accountType: "live" },
-      enabled: false,
-      notifyAlerts: false,
-      notifySignals: false,
-      notifyTrades: true,
-      notifySystem: false,
-      autoTrade: false,
-      paperTrade: false,
+      enabled: false, notifyAlerts: false, notifySignals: false, notifyTrades: true, notifySystem: false, autoTrade: false, paperTrade: false,
     },
   ]);
 }
@@ -304,194 +266,20 @@ async function seedIbkrData() {
   const h = (hours: number) => new Date(now.getTime() - hours * 3600000);
 
   await db.insert(ibkrOrders).values([
-    {
-      integrationId: paperAccount.id,
-      sourceAppId: situTrader?.id || null,
-      sourceAppName: situTrader?.name || "Situ Trader",
-      orderId: "ORD-2401001",
-      symbol: "AAPL",
-      side: "buy",
-      orderType: "limit",
-      quantity: 100,
-      limitPrice: 178.50,
-      filledQuantity: 100,
-      avgFillPrice: 178.45,
-      status: "filled",
-      timeInForce: "DAY",
-      commission: 1.00,
-      submittedAt: h(48),
-      filledAt: h(47.5),
-    },
-    {
-      integrationId: paperAccount.id,
-      sourceAppId: situTrader?.id || null,
-      sourceAppName: situTrader?.name || "Situ Trader",
-      orderId: "ORD-2401002",
-      symbol: "TSLA",
-      side: "buy",
-      orderType: "market",
-      quantity: 50,
-      filledQuantity: 50,
-      avgFillPrice: 248.30,
-      status: "filled",
-      timeInForce: "DAY",
-      commission: 1.00,
-      submittedAt: h(36),
-      filledAt: h(36),
-    },
-    {
-      integrationId: paperAccount.id,
-      sourceAppId: crownedTrader?.id || null,
-      sourceAppName: crownedTrader?.name || "Crowned Trader",
-      orderId: "ORD-2401003",
-      symbol: "NVDA",
-      side: "buy",
-      orderType: "limit",
-      quantity: 75,
-      limitPrice: 875.00,
-      filledQuantity: 75,
-      avgFillPrice: 874.50,
-      status: "filled",
-      timeInForce: "GTC",
-      commission: 1.00,
-      submittedAt: h(24),
-      filledAt: h(23),
-    },
-    {
-      integrationId: paperAccount.id,
-      sourceAppId: crownedTrader?.id || null,
-      sourceAppName: crownedTrader?.name || "Crowned Trader",
-      orderId: "ORD-2401004",
-      symbol: "MSFT",
-      side: "sell",
-      orderType: "limit",
-      quantity: 30,
-      limitPrice: 420.00,
-      filledQuantity: 0,
-      status: "pending",
-      timeInForce: "GTC",
-      submittedAt: h(12),
-    },
-    {
-      integrationId: paperAccount.id,
-      sourceAppId: situTrader?.id || null,
-      sourceAppName: situTrader?.name || "Situ Trader",
-      orderId: "ORD-2401005",
-      symbol: "META",
-      side: "buy",
-      orderType: "stop_limit",
-      quantity: 40,
-      limitPrice: 510.00,
-      stopPrice: 505.00,
-      filledQuantity: 0,
-      status: "submitted",
-      timeInForce: "DAY",
-      submittedAt: h(6),
-    },
-    {
-      integrationId: paperAccount.id,
-      sourceAppId: situTrader?.id || null,
-      sourceAppName: situTrader?.name || "Situ Trader",
-      orderId: "ORD-2401006",
-      symbol: "AMZN",
-      side: "sell",
-      orderType: "market",
-      quantity: 20,
-      filledQuantity: 20,
-      avgFillPrice: 185.20,
-      status: "filled",
-      timeInForce: "DAY",
-      commission: 1.00,
-      submittedAt: h(3),
-      filledAt: h(3),
-    },
-    {
-      integrationId: paperAccount.id,
-      sourceAppId: crownedTrader?.id || null,
-      sourceAppName: crownedTrader?.name || "Crowned Trader",
-      orderId: "ORD-2401007",
-      symbol: "SPY",
-      side: "buy",
-      orderType: "limit",
-      quantity: 200,
-      limitPrice: 502.50,
-      filledQuantity: 0,
-      status: "cancelled",
-      timeInForce: "DAY",
-      submittedAt: h(72),
-      cancelledAt: h(71),
-    },
-    {
-      integrationId: paperAccount.id,
-      sourceAppId: situTrader?.id || null,
-      sourceAppName: situTrader?.name || "Situ Trader",
-      orderId: "ORD-2401008",
-      symbol: "GOOGL",
-      side: "buy",
-      orderType: "market",
-      quantity: 25,
-      filledQuantity: 25,
-      avgFillPrice: 172.80,
-      status: "filled",
-      timeInForce: "DAY",
-      commission: 1.00,
-      submittedAt: h(1),
-      filledAt: h(1),
-    },
+    { integrationId: paperAccount.id, sourceAppId: situTrader?.id || null, sourceAppName: situTrader?.name || "Situ Trader", orderId: "ORD-2401001", symbol: "AAPL", side: "buy", orderType: "limit", quantity: 100, limitPrice: 178.50, filledQuantity: 100, avgFillPrice: 178.45, status: "filled", timeInForce: "DAY", commission: 1.00, submittedAt: h(48), filledAt: h(47.5) },
+    { integrationId: paperAccount.id, sourceAppId: situTrader?.id || null, sourceAppName: situTrader?.name || "Situ Trader", orderId: "ORD-2401002", symbol: "TSLA", side: "buy", orderType: "market", quantity: 50, filledQuantity: 50, avgFillPrice: 248.30, status: "filled", timeInForce: "DAY", commission: 1.00, submittedAt: h(36), filledAt: h(36) },
+    { integrationId: paperAccount.id, sourceAppId: crownedTrader?.id || null, sourceAppName: crownedTrader?.name || "Crowned Trader", orderId: "ORD-2401003", symbol: "NVDA", side: "buy", orderType: "limit", quantity: 75, limitPrice: 875.00, filledQuantity: 75, avgFillPrice: 874.50, status: "filled", timeInForce: "GTC", commission: 1.00, submittedAt: h(24), filledAt: h(23) },
+    { integrationId: paperAccount.id, sourceAppId: crownedTrader?.id || null, sourceAppName: crownedTrader?.name || "Crowned Trader", orderId: "ORD-2401004", symbol: "MSFT", side: "sell", orderType: "limit", quantity: 30, limitPrice: 420.00, filledQuantity: 0, status: "pending", timeInForce: "GTC", submittedAt: h(12) },
+    { integrationId: paperAccount.id, sourceAppId: situTrader?.id || null, sourceAppName: situTrader?.name || "Situ Trader", orderId: "ORD-2401005", symbol: "META", side: "buy", orderType: "stop_limit", quantity: 40, limitPrice: 510.00, stopPrice: 505.00, filledQuantity: 0, status: "submitted", timeInForce: "DAY", submittedAt: h(6) },
+    { integrationId: paperAccount.id, sourceAppId: situTrader?.id || null, sourceAppName: situTrader?.name || "Situ Trader", orderId: "ORD-2401006", symbol: "AMZN", side: "sell", orderType: "market", quantity: 20, filledQuantity: 20, avgFillPrice: 185.20, status: "filled", timeInForce: "DAY", commission: 1.00, submittedAt: h(3), filledAt: h(3) },
+    { integrationId: paperAccount.id, sourceAppId: crownedTrader?.id || null, sourceAppName: crownedTrader?.name || "Crowned Trader", orderId: "ORD-2401007", symbol: "SPY", side: "buy", orderType: "limit", quantity: 200, limitPrice: 502.50, filledQuantity: 0, status: "cancelled", timeInForce: "DAY", submittedAt: h(72), cancelledAt: h(71) },
+    { integrationId: paperAccount.id, sourceAppId: situTrader?.id || null, sourceAppName: situTrader?.name || "Situ Trader", orderId: "ORD-2401008", symbol: "GOOGL", side: "buy", orderType: "market", quantity: 25, filledQuantity: 25, avgFillPrice: 172.80, status: "filled", timeInForce: "DAY", commission: 1.00, submittedAt: h(1), filledAt: h(1) },
   ]);
 
   await db.insert(ibkrPositions).values([
-    {
-      integrationId: paperAccount.id,
-      sourceAppId: situTrader?.id || null,
-      sourceAppName: situTrader?.name || "Situ Trader",
-      symbol: "AAPL",
-      quantity: 100,
-      avgCost: 178.45,
-      marketPrice: 182.30,
-      marketValue: 18230,
-      unrealizedPnl: 385.00,
-      realizedPnl: 0,
-      currency: "USD",
-    },
-    {
-      integrationId: paperAccount.id,
-      sourceAppId: situTrader?.id || null,
-      sourceAppName: situTrader?.name || "Situ Trader",
-      symbol: "TSLA",
-      quantity: 50,
-      avgCost: 248.30,
-      marketPrice: 255.10,
-      marketValue: 12755,
-      unrealizedPnl: 340.00,
-      realizedPnl: 0,
-      currency: "USD",
-    },
-    {
-      integrationId: paperAccount.id,
-      sourceAppId: crownedTrader?.id || null,
-      sourceAppName: crownedTrader?.name || "Crowned Trader",
-      symbol: "NVDA",
-      quantity: 75,
-      avgCost: 874.50,
-      marketPrice: 890.25,
-      marketValue: 66768.75,
-      unrealizedPnl: 1181.25,
-      realizedPnl: 0,
-      currency: "USD",
-    },
-    {
-      integrationId: paperAccount.id,
-      sourceAppId: situTrader?.id || null,
-      sourceAppName: situTrader?.name || "Situ Trader",
-      symbol: "GOOGL",
-      quantity: 25,
-      avgCost: 172.80,
-      marketPrice: 174.50,
-      marketValue: 4362.50,
-      unrealizedPnl: 42.50,
-      realizedPnl: 0,
-      currency: "USD",
-    },
+    { integrationId: paperAccount.id, sourceAppId: situTrader?.id || null, sourceAppName: situTrader?.name || "Situ Trader", symbol: "AAPL", quantity: 100, avgCost: 178.45, marketPrice: 182.30, marketValue: 18230, unrealizedPnl: 385.00, realizedPnl: 0, currency: "USD" },
+    { integrationId: paperAccount.id, sourceAppId: situTrader?.id || null, sourceAppName: situTrader?.name || "Situ Trader", symbol: "TSLA", quantity: 50, avgCost: 248.30, marketPrice: 255.10, marketValue: 12755, unrealizedPnl: 340.00, realizedPnl: 0, currency: "USD" },
+    { integrationId: paperAccount.id, sourceAppId: crownedTrader?.id || null, sourceAppName: crownedTrader?.name || "Crowned Trader", symbol: "NVDA", quantity: 75, avgCost: 874.50, marketPrice: 890.25, marketValue: 66768.75, unrealizedPnl: 1181.25, realizedPnl: 0, currency: "USD" },
+    { integrationId: paperAccount.id, sourceAppId: situTrader?.id || null, sourceAppName: situTrader?.name || "Situ Trader", symbol: "GOOGL", quantity: 25, avgCost: 172.80, marketPrice: 174.50, marketValue: 4362.50, unrealizedPnl: 42.50, realizedPnl: 0, currency: "USD" },
   ]);
 }

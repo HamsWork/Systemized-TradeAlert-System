@@ -1,11 +1,12 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertAlertSchema, insertSignalSchema, insertConnectedAppSchema, insertSystemSettingSchema, insertIntegrationSchema, insertIbkrOrderSchema, insertIbkrPositionSchema } from "@shared/schema";
+import { insertAlertSchema, insertSignalSchema, insertSignalTypeSchema, insertConnectedAppSchema, insertSystemSettingSchema, insertIntegrationSchema, insertIbkrOrderSchema, insertIbkrPositionSchema } from "@shared/schema";
 import crypto from "crypto";
 
 const partialAlertSchema = insertAlertSchema.partial();
 const partialSignalSchema = insertSignalSchema.partial();
+const partialSignalTypeSchema = insertSignalTypeSchema.partial();
 const partialConnectedAppSchema = insertConnectedAppSchema.partial();
 const partialIntegrationSchema = insertIntegrationSchema.partial();
 const partialIbkrOrderSchema = insertIbkrOrderSchema.partial();
@@ -86,6 +87,63 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/signal-types", async (_req, res) => {
+    try {
+      const types = await storage.getSignalTypes();
+      res.json(types);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch signal types" });
+    }
+  });
+
+  app.get("/api/signal-types/:id", async (req, res) => {
+    try {
+      const st = await storage.getSignalType(req.params.id);
+      if (!st) return res.status(404).json({ message: "Signal type not found" });
+      res.json(st);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch signal type" });
+    }
+  });
+
+  app.post("/api/signal-types", async (req, res) => {
+    try {
+      const parsed = insertSignalTypeSchema.parse(req.body);
+      const st = await storage.createSignalType(parsed);
+      await storage.createActivity({
+        type: "signal_type_created",
+        title: `Signal type created: ${parsed.name}`,
+        description: `New signal template "${parsed.name}" with ${(parsed.variables as any[])?.length || 0} variables`,
+        symbol: null,
+        metadata: null,
+      });
+      res.status(201).json(st);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message || "Invalid signal type data" });
+    }
+  });
+
+  app.patch("/api/signal-types/:id", async (req, res) => {
+    try {
+      const parsed = partialSignalTypeSchema.parse(req.body);
+      const updated = await storage.updateSignalType(req.params.id, parsed);
+      if (!updated) return res.status(404).json({ message: "Signal type not found" });
+      res.json(updated);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message || "Failed to update signal type" });
+    }
+  });
+
+  app.delete("/api/signal-types/:id", async (req, res) => {
+    try {
+      const deleted = await storage.deleteSignalType(req.params.id);
+      if (!deleted) return res.status(404).json({ message: "Signal type not found" });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete signal type" });
+    }
+  });
+
   app.get("/api/signals", async (_req, res) => {
     try {
       const sigs = await storage.getSignals();
@@ -108,12 +166,14 @@ export async function registerRoutes(
   app.post("/api/signals", async (req, res) => {
     try {
       const parsed = insertSignalSchema.parse(req.body);
+      const signalType = await storage.getSignalType(parsed.signalTypeId);
       const signal = await storage.createSignal(parsed);
+      const data = parsed.data as Record<string, any>;
       await storage.createActivity({
         type: "signal_created",
-        title: `${parsed.direction.toUpperCase()} signal: ${parsed.symbol}`,
-        description: `${parsed.type} signal at $${parsed.entryPrice} with ${parsed.confidence}% confidence`,
-        symbol: parsed.symbol,
+        title: `Signal: ${signalType?.name || "Unknown"} - ${data.ticker || data.symbol || ""}`,
+        description: `${signalType?.name || "Signal"} created${data.ticker ? ` for ${data.ticker}` : ""}`,
+        symbol: data.ticker || data.symbol || null,
         metadata: null,
       });
       res.status(201).json(signal);
@@ -166,16 +226,27 @@ export async function registerRoutes(
       }
 
       const body = req.body;
+
+      let signalTypeId = body.signalTypeId;
+      if (!signalTypeId && body.signalType) {
+        const st = await storage.getSignalTypeByName(body.signalType);
+        if (st) signalTypeId = st.id;
+      }
+
+      if (!signalTypeId) {
+        return res.status(400).json({ message: "signalTypeId or signalType (name) is required" });
+      }
+
+      const signalType = await storage.getSignalType(signalTypeId);
+      if (!signalType) {
+        return res.status(400).json({ message: "Signal type not found" });
+      }
+
       const signalData = {
-        symbol: body.symbol,
-        type: body.type || "algorithmic",
-        direction: body.direction,
-        confidence: body.confidence,
-        entryPrice: body.entryPrice,
-        targetPrice: body.targetPrice || null,
-        stopLoss: body.stopLoss || null,
+        signalTypeId,
+        data: body.data || {},
+        discordChannelId: body.discordChannelId || null,
         status: "active",
-        notes: body.notes || null,
         sourceAppId: connectedApp.id,
         sourceAppName: connectedApp.name,
       };
@@ -185,11 +256,12 @@ export async function registerRoutes(
 
       await storage.updateConnectedApp(connectedApp.id, { lastSyncAt: new Date() } as any);
 
+      const data = body.data || {};
       await storage.createActivity({
         type: "signal_ingested",
-        title: `Signal from ${connectedApp.name}: ${parsed.direction.toUpperCase()} ${parsed.symbol}`,
-        description: `${parsed.type} signal at $${parsed.entryPrice} with ${parsed.confidence}% confidence`,
-        symbol: parsed.symbol,
+        title: `Signal from ${connectedApp.name}: ${signalType.name} ${data.ticker || data.symbol || ""}`,
+        description: `${signalType.name} signal${data.ticker ? ` for ${data.ticker}` : ""}`,
+        symbol: data.ticker || data.symbol || null,
         metadata: { sourceApp: connectedApp.name, sourceAppId: connectedApp.id },
       });
 
