@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -87,7 +88,16 @@ interface SectionDef {
   endpoints: EndpointDef[];
 }
 
-function generateCode(method: string, path: string, params: Record<string, string>, lang: string, baseUrl: string, authKey?: string): string {
+function parseParamValue(key: string, value: string, paramDefs?: ParamDef[]): any {
+  const def = paramDefs?.find(p => p.name === key);
+  if (def?.type === "json") {
+    try { return JSON.parse(value); } catch { return value; }
+  }
+  const num = Number(value);
+  return !isNaN(num) && value !== "" ? num : value;
+}
+
+function generateCode(method: string, path: string, params: Record<string, string>, lang: string, baseUrl: string, authKey?: string, paramDefs?: ParamDef[]): string {
   const hasBody = method === "POST" || method === "PATCH" || method === "PUT";
   const filledParams = Object.entries(params).filter(([_, v]) => v.trim() !== "");
 
@@ -109,11 +119,8 @@ function generateCode(method: string, path: string, params: Record<string, strin
     if (hasBody && bodyParams.length > 0) {
       cmd += ` \\\n  -H "Content-Type: application/json"`;
       const body: Record<string, any> = {};
-      bodyParams.forEach(([k, v]) => {
-        const num = Number(v);
-        body[k] = !isNaN(num) && v !== "" ? num : v;
-      });
-      cmd += ` \\\n  -d '${JSON.stringify(body)}'`;
+      bodyParams.forEach(([k, v]) => { body[k] = parseParamValue(k, v, paramDefs); });
+      cmd += ` \\\n  -d '${JSON.stringify(body, null, 2)}'`;
     }
     return cmd;
   }
@@ -128,7 +135,7 @@ function generateCode(method: string, path: string, params: Record<string, strin
     }
     if (hasBody && bodyParams.length > 0) {
       const body: Record<string, any> = {};
-      bodyParams.forEach(([k, v]) => { const n = Number(v); body[k] = !isNaN(n) && v !== "" ? n : v; });
+      bodyParams.forEach(([k, v]) => { body[k] = parseParamValue(k, v, paramDefs); });
       code += `data = ${JSON.stringify(body, null, 2)}\n\n`;
       code += `response = requests.${method.toLowerCase()}(\n  "${url}",\n  headers=headers,\n  json=data\n)`;
     } else {
@@ -148,7 +155,7 @@ function generateCode(method: string, path: string, params: Record<string, strin
     }
     if (hasBody && bodyParams.length > 0) {
       const body: Record<string, any> = {};
-      bodyParams.forEach(([k, v]) => { const n = Number(v); body[k] = !isNaN(n) && v !== "" ? n : v; });
+      bodyParams.forEach(([k, v]) => { body[k] = parseParamValue(k, v, paramDefs); });
       code += `,\n  body: JSON.stringify(${JSON.stringify(body, null, 4).replace(/\n/g, "\n  ")})`;
     }
     code += `\n});\n\nconst data = await response.json();\nconsole.log(data);`;
@@ -161,8 +168,8 @@ function generateCode(method: string, path: string, params: Record<string, strin
     code += `)\n\nfunc main() {\n`;
     if (hasBody && bodyParams.length > 0) {
       const body: Record<string, any> = {};
-      bodyParams.forEach(([k, v]) => { const n = Number(v); body[k] = !isNaN(n) && v !== "" ? n : v; });
-      code += `  payload := strings.NewReader(\`${JSON.stringify(body)}\`)\n`;
+      bodyParams.forEach(([k, v]) => { body[k] = parseParamValue(k, v, paramDefs); });
+      code += `  payload := strings.NewReader(\`${JSON.stringify(body, null, 2)}\`)\n`;
       code += `  req, _ := http.NewRequest("${method}", "${url}", payload)\n`;
     } else {
       code += `  req, _ := http.NewRequest("${method}", "${url}", nil)\n`;
@@ -195,8 +202,8 @@ function EndpointInteractive({ endpoint, baseUrl, authKey }: { endpoint: Endpoin
   };
 
   const codeOutput = useMemo(() =>
-    generateCode(endpoint.method, endpoint.path, paramValues, codeLang, baseUrl, authKey),
-    [endpoint.method, endpoint.path, paramValues, codeLang, baseUrl, authKey]
+    generateCode(endpoint.method, endpoint.path, paramValues, codeLang, baseUrl, authKey, endpoint.params),
+    [endpoint.method, endpoint.path, paramValues, codeLang, baseUrl, authKey, endpoint.params]
   );
 
   const hasBody = endpoint.method === "POST" || endpoint.method === "PATCH" || endpoint.method === "PUT";
@@ -224,7 +231,7 @@ function EndpointInteractive({ endpoint, baseUrl, authKey }: { endpoint: Endpoin
       let body: string | undefined;
       if (hasBody && bodyParams.length > 0) {
         const obj: Record<string, any> = {};
-        bodyParams.forEach(([k, v]) => { const n = Number(v); obj[k] = !isNaN(n) && v !== "" ? n : v; });
+        bodyParams.forEach(([k, v]) => { obj[k] = parseParamValue(k, v, endpoint.params); });
         body = JSON.stringify(obj);
       }
 
@@ -265,13 +272,21 @@ function EndpointInteractive({ endpoint, baseUrl, authKey }: { endpoint: Endpoin
           <div className="space-y-5">
             {params.map((param) => (
               <div key={param.name} data-testid={`param-${param.name}`}>
-                <div className="flex items-center justify-between gap-3 mb-1.5">
+                <div className={`flex items-center ${param.type === "json" ? "flex-col items-start" : "justify-between"} gap-3 mb-1.5`}>
                   <div className="flex items-center gap-2">
                     <code className="text-sm font-mono font-semibold">{param.name}</code>
                     <Badge variant="secondary" className="text-[10px] font-normal px-1.5 py-0">{param.type}</Badge>
                     {param.required && <span className="text-[10px] text-red-400 font-medium">required</span>}
                   </div>
-                  {param.enumValues ? (
+                  {param.type === "json" ? (
+                    <Textarea
+                      value={paramValues[param.name] || ""}
+                      onChange={(e) => setParam(param.name, e.target.value)}
+                      className="w-full bg-zinc-900/50 dark:bg-zinc-900/80 border-zinc-700/50 text-sm font-mono min-h-[120px]"
+                      placeholder={'{\n  "ticker": "AAPL",\n  "instrument_type": "Options",\n  "entry_price": "189.50"\n}'}
+                      data-testid={`input-param-${param.name}`}
+                    />
+                  ) : param.enumValues ? (
                     <Select value={paramValues[param.name] || ""} onValueChange={(v) => setParam(param.name, v)}>
                       <SelectTrigger className="w-[200px] bg-zinc-900/50 dark:bg-zinc-900/80 border-zinc-700/50 text-sm" data-testid={`select-param-${param.name}`}>
                         <SelectValue placeholder="Select" />
@@ -476,29 +491,32 @@ const sections: SectionDef[] = [
       {
         method: "POST",
         path: "/api/ingest/signals",
-        description: "Push a trading signal from a connected app into TradeSync. Requires a valid API key from a connected app passed via Bearer token authentication.",
+        description: "Push a trading signal from a connected app into TradeSync. Requires a valid API key from a connected app passed via Bearer token authentication. Signal data is a flexible JSON object based on the signal type's variables.",
         auth: "Bearer Token",
         params: [
-          { name: "symbol", type: "string", required: true, description: "Trading symbol (e.g., AAPL, BTC, TSLA)" },
-          { name: "direction", type: "string", required: true, description: "'buy' or 'sell' direction for the signal.", enumValues: ["buy", "sell"] },
-          { name: "confidence", type: "integer", required: true, description: "Confidence level from 0-100 indicating signal strength." },
-          { name: "entryPrice", type: "number", required: true, description: "The recommended entry price point." },
-          { name: "type", type: "string", required: false, description: "Signal analysis type classification.", enumValues: ["technical", "fundamental", "sentiment", "algorithmic"] },
-          { name: "targetPrice", type: "number", required: false, description: "Target take-profit price level." },
-          { name: "stopLoss", type: "number", required: false, description: "Stop-loss price level for risk management." },
-          { name: "notes", type: "string", required: false, description: "Additional notes or analysis context." },
+          { name: "signalType", type: "string", required: false, description: "Signal type name (e.g., 'Common Trade Alert', 'Stop Loss Hit', 'Take Profit Hit'). Provide this or signalTypeId." },
+          { name: "signalTypeId", type: "string", required: false, description: "Signal type UUID. Alternative to signalType name. Provide this or signalType." },
+          { name: "data", type: "json", required: true, description: "JSON object with signal data matching the signal type's variables. For Common Trade Alert: { ticker, instrument_type, entry_price, trade_plan, stop_loss_1, take_profit_1, ... }" },
         ],
         responseExample: `{
   "success": true,
   "signal": {
     "id": "abc-123",
-    "symbol": "AAPL",
-    "direction": "buy",
-    "type": "technical",
-    "confidence": 75,
-    "entryPrice": 185.50,
-    "targetPrice": 200.00,
-    "stopLoss": 175.00,
+    "signalTypeId": "type-456",
+    "data": {
+      "ticker": "AAPL",
+      "instrument_type": "Options",
+      "option_type": "CALL",
+      "strike": "190",
+      "expiration": "2026-03-20",
+      "entry_price": "189.50",
+      "trade_plan": "Breakout above 188 resistance. Scale out at each TP.",
+      "stop_loss_1": "182.00",
+      "take_profit_1": "195.00",
+      "take_profit_2": "200.00",
+      "take_profit_3": "205.00",
+      "raise_stop_method": "Move to Entry at TP1"
+    },
     "status": "active",
     "sourceAppName": "Situ Trader",
     "createdAt": "2026-02-26T12:00:00.000Z"
@@ -513,12 +531,18 @@ const sections: SectionDef[] = [
         responseExample: `[
   {
     "id": "abc-123",
-    "symbol": "AAPL",
-    "direction": "buy",
-    "type": "technical",
-    "confidence": 75,
+    "signalTypeId": "type-456",
+    "data": {
+      "ticker": "AAPL",
+      "instrument_type": "Options",
+      "entry_price": "189.50",
+      "trade_plan": "Breakout play",
+      "stop_loss_1": "182.00",
+      "take_profit_1": "195.00"
+    },
     "status": "active",
-    "sourceAppName": "Situ Trader"
+    "sourceAppName": "Situ Trader",
+    "createdAt": "2026-02-26T12:00:00.000Z"
   }
 ]`,
       },
@@ -535,14 +559,9 @@ const sections: SectionDef[] = [
         path: "/api/signals",
         description: "Create a signal manually (internal use, no API key required).",
         params: [
-          { name: "symbol", type: "string", required: true, description: "Trading symbol" },
-          { name: "direction", type: "string", required: true, description: "'buy' or 'sell'", enumValues: ["buy", "sell"] },
-          { name: "type", type: "string", required: true, description: "Signal type", enumValues: ["technical", "fundamental", "sentiment", "algorithmic"] },
-          { name: "confidence", type: "integer", required: true, description: "Confidence level 0-100" },
-          { name: "entryPrice", type: "number", required: true, description: "Entry price" },
-          { name: "targetPrice", type: "number", required: false, description: "Target price" },
-          { name: "stopLoss", type: "number", required: false, description: "Stop-loss price" },
-          { name: "notes", type: "string", required: false, description: "Notes" },
+          { name: "signalTypeId", type: "string", required: true, description: "ID of the signal type to use" },
+          { name: "data", type: "json", required: true, description: "JSON object with signal data matching the signal type's variables" },
+          { name: "status", type: "string", required: false, description: "Signal status", enumValues: ["active", "closed", "expired"] },
         ],
       },
       {
