@@ -49,18 +49,12 @@ function IbkrAccountSelector({ form, ibkrAccounts, testIdPrefix }: { form: any; 
 
   const handleAccountSelect = (accountId: string) => {
     setSelectedAccountId(accountId);
-    if (accountId === "manual") {
-      form.setValue("ibkrClientId", "");
-      form.setValue("ibkrHost", "127.0.0.1");
-      form.setValue("ibkrPort", "7497");
-    } else {
-      const account = ibkrAccounts.find(a => a.id === accountId);
-      if (account) {
-        const config = account.config as Record<string, any> | null;
-        form.setValue("ibkrClientId", String(config?.clientId ?? ""));
-        form.setValue("ibkrHost", config?.host ?? "");
-        form.setValue("ibkrPort", String(config?.port ?? ""));
-      }
+    const account = ibkrAccounts.find(a => a.id === accountId);
+    if (account) {
+      const config = account.config as Record<string, any> | null;
+      form.setValue("ibkrClientId", String(config?.clientId ?? ""));
+      form.setValue("ibkrHost", config?.host ?? "");
+      form.setValue("ibkrPort", String(config?.port ?? ""));
     }
   };
 
@@ -81,56 +75,10 @@ function IbkrAccountSelector({ form, ibkrAccounts, testIdPrefix }: { form: any; 
                 </SelectItem>
               );
             })}
-            <SelectItem value="manual">Manual Configuration</SelectItem>
           </SelectContent>
         </Select>
       </div>
-      {selectedAccountId === "manual" && (
-        <>
-          <FormField
-            control={form.control}
-            name="ibkrClientId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Client ID</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g., 1" {...field} value={field.value ?? ""} data-testid={`${testIdPrefix}-input-ibkr-client-id`} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <FormField
-              control={form.control}
-              name="ibkrHost"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Host IP</FormLabel>
-                  <FormControl>
-                    <Input placeholder="127.0.0.1" {...field} value={field.value ?? ""} data-testid={`${testIdPrefix}-input-ibkr-host`} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="ibkrPort"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Port</FormLabel>
-                  <FormControl>
-                    <Input placeholder="7497" {...field} value={field.value ?? ""} data-testid={`${testIdPrefix}-input-ibkr-port`} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-        </>
-      )}
-      {selectedAccountId && selectedAccountId !== "manual" && (
+      {selectedAccountId && (
         <div className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1.5 flex items-center gap-3">
           <span><span className="font-medium">Host:</span> {form.getValues("ibkrHost")}:{form.getValues("ibkrPort")}</span>
           <span><span className="font-medium">Client:</span> {form.getValues("ibkrClientId")}</span>
