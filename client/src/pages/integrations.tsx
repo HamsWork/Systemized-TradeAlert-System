@@ -16,6 +16,16 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -237,6 +247,8 @@ function CreateDiscordDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 
 function CreateIbkrDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { toast } = useToast();
+  const [showLiveConfirm, setShowLiveConfirm] = useState(false);
+  const [pendingData, setPendingData] = useState<IbkrFormValues | null>(null);
 
   const form = useForm<IbkrFormValues>({
     resolver: zodResolver(ibkrFormSchema),
@@ -285,6 +297,7 @@ function CreateIbkrDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
   });
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
@@ -297,7 +310,14 @@ function CreateIbkrDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit((data) => createMutation.mutate(data))} className="space-y-4">
+          <form onSubmit={form.handleSubmit((data) => {
+            if (data.accountType === "live") {
+              setPendingData(data);
+              setShowLiveConfirm(true);
+            } else {
+              createMutation.mutate(data);
+            }
+          })} className="space-y-4">
             <FormField
               control={form.control}
               name="name"
@@ -380,6 +400,39 @@ function CreateIbkrDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
         </Form>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={showLiveConfirm} onOpenChange={setShowLiveConfirm}>
+      <AlertDialogContent data-testid="alert-ibkr-live-confirm">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2 text-amber-500">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+            Live Account Warning
+          </AlertDialogTitle>
+          <AlertDialogDescription className="space-y-2">
+            <span className="block">You are about to connect a <strong className="text-foreground">live IBKR trading account</strong>. This means:</span>
+            <span className="block text-red-400 font-medium">Real money will be at risk if trade execution is enabled.</span>
+            <span className="block">Make sure the connection details (host, port, client ID) are correct and that you understand the risks before proceeding.</span>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => setPendingData(null)} data-testid="button-cancel-live-ibkr">Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-amber-600 hover:bg-amber-700 text-white"
+            onClick={() => {
+              if (pendingData) {
+                createMutation.mutate(pendingData);
+                setPendingData(null);
+              }
+              setShowLiveConfirm(false);
+            }}
+            data-testid="button-confirm-live-ibkr"
+          >
+            I understand, proceed
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
 
