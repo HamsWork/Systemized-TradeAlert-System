@@ -113,15 +113,27 @@ export function registerSignalRoutes(app: Express) {
     if (tradePlan && typeof tradePlan === "object") {
       if (tradePlan.stopLoss) {
         const sl = tradePlan.stopLoss;
-        if (sl.sl1) signalDataObj.stop_loss_1 = sl.sl1;
-        if (sl.sl2) signalDataObj.stop_loss_2 = sl.sl2;
-        if (sl.sl3) signalDataObj.stop_loss_3 = sl.sl3;
+        if (Array.isArray(sl)) {
+          if (sl[0]) signalDataObj.stop_loss_1 = sl[0];
+          if (sl[1]) signalDataObj.stop_loss_2 = sl[1];
+          if (sl[2]) signalDataObj.stop_loss_3 = sl[2];
+        } else {
+          if (sl.sl1) signalDataObj.stop_loss_1 = sl.sl1;
+          if (sl.sl2) signalDataObj.stop_loss_2 = sl.sl2;
+          if (sl.sl3) signalDataObj.stop_loss_3 = sl.sl3;
+        }
       }
       if (tradePlan.targetLevels) {
         const tp = tradePlan.targetLevels;
-        if (tp.tp1) signalDataObj.take_profit_1 = tp.tp1;
-        if (tp.tp2) signalDataObj.take_profit_2 = tp.tp2;
-        if (tp.tp3) signalDataObj.take_profit_3 = tp.tp3;
+        if (Array.isArray(tp)) {
+          if (tp[0]) signalDataObj.take_profit_1 = tp[0];
+          if (tp[1]) signalDataObj.take_profit_2 = tp[1];
+          if (tp[2]) signalDataObj.take_profit_3 = tp[2];
+        } else {
+          if (tp.tp1) signalDataObj.take_profit_1 = tp.tp1;
+          if (tp.tp2) signalDataObj.take_profit_2 = tp.tp2;
+          if (tp.tp3) signalDataObj.take_profit_3 = tp.tp3;
+        }
       }
       if (tradePlan.raiseStopLevel) {
         const rs = tradePlan.raiseStopLevel;
