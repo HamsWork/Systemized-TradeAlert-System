@@ -245,10 +245,12 @@ export default function IbkrPage() {
 
   const { data: orders = [], isLoading: ordersLoading } = useQuery<IbkrOrder[]>({
     queryKey: ["/api/ibkr/orders"],
+    refetchInterval: 5000,
   });
 
   const { data: positions = [], isLoading: positionsLoading } = useQuery<IbkrPosition[]>({
     queryKey: ["/api/ibkr/positions"],
+    refetchInterval: 5000,
   });
 
   const { data: ibkrIntegrations = [] } = useQuery<Integration[]>({
