@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -33,12 +34,60 @@ import {
   Layers,
   History,
   Filter,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import type { IbkrOrder, IbkrPosition, Integration, ConnectedApp } from "@shared/schema";
 import { formatCurrency, formatNumber, formatRelativeTime } from "@/lib/formatters";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import type { ElementType } from "react";
+
+const PAGE_SIZE = 10;
+
+function Pagination({ currentPage, totalPages, onPageChange, totalItems, label }: {
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+  totalItems: number;
+  label: string;
+}) {
+  if (totalPages <= 1) return null;
+  const start = (currentPage - 1) * PAGE_SIZE + 1;
+  const end = Math.min(currentPage * PAGE_SIZE, totalItems);
+  return (
+    <div className="flex items-center justify-between pt-3 px-1" data-testid={`pagination-${label}`}>
+      <p className="text-xs text-muted-foreground">
+        Showing {start}-{end} of {totalItems} {label}
+      </p>
+      <div className="flex items-center gap-1">
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-7 w-7"
+          disabled={currentPage <= 1}
+          onClick={() => onPageChange(currentPage - 1)}
+          data-testid={`button-prev-${label}`}
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+        </Button>
+        <span className="text-xs text-muted-foreground px-2">
+          {currentPage} / {totalPages}
+        </span>
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-7 w-7"
+          disabled={currentPage >= totalPages}
+          onClick={() => onPageChange(currentPage + 1)}
+          data-testid={`button-next-${label}`}
+        >
+          <ChevronRight className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 function OrderStatusBadge({ status }: { status: string }) {
   const variants: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof CheckCircle2; label: string }> = {
@@ -112,7 +161,7 @@ function SummaryCards({ orders, positions }: { orders: IbkrOrder[]; positions: I
   );
 }
 
-function OrdersTable({ orders, showSource }: { orders: IbkrOrder[]; showSource: boolean }) {
+function OrdersTable({ orders, showSource, page, onPageChange }: { orders: IbkrOrder[]; showSource: boolean; page: number; onPageChange: (p: number) => void }) {
   if (orders.length === 0) {
     return (
       <EmptyState
@@ -123,55 +172,62 @@ function OrdersTable({ orders, showSource }: { orders: IbkrOrder[]; showSource: 
     );
   }
 
+  const totalPages = Math.ceil(orders.length / PAGE_SIZE);
+  const clampedPage = Math.min(page, totalPages);
+  const paged = orders.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE);
+
   return (
-    <div className="rounded-lg border overflow-hidden">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/50">
-            <TableHead className="text-xs font-medium">Order ID</TableHead>
-            <TableHead className="text-xs font-medium">Symbol</TableHead>
-            <TableHead className="text-xs font-medium">Side</TableHead>
-            <TableHead className="text-xs font-medium">Type</TableHead>
-            <TableHead className="text-xs font-medium text-right">Qty</TableHead>
-            <TableHead className="text-xs font-medium text-right">Filled</TableHead>
-            <TableHead className="text-xs font-medium text-right">Price</TableHead>
-            <TableHead className="text-xs font-medium text-right">Avg Fill</TableHead>
-            <TableHead className="text-xs font-medium">Status</TableHead>
-            {showSource && <TableHead className="text-xs font-medium">Source</TableHead>}
-            <TableHead className="text-xs font-medium">Time</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {orders.map((order) => (
-            <TableRow key={order.id} data-testid={`row-order-${order.id}`}>
-              <TableCell className="font-mono text-xs">{order.orderId}</TableCell>
-              <TableCell className="font-semibold text-sm">{order.symbol}</TableCell>
-              <TableCell><SideBadge side={order.side} /></TableCell>
-              <TableCell className="text-xs capitalize">{order.orderType.replace("_", " ")}</TableCell>
-              <TableCell className="text-right text-sm">{formatNumber(order.quantity)}</TableCell>
-              <TableCell className="text-right text-sm">{formatNumber(order.filledQuantity)}</TableCell>
-              <TableCell className="text-right text-sm font-mono">
-                {order.limitPrice ? formatCurrency(order.limitPrice) : order.stopPrice ? formatCurrency(order.stopPrice) : "MKT"}
-              </TableCell>
-              <TableCell className="text-right text-sm font-mono">{order.avgFillPrice ? formatCurrency(order.avgFillPrice) : "-"}</TableCell>
-              <TableCell><OrderStatusBadge status={order.status} /></TableCell>
-              {showSource && (
-                <TableCell>
-                  <Badge variant="outline" className="text-xs">{order.sourceAppName || "Manual"}</Badge>
-                </TableCell>
-              )}
-              <TableCell className="text-xs text-muted-foreground">
-                {formatRelativeTime(order.submittedAt)}
-              </TableCell>
+    <div>
+      <div className="rounded-lg border overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/50">
+              <TableHead className="text-xs font-medium">Order ID</TableHead>
+              <TableHead className="text-xs font-medium">Symbol</TableHead>
+              <TableHead className="text-xs font-medium">Side</TableHead>
+              <TableHead className="text-xs font-medium">Type</TableHead>
+              <TableHead className="text-xs font-medium text-right">Qty</TableHead>
+              <TableHead className="text-xs font-medium text-right">Filled</TableHead>
+              <TableHead className="text-xs font-medium text-right">Price</TableHead>
+              <TableHead className="text-xs font-medium text-right">Avg Fill</TableHead>
+              <TableHead className="text-xs font-medium">Status</TableHead>
+              {showSource && <TableHead className="text-xs font-medium">Source</TableHead>}
+              <TableHead className="text-xs font-medium">Time</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {paged.map((order) => (
+              <TableRow key={order.id} data-testid={`row-order-${order.id}`}>
+                <TableCell className="font-mono text-xs">{order.orderId}</TableCell>
+                <TableCell className="font-semibold text-sm">{order.symbol}</TableCell>
+                <TableCell><SideBadge side={order.side} /></TableCell>
+                <TableCell className="text-xs capitalize">{order.orderType.replace("_", " ")}</TableCell>
+                <TableCell className="text-right text-sm">{formatNumber(order.quantity)}</TableCell>
+                <TableCell className="text-right text-sm">{formatNumber(order.filledQuantity)}</TableCell>
+                <TableCell className="text-right text-sm font-mono">
+                  {order.limitPrice ? formatCurrency(order.limitPrice) : order.stopPrice ? formatCurrency(order.stopPrice) : "MKT"}
+                </TableCell>
+                <TableCell className="text-right text-sm font-mono">{order.avgFillPrice ? formatCurrency(order.avgFillPrice) : "-"}</TableCell>
+                <TableCell><OrderStatusBadge status={order.status} /></TableCell>
+                {showSource && (
+                  <TableCell>
+                    <Badge variant="outline" className="text-xs">{order.sourceAppName || "Manual"}</Badge>
+                  </TableCell>
+                )}
+                <TableCell className="text-xs text-muted-foreground">
+                  {formatRelativeTime(order.submittedAt)}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+      <Pagination currentPage={clampedPage} totalPages={totalPages} onPageChange={onPageChange} totalItems={orders.length} label="orders" />
     </div>
   );
 }
 
-function PositionsTable({ positions, showSource }: { positions: IbkrPosition[]; showSource: boolean }) {
+function PositionsTable({ positions, showSource, page, onPageChange }: { positions: IbkrPosition[]; showSource: boolean; page: number; onPageChange: (p: number) => void }) {
   if (positions.length === 0) {
     return (
       <EmptyState
@@ -182,58 +238,65 @@ function PositionsTable({ positions, showSource }: { positions: IbkrPosition[]; 
     );
   }
 
+  const totalPages = Math.ceil(positions.length / PAGE_SIZE);
+  const clampedPage = Math.min(page, totalPages);
+  const paged = positions.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE);
+
   return (
-    <div className="rounded-lg border overflow-hidden">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/50">
-            <TableHead className="text-xs font-medium">Symbol</TableHead>
-            <TableHead className="text-xs font-medium text-right">Quantity</TableHead>
-            <TableHead className="text-xs font-medium text-right">Avg Cost</TableHead>
-            <TableHead className="text-xs font-medium text-right">Market Price</TableHead>
-            <TableHead className="text-xs font-medium text-right">Market Value</TableHead>
-            <TableHead className="text-xs font-medium text-right">Unrealized P&L</TableHead>
-            <TableHead className="text-xs font-medium text-right">Realized P&L</TableHead>
-            {showSource && <TableHead className="text-xs font-medium">Source</TableHead>}
-            <TableHead className="text-xs font-medium">Updated</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {positions.map((pos) => {
-            const pnlPct = pos.avgCost && pos.marketPrice
-              ? ((pos.marketPrice - pos.avgCost) / pos.avgCost * 100)
-              : null;
-            return (
-              <TableRow key={pos.id} data-testid={`row-position-${pos.id}`}>
-                <TableCell className="font-semibold text-sm">{pos.symbol}</TableCell>
-                <TableCell className="text-right text-sm">{formatNumber(pos.quantity)}</TableCell>
-                <TableCell className="text-right text-sm font-mono">{formatCurrency(pos.avgCost)}</TableCell>
-                <TableCell className="text-right text-sm font-mono">{formatCurrency(pos.marketPrice)}</TableCell>
-                <TableCell className="text-right text-sm font-mono">{formatCurrency(pos.marketValue)}</TableCell>
-                <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-1.5">
-                    <PnlValue value={pos.unrealizedPnl} />
-                    {pnlPct != null && (
-                      <span className={`text-xs ${pnlPct >= 0 ? "text-emerald-500" : "text-red-500"}`}>
-                        ({pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(2)}%)
-                      </span>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell className="text-right"><PnlValue value={pos.realizedPnl} /></TableCell>
-                {showSource && (
-                  <TableCell>
-                    <Badge variant="outline" className="text-xs">{pos.sourceAppName || "Manual"}</Badge>
+    <div>
+      <div className="rounded-lg border overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/50">
+              <TableHead className="text-xs font-medium">Symbol</TableHead>
+              <TableHead className="text-xs font-medium text-right">Quantity</TableHead>
+              <TableHead className="text-xs font-medium text-right">Avg Cost</TableHead>
+              <TableHead className="text-xs font-medium text-right">Market Price</TableHead>
+              <TableHead className="text-xs font-medium text-right">Market Value</TableHead>
+              <TableHead className="text-xs font-medium text-right">Unrealized P&L</TableHead>
+              <TableHead className="text-xs font-medium text-right">Realized P&L</TableHead>
+              {showSource && <TableHead className="text-xs font-medium">Source</TableHead>}
+              <TableHead className="text-xs font-medium">Updated</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {paged.map((pos) => {
+              const pnlPct = pos.avgCost && pos.marketPrice
+                ? ((pos.marketPrice - pos.avgCost) / pos.avgCost * 100)
+                : null;
+              return (
+                <TableRow key={pos.id} data-testid={`row-position-${pos.id}`}>
+                  <TableCell className="font-semibold text-sm">{pos.symbol}</TableCell>
+                  <TableCell className="text-right text-sm">{formatNumber(pos.quantity)}</TableCell>
+                  <TableCell className="text-right text-sm font-mono">{formatCurrency(pos.avgCost)}</TableCell>
+                  <TableCell className="text-right text-sm font-mono">{formatCurrency(pos.marketPrice)}</TableCell>
+                  <TableCell className="text-right text-sm font-mono">{formatCurrency(pos.marketValue)}</TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <PnlValue value={pos.unrealizedPnl} />
+                      {pnlPct != null && (
+                        <span className={`text-xs ${pnlPct >= 0 ? "text-emerald-500" : "text-red-500"}`}>
+                          ({pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(2)}%)
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
-                )}
-                <TableCell className="text-xs text-muted-foreground">
-                  {formatRelativeTime(pos.lastUpdated)}
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+                  <TableCell className="text-right"><PnlValue value={pos.realizedPnl} /></TableCell>
+                  {showSource && (
+                    <TableCell>
+                      <Badge variant="outline" className="text-xs">{pos.sourceAppName || "Manual"}</Badge>
+                    </TableCell>
+                  )}
+                  <TableCell className="text-xs text-muted-foreground">
+                    {formatRelativeTime(pos.lastUpdated)}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+      <Pagination currentPage={clampedPage} totalPages={totalPages} onPageChange={onPageChange} totalItems={positions.length} label="positions" />
     </div>
   );
 }
@@ -242,6 +305,9 @@ export default function IbkrPage() {
   const [appFilter, setAppFilter] = useState<string>("all");
   const [orderStatusFilter, setOrderStatusFilter] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<string>("orders");
+  const [ordersPage, setOrdersPage] = useState(1);
+  const [positionsPage, setPositionsPage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
 
   const { data: orders = [], isLoading: ordersLoading } = useQuery<IbkrOrder[]>({
     queryKey: ["/api/ibkr/orders"],
@@ -313,7 +379,7 @@ export default function IbkrPage() {
               <Filter className="h-3.5 w-3.5" />
               <span>Filter by:</span>
             </div>
-            <Select value={appFilter} onValueChange={setAppFilter}>
+            <Select value={appFilter} onValueChange={(v) => { setAppFilter(v); setOrdersPage(1); setPositionsPage(1); setHistoryPage(1); }}>
               <SelectTrigger className="w-[180px] h-9 text-sm" data-testid="select-app-filter">
                 <SelectValue placeholder="All Apps" />
               </SelectTrigger>
@@ -358,7 +424,7 @@ export default function IbkrPage() {
         </div>
       )}
 
-      <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setOrderStatusFilter("all"); }} className="space-y-4">
+      <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setOrderStatusFilter("all"); setOrdersPage(1); setPositionsPage(1); setHistoryPage(1); }} className="space-y-4">
         <div className="flex items-center justify-between">
           <TabsList data-testid="tabs-ibkr">
             <TabsTrigger value="orders" data-testid="tab-orders">
@@ -381,7 +447,7 @@ export default function IbkrPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">Active Orders</CardTitle>
-                <Select value={orderStatusFilter} onValueChange={setOrderStatusFilter}>
+                <Select value={orderStatusFilter} onValueChange={(v) => { setOrderStatusFilter(v); setOrdersPage(1); }}>
                   <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="select-order-status-filter">
                     <SelectValue placeholder="All Statuses" />
                   </SelectTrigger>
@@ -394,7 +460,7 @@ export default function IbkrPage() {
               </div>
             </CardHeader>
             <CardContent className="pt-0">
-              <OrdersTable orders={activeOrders} showSource={appFilter === "all"} />
+              <OrdersTable orders={activeOrders} showSource={appFilter === "all"} page={ordersPage} onPageChange={setOrdersPage} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -405,7 +471,7 @@ export default function IbkrPage() {
               <CardTitle className="text-base">Open Positions</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
-              <PositionsTable positions={filteredPositions} showSource={appFilter === "all"} />
+              <PositionsTable positions={filteredPositions} showSource={appFilter === "all"} page={positionsPage} onPageChange={setPositionsPage} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -415,7 +481,7 @@ export default function IbkrPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">Order History</CardTitle>
-                <Select value={orderStatusFilter} onValueChange={setOrderStatusFilter}>
+                <Select value={orderStatusFilter} onValueChange={(v) => { setOrderStatusFilter(v); setHistoryPage(1); }}>
                   <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="select-history-status-filter">
                     <SelectValue placeholder="All Statuses" />
                   </SelectTrigger>
@@ -429,7 +495,7 @@ export default function IbkrPage() {
               </div>
             </CardHeader>
             <CardContent className="pt-0">
-              <OrdersTable orders={[...filledOrders, ...historicalOrders]} showSource={appFilter === "all"} />
+              <OrdersTable orders={[...filledOrders, ...historicalOrders]} showSource={appFilter === "all"} page={historyPage} onPageChange={setHistoryPage} />
             </CardContent>
           </Card>
         </TabsContent>
