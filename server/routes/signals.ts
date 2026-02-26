@@ -85,23 +85,23 @@ export function registerSignalRoutes(app: Express) {
 
   app.post("/api/ingest/signals", asyncHandler(async (req, res) => {
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ message: "Missing or invalid Authorization header. Use: Bearer <api_key>" });
-    }
+    let connectedApp = null;
 
-    const apiKey = authHeader.slice(7);
-    const connectedApp = await storage.getConnectedAppByApiKey(apiKey);
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const apiKey = authHeader.slice(7);
+      connectedApp = await storage.getConnectedAppByApiKey(apiKey);
 
-    if (!connectedApp) {
-      return res.status(401).json({ message: "Invalid API key" });
-    }
+      if (!connectedApp) {
+        return res.status(401).json({ message: "Invalid API key" });
+      }
 
-    if (connectedApp.status !== "active") {
-      return res.status(403).json({ message: "App is inactive. Enable it in TradeSync to send signals." });
-    }
+      if (connectedApp.status !== "active") {
+        return res.status(403).json({ message: "App is inactive. Enable it in TradeSync to send signals." });
+      }
 
-    if (!connectedApp.syncSignals) {
-      return res.status(403).json({ message: "Signal sync is disabled for this app." });
+      if (!connectedApp.syncSignals) {
+        return res.status(403).json({ message: "Signal sync is disabled for this app." });
+      }
     }
 
     const body = req.body;
@@ -184,26 +184,31 @@ export function registerSignalRoutes(app: Express) {
       if (tradePlan.notes) signalDataObj.trade_plan = tradePlan.notes;
     }
 
+    const sourceName = connectedApp ? connectedApp.name : "Manual";
+    const sourceId = connectedApp ? connectedApp.id : null;
+
     const signalData = {
       signalTypeId,
       data: signalDataObj,
       discordChannelId: body.discordChannelId || null,
       status: "active",
-      sourceAppId: connectedApp.id,
-      sourceAppName: connectedApp.name,
+      sourceAppId: sourceId,
+      sourceAppName: sourceName,
     };
 
     const parsed = insertSignalSchema.parse(signalData);
     const signal = await storage.createSignal(parsed);
 
-    await storage.updateConnectedApp(connectedApp.id, { lastSyncAt: new Date() } as any);
+    if (connectedApp) {
+      await storage.updateConnectedApp(connectedApp.id, { lastSyncAt: new Date() } as any);
+    }
 
     await storage.createActivity({
       type: "signal_ingested",
-      title: `Signal from ${connectedApp.name}: ${signalType.name} ${ticker}`,
+      title: `Signal from ${sourceName}: ${signalType.name} ${ticker}`,
       description: `${signalType.name} signal for ${ticker} (${instrumentType})`,
       symbol: ticker,
-      metadata: { sourceApp: connectedApp.name, sourceAppId: connectedApp.id },
+      metadata: { sourceApp: sourceName, sourceAppId: sourceId },
     });
 
     res.status(201).json({ success: true, signal });

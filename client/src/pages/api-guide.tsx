@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,8 @@ import {
   RotateCcw,
   Braces,
   Info,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import type { ConnectedApp } from "@shared/schema";
 
@@ -114,11 +116,9 @@ function generateCode(method: string, path: string, params: Record<string, strin
   const bodyParams = hasBody ? filledParams.filter(([k]) => !pathParams.includes(k)) : [];
   const qs = queryParams.length > 0 ? "?" + queryParams.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&") : "";
   const url = `${baseUrl}${resolvedPath}${qs}`;
-  const authHeader = authKey ? authKey : "YOUR_API_KEY";
-
   if (lang === "shell") {
     let cmd = `curl -X ${method} "${url}"`;
-    if (authKey || path.includes("ingest")) cmd += ` \\\n  -H "Authorization: Bearer ${authHeader}"`;
+    if (authKey) cmd += ` \\\n  -H "Authorization: Bearer ${authKey}"`;
     if (hasBody && bodyParams.length > 0) {
       cmd += ` \\\n  -H "Content-Type: application/json"`;
       const body: Record<string, any> = {};
@@ -131,7 +131,7 @@ function generateCode(method: string, path: string, params: Record<string, strin
   if (lang === "python") {
     let code = `import requests\n\n`;
     const headers: Record<string, string> = {};
-    if (authKey || path.includes("ingest")) headers["Authorization"] = `Bearer ${authHeader}`;
+    if (authKey) headers["Authorization"] = `Bearer ${authKey}`;
     if (hasBody) headers["Content-Type"] = "application/json";
     if (Object.keys(headers).length > 0) {
       code += `headers = ${JSON.stringify(headers, null, 2)}\n\n`;
@@ -151,7 +151,7 @@ function generateCode(method: string, path: string, params: Record<string, strin
   if (lang === "javascript") {
     let code = `const response = await fetch("${url}", {\n  method: "${method}"`;
     const headers: Record<string, string> = {};
-    if (authKey || path.includes("ingest")) headers["Authorization"] = `Bearer ${authHeader}`;
+    if (authKey) headers["Authorization"] = `Bearer ${authKey}`;
     if (hasBody) headers["Content-Type"] = "application/json";
     if (Object.keys(headers).length > 0) {
       code += `,\n  headers: ${JSON.stringify(headers, null, 4).replace(/\n/g, "\n  ")}`;
@@ -177,7 +177,7 @@ function generateCode(method: string, path: string, params: Record<string, strin
     } else {
       code += `  req, _ := http.NewRequest("${method}", "${url}", nil)\n`;
     }
-    if (authKey || path.includes("ingest")) code += `  req.Header.Set("Authorization", "Bearer ${authHeader}")\n`;
+    if (authKey) code += `  req.Header.Set("Authorization", "Bearer ${authKey}")\n`;
     if (hasBody) code += `  req.Header.Set("Content-Type", "application/json")\n`;
     code += `  resp, _ := http.DefaultClient.Do(req)\n  defer resp.Body.Close()\n  body, _ := io.ReadAll(resp.Body)\n  fmt.Println(string(body))\n}`;
     return code;
@@ -186,13 +186,21 @@ function generateCode(method: string, path: string, params: Record<string, strin
   return "";
 }
 
-function EndpointInteractive({ endpoint, baseUrl, authKey }: { endpoint: EndpointDef; baseUrl: string; authKey?: string }) {
+function EndpointInteractive({ endpoint, baseUrl, defaultApiKey }: { endpoint: EndpointDef; baseUrl: string; defaultApiKey?: string }) {
   const [paramValues, setParamValues] = useState<Record<string, string>>({});
   const [codeLang, setCodeLang] = useState("shell");
   const [responseTab, setResponseTab] = useState("sample");
   const [queryResponse, setQueryResponse] = useState<string | null>(null);
   const [queryStatus, setQueryStatus] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [apiKeyValue, setApiKeyValue] = useState(defaultApiKey || "");
+  const [showApiKey, setShowApiKey] = useState(false);
+
+  useEffect(() => {
+    setApiKeyValue(defaultApiKey || "");
+  }, [defaultApiKey]);
+
+  const effectiveAuthKey = apiKeyValue.trim() || undefined;
 
   const setParam = (name: string, value: string) => {
     setParamValues(prev => ({ ...prev, [name]: value }));
@@ -205,8 +213,8 @@ function EndpointInteractive({ endpoint, baseUrl, authKey }: { endpoint: Endpoin
   };
 
   const codeOutput = useMemo(() =>
-    generateCode(endpoint.method, endpoint.path, paramValues, codeLang, baseUrl, authKey, endpoint.params),
-    [endpoint.method, endpoint.path, paramValues, codeLang, baseUrl, authKey, endpoint.params]
+    generateCode(endpoint.method, endpoint.path, paramValues, codeLang, baseUrl, effectiveAuthKey, endpoint.params),
+    [endpoint.method, endpoint.path, paramValues, codeLang, baseUrl, effectiveAuthKey, endpoint.params]
   );
 
   const hasBody = endpoint.method === "POST" || endpoint.method === "PATCH" || endpoint.method === "PUT";
@@ -227,7 +235,7 @@ function EndpointInteractive({ endpoint, baseUrl, authKey }: { endpoint: Endpoin
     setQueryStatus(null);
     try {
       const headers: Record<string, string> = {};
-      if (authKey) headers["Authorization"] = `Bearer ${authKey}`;
+      if (effectiveAuthKey) headers["Authorization"] = `Bearer ${effectiveAuthKey}`;
       if (hasBody) headers["Content-Type"] = "application/json";
 
       const bodyParams = hasBody ? filledParams.filter(([k]) => !pathParams.includes(k)) : [];
@@ -384,15 +392,53 @@ function EndpointInteractive({ endpoint, baseUrl, authKey }: { endpoint: Endpoin
             <code className="text-[13px] font-mono text-zinc-300 break-all flex-1">{queryUrl}</code>
             <CopyButton text={queryUrl} />
           </div>
-          <div className="flex items-center justify-between mt-3">
-            <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-              {!authKey && endpoint.auth && (
-                <>
-                  <Lock className="h-3 w-3" />
-                  <span>Requires API key to run</span>
-                </>
-              )}
+
+          {endpoint.auth && (
+            <div className="mt-3 rounded-lg border border-zinc-700/40 bg-zinc-900/30 overflow-hidden" data-testid="api-key-section">
+              <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-700/30 bg-zinc-800/20">
+                <div className="flex items-center gap-2">
+                  <Key className="h-3.5 w-3.5 text-primary/70" />
+                  <span className="text-sm font-medium text-foreground/90">API Key</span>
+                  <Badge variant="secondary" className="text-[10px] font-normal px-1.5 py-0 bg-primary/10 text-primary/80 border-primary/20">
+                    {effectiveAuthKey ? "Connected App" : "Manual"}
+                  </Badge>
+                </div>
+                {apiKeyValue && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-6 w-6"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    data-testid="button-toggle-api-key"
+                  >
+                    {showApiKey ? <EyeOff className="h-3.5 w-3.5 text-muted-foreground" /> : <Eye className="h-3.5 w-3.5 text-muted-foreground" />}
+                  </Button>
+                )}
+              </div>
+              <div className="p-3">
+                <Input
+                  type={showApiKey ? "text" : "password"}
+                  value={apiKeyValue}
+                  onChange={(e) => setApiKeyValue(e.target.value)}
+                  placeholder="Leave empty for manual mode (no auth)"
+                  className="bg-zinc-950/60 border-zinc-700/30 text-sm font-mono placeholder:text-zinc-600"
+                  data-testid="input-api-key"
+                />
+              </div>
+              <div className="px-4 py-2 border-t border-zinc-700/20 bg-zinc-800/10">
+                <div className="flex items-start gap-1.5">
+                  <Info className="h-3 w-3 text-muted-foreground/50 mt-0.5 shrink-0" />
+                  <p className="text-[11px] text-muted-foreground/60 leading-relaxed">
+                    {effectiveAuthKey
+                      ? "Requests will include the Authorization header with this API key."
+                      : "No API key set. Requests will run without authentication (manual mode)."}
+                  </p>
+                </div>
+              </div>
             </div>
+          )}
+
+          <div className="flex items-center justify-end mt-3">
             <Button
               size="sm"
               onClick={runQuery}
@@ -401,7 +447,6 @@ function EndpointInteractive({ endpoint, baseUrl, authKey }: { endpoint: Endpoin
               data-testid="button-run-query"
             >
               {loading ? "Running..." : "Run Query"}
-              {!authKey && endpoint.auth && <Lock className="ml-1.5 h-3 w-3" />}
             </Button>
           </div>
         </div>
@@ -521,8 +566,8 @@ const sections: SectionDef[] = [
       {
         method: "POST",
         path: "/api/ingest/signals",
-        description: "Push a trading signal from a connected app into TradeSync. Requires a valid API key from a connected app passed via Bearer token authentication.",
-        auth: "Bearer Token",
+        description: "Push a trading signal into TradeSync. Optionally include a Bearer token to link the signal to a connected app. Without an API key, the signal is processed as Manual.",
+        auth: "Bearer Token (Optional)",
         params: [
           { name: "signalType", type: "string", required: false, description: "Signal type name (e.g., 'Common Trade Alert'). Provide this or signalTypeId." },
           { name: "signalTypeId", type: "string", required: false, description: "Signal type UUID. Alternative to signalType name." },
@@ -1106,7 +1151,7 @@ export default function ApiGuidePage() {
             <EndpointInteractive
               endpoint={currentEndpoint}
               baseUrl={baseUrl}
-              authKey={currentEndpoint.auth ? activeApp?.apiKey : undefined}
+              defaultApiKey={currentEndpoint.auth ? activeApp?.apiKey : undefined}
             />
           </div>
         )}
