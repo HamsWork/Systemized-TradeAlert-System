@@ -1,4 +1,4 @@
-import type { Signal, SignalType, ConnectedApp } from "@shared/schema";
+import type { Signal, ConnectedApp } from "@shared/schema";
 
 interface DiscordField {
   name: string;
@@ -81,7 +81,6 @@ function getWebhookForInstrument(app: ConnectedApp, instrumentType: string): str
 
 export async function sendSignalDiscordAlert(
   signal: Signal,
-  signalType: SignalType | null,
   app: ConnectedApp,
 ): Promise<boolean> {
   const data = signal.data as Record<string, any>;
@@ -157,7 +156,7 @@ export async function sendSignalDiscordAlert(
 
   fields.push({
     name: "📡 Source",
-    value: `${app.name}${signalType ? ` via ${signalType.name}` : ""}`,
+    value: app.name,
     inline: false,
   });
 

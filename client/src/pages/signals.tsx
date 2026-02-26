@@ -28,7 +28,6 @@ import {
   Trash2,
   Puzzle,
   CircleDot,
-  OctagonX,
   Target,
   ArrowUpRight,
   ArrowDownRight,
@@ -42,20 +41,15 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
-import { type Signal, type SignalType, type InsertSignal } from "@shared/schema";
+import { type Signal, type InsertSignal } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { SignalDetailDialog } from "@/pages/signal-detail";
 
-function renderTemplatePreview(template: string, data: Record<string, string>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => data[key] || "");
-}
-
 function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { toast } = useToast();
-  const [selectedTypeId, setSelectedTypeId] = useState<string>("");
   const [ticker, setTicker] = useState("");
   const [instrumentType, setInstrumentType] = useState("");
   const [direction, setDirection] = useState("");
@@ -71,10 +65,6 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
   const [raiseMethod, setRaiseMethod] = useState("");
   const [raiseValue, setRaiseValue] = useState("");
   const [notes, setNotes] = useState("");
-
-  const typesQuery = useQuery<SignalType[]>({ queryKey: ["/api/signal-types"] });
-  const signalTypes = typesQuery.data ?? [];
-  const selectedType = signalTypes.find(t => t.id === selectedTypeId);
 
   const resetForm = () => {
     setTicker(""); setInstrumentType(""); setDirection("");
@@ -95,7 +85,6 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
       queryClient.invalidateQueries({ queryKey: ["/api/activity"] });
       toast({ title: "Signal created" });
       resetForm();
-      setSelectedTypeId("");
       onOpenChange(false);
     },
     onError: (error: Error) => {
@@ -131,7 +120,6 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
     if (notes) data.trade_plan = notes;
 
     createMutation.mutate({
-      signalTypeId: selectedTypeId || null,
       data,
       status: "active",
     });
@@ -149,28 +137,6 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-5">
-          <div>
-            <Label className="text-sm font-medium mb-1.5 block">Signal Type <span className="text-muted-foreground font-normal">(optional)</span></Label>
-            <Select value={selectedTypeId} onValueChange={(val) => { setSelectedTypeId(val); resetForm(); }} data-testid="select-signal-type-dropdown">
-              <SelectTrigger data-testid="select-signal-type">
-                <SelectValue placeholder="Select signal type..." />
-              </SelectTrigger>
-              <SelectContent>
-                {signalTypes.map(st => (
-                  <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {selectedType && (
-            <div className="rounded-lg p-3 text-xs" style={{ backgroundColor: selectedType.color + "12", borderLeft: `3px solid ${selectedType.color}` }}>
-              <span className="font-semibold text-sm" style={{ color: selectedType.color }}>{selectedType.name}</span>
-            </div>
-          )}
-
-          <Separator />
-
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 sm:col-span-1">
               <Label className="text-sm font-medium mb-1.5 block">Ticker <span className="text-red-500">*</span></Label>
@@ -334,9 +300,9 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
   );
 }
 
-function getSignalIcon(typeName: string) {
-  if (typeName.toLowerCase().includes("stop loss")) return <OctagonX className="h-4 w-4 text-red-500" />;
-  if (typeName.toLowerCase().includes("take profit")) return <Target className="h-4 w-4 text-blue-500" />;
+function getSignalIcon(instrumentType: string | undefined) {
+  if (instrumentType === "Options") return <Target className="h-4 w-4 text-blue-500" />;
+  if (instrumentType === "LETF") return <TrendingUp className="h-4 w-4 text-amber-500" />;
   return <CircleDot className="h-4 w-4 text-emerald-500" />;
 }
 
@@ -355,12 +321,10 @@ function getDirectionBadge(direction: string | undefined) {
   );
 }
 
-function SignalCard({ signal, signalType, onDelete, onOpen }: { signal: Signal; signalType?: SignalType; onDelete: (id: string) => void; onOpen: (signal: Signal) => void }) {
+function SignalCard({ signal, onDelete, onOpen }: { signal: Signal; onDelete: (id: string) => void; onOpen: (signal: Signal) => void }) {
   const [expanded, setExpanded] = useState(false);
   const data = (signal.data || {}) as Record<string, any>;
   const ticker = data.ticker || data.symbol || "";
-  const typeName = signalType?.name || "Signal";
-  const color = signalType?.color || "#6b7280";
 
   const instrumentType = data.instrument_type;
   const direction = data.direction;
@@ -384,15 +348,8 @@ function SignalCard({ signal, signalType, onDelete, onOpen }: { signal: Signal; 
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
-                {getSignalIcon(typeName)}
+                {getSignalIcon(instrumentType)}
                 {ticker && <span className="font-bold text-lg font-mono" data-testid="text-ticker">{ticker}</span>}
-                <Badge
-                  className="text-[10px] border font-medium"
-                  style={{ backgroundColor: color + "15", color, borderColor: color + "30" }}
-                  data-testid="badge-signal-type"
-                >
-                  {typeName}
-                </Badge>
                 {getDirectionBadge(direction)}
                 {instrumentType && (
                   <Badge variant="outline" className="text-[10px] text-muted-foreground" data-testid="badge-instrument-type">
@@ -534,7 +491,6 @@ export default function SignalsPage() {
   const { toast } = useToast();
 
   const signalsQuery = useQuery<Signal[]>({ queryKey: ["/api/signals"] });
-  const typesQuery = useQuery<SignalType[]>({ queryKey: ["/api/signal-types"] });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -547,7 +503,7 @@ export default function SignalsPage() {
     },
   });
 
-  if (signalsQuery.isLoading || typesQuery.isLoading) {
+  if (signalsQuery.isLoading) {
     return (
       <div className="space-y-4 p-6">
         <Skeleton className="h-8 w-32" />
@@ -561,8 +517,6 @@ export default function SignalsPage() {
   }
 
   const signals = signalsQuery.data ?? [];
-  const signalTypes = typesQuery.data ?? [];
-  const typeMap = new Map(signalTypes.map(st => [st.id, st]));
   const filtered = filter === "all" ? signals : signals.filter((s) => s.status === filter);
 
   return (
@@ -618,7 +572,6 @@ export default function SignalsPage() {
             <SignalCard
               key={signal.id}
               signal={signal}
-              signalType={typeMap.get(signal.signalTypeId)}
               onDelete={(id) => deleteMutation.mutate(id)}
               onOpen={(s) => setSelectedSignal(s)}
             />

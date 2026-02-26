@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { alerts, signalTypes, signals, activityLog, connectedApps, systemSettings, integrations, ibkrOrders, ibkrPositions } from "@shared/schema";
+import { alerts, signals, activityLog, connectedApps, systemSettings, integrations, ibkrOrders, ibkrPositions } from "@shared/schema";
 import { sql } from "drizzle-orm";
 import crypto from "crypto";
 
@@ -12,23 +12,22 @@ export async function seedDatabase() {
   const existingSettings = await db.select().from(systemSettings);
   const existingIntegrations = await db.select().from(integrations);
   const existingApps = await db.select().from(connectedApps);
-  const existingSignalTypes = await db.select().from(signalTypes);
+  const existingSignals = await db.select().from(signals);
   const existingIbkrOrders = await db.select().from(ibkrOrders);
 
   const needsAlertSeed = existingAlerts.length === 0;
   const needsSettingsSeed = existingSettings.length === 0;
   const needsIntegrationsSeed = existingIntegrations.length === 0;
   const needsAppsSeed = existingApps.length === 0;
-  const needsSignalTypesSeed = existingSignalTypes.length === 0;
+  const needsSignalsSeed = existingSignals.length === 0;
   const needsIbkrSeed = existingIbkrOrders.length === 0;
   const hasBuiltInApp = existingApps.some(a => a.slug === "tradesync-api");
 
-  if (!needsAlertSeed && !needsSettingsSeed && !needsIntegrationsSeed && !needsAppsSeed && !needsSignalTypesSeed && !needsIbkrSeed && hasBuiltInApp) {
+  if (!needsAlertSeed && !needsSettingsSeed && !needsIntegrationsSeed && !needsAppsSeed && !needsSignalsSeed && !needsIbkrSeed && hasBuiltInApp) {
     return;
   }
 
   if (!hasBuiltInApp) await seedBuiltInApp();
-  if (needsSignalTypesSeed) await seedSignalTypes();
   if (needsSettingsSeed) await seedSettings();
   if (needsIntegrationsSeed) await seedIntegrations();
   if (needsAppsSeed) await seedApps();
@@ -43,8 +42,6 @@ export async function seedDatabase() {
       { name: "SPY Correction Alert", symbol: "SPY", condition: "below", targetPrice: 480, currentPrice: 512.45, status: "paused", priority: "low", triggered: false },
     ]);
 
-    await seedSignals();
-
     await db.insert(activityLog).values([
       { type: "system", title: "System initialized", description: "TradeSync signal execution system started and connected to data feeds", symbol: null, metadata: null },
       { type: "alert_created", title: "Alert created: BTC Breakout Watch", description: "Price above $72,000 on BTC", symbol: "BTC", metadata: null },
@@ -53,139 +50,38 @@ export async function seedDatabase() {
       { type: "alert_created", title: "Alert created: ETH Support Level", description: "Price below $3,200 on ETH", symbol: "ETH", metadata: null },
     ]);
   }
-}
 
-async function seedSignalTypes() {
-  await db.insert(signalTypes).values([
-    {
-      name: "Common Trade Alert",
-      variables: [
-        { name: "ticker", label: "Ticker", type: "string", required: true },
-        { name: "instrument_type", label: "Instrument Type", type: "select", options: ["Options", "Shares", "LETF"], required: true },
-        { name: "option_type", label: "Option Type", type: "select", options: ["CALL", "PUT"], required: false, showWhen: { field: "instrument_type", value: "Options" } },
-        { name: "strike", label: "Strike Price", type: "number", required: false, showWhen: { field: "instrument_type", value: "Options" } },
-        { name: "expiration", label: "Expiration", type: "date", required: false, showWhen: { field: "instrument_type", value: "Options" } },
-        { name: "etf_ticker", label: "Leveraged ETF Ticker", type: "string", required: false, showWhen: { field: "instrument_type", value: "LETF" } },
-        { name: "leverage", label: "Leverage", type: "select", options: ["2x", "3x", "-2x", "-3x"], required: false, showWhen: { field: "instrument_type", value: "LETF" } },
-        { name: "entry_price", label: "Entry Price", type: "number", required: true },
-        { name: "trade_plan", label: "Trade Plan", type: "text", required: false },
-        { name: "stop_loss_1", label: "Stop Loss 1", type: "number", required: false },
-        { name: "stop_loss_2", label: "Stop Loss 2", type: "number", required: false },
-        { name: "stop_loss_3", label: "Stop Loss 3", type: "number", required: false },
-        { name: "take_profit_1", label: "Take Profit 1", type: "number", required: false },
-        { name: "take_profit_2", label: "Take Profit 2", type: "number", required: false },
-        { name: "take_profit_3", label: "Take Profit 3", type: "number", required: false },
-        { name: "raise_stop_method", label: "Raise Stop Loss Method", type: "select", options: ["None", "Trail by %", "Trail by $", "Move to Entry at TP1", "Move to TP1 at TP2", "Custom"], required: false },
-        { name: "raise_stop_value", label: "Raise Stop Value", type: "string", required: false, showWhen: { field: "raise_stop_method", values: ["Trail by %", "Trail by $", "Custom"] } },
-        { name: "notes", label: "Notes", type: "text", required: false },
-      ],
-      titleTemplate: "{{ticker}} Trade Alert",
-      descriptionTemplate: "{{instrument_type}} entry on {{ticker}} @ ${{entry_price}}",
-      color: "#22c55e",
-      fieldsTemplate: [
-        { name: "Ticker", value: "{{ticker}}", inline: true },
-        { name: "Type", value: "{{instrument_type}}", inline: true },
-        { name: "Entry", value: "${{entry_price}}", inline: true },
-        { name: "Option", value: "{{option_type}} {{strike}} {{expiration}}", inline: true },
-        { name: "ETF", value: "{{etf_ticker}} {{leverage}}", inline: true },
-        { name: "SL1", value: "${{stop_loss_1}}", inline: true },
-        { name: "SL2", value: "${{stop_loss_2}}", inline: true },
-        { name: "SL3", value: "${{stop_loss_3}}", inline: true },
-        { name: "TP1", value: "${{take_profit_1}}", inline: true },
-        { name: "TP2", value: "${{take_profit_2}}", inline: true },
-        { name: "TP3", value: "${{take_profit_3}}", inline: true },
-        { name: "Raise SL", value: "{{raise_stop_method}} {{raise_stop_value}}", inline: true },
-      ],
-      footerTemplate: "TradeSync Signal",
-      showTitle: true,
-      showDescription: true,
-    },
-    {
-      name: "Stop Loss Hit",
-      variables: [
-        { name: "ticker", label: "Ticker", type: "string", required: true },
-        { name: "exit_price", label: "Exit Price", type: "number", required: true },
-        { name: "loss_amount", label: "Loss Amount", type: "number", required: false },
-        { name: "notes", label: "Notes", type: "text", required: false },
-      ],
-      titleTemplate: "{{ticker}} Stop Loss Hit",
-      descriptionTemplate: "Stop loss triggered on {{ticker}} at ${{exit_price}}",
-      color: "#ef4444",
-      fieldsTemplate: [
-        { name: "Ticker", value: "{{ticker}}", inline: true },
-        { name: "Exit Price", value: "${{exit_price}}", inline: true },
-        { name: "Loss", value: "${{loss_amount}}", inline: true },
-      ],
-      footerTemplate: "TradeSync Signal",
-      showTitle: true,
-      showDescription: true,
-    },
-    {
-      name: "Take Profit Hit",
-      variables: [
-        { name: "ticker", label: "Ticker", type: "string", required: true },
-        { name: "tp_level", label: "TP Level", type: "select", options: ["TP1", "TP2", "TP3"], required: true },
-        { name: "exit_price", label: "Exit Price", type: "number", required: true },
-        { name: "profit_amount", label: "Profit Amount", type: "number", required: false },
-        { name: "notes", label: "Notes", type: "text", required: false },
-      ],
-      titleTemplate: "{{ticker}} {{tp_level}} Hit",
-      descriptionTemplate: "{{tp_level}} hit on {{ticker}} at ${{exit_price}}",
-      color: "#3b82f6",
-      fieldsTemplate: [
-        { name: "Ticker", value: "{{ticker}}", inline: true },
-        { name: "TP Level", value: "{{tp_level}}", inline: true },
-        { name: "Exit Price", value: "${{exit_price}}", inline: true },
-        { name: "Profit", value: "${{profit_amount}}", inline: true },
-      ],
-      footerTemplate: "TradeSync Signal",
-      showTitle: true,
-      showDescription: true,
-    },
-  ]);
+  if (needsSignalsSeed) await seedSignals();
 }
 
 async function seedSignals() {
-  const allTypes = await db.select().from(signalTypes);
-  const entryType = allTypes.find(t => t.name === "Common Trade Alert");
-  const slType = allTypes.find(t => t.name === "Stop Loss Hit");
-  const tpType = allTypes.find(t => t.name === "Take Profit Hit");
-
-  if (!entryType || !slType || !tpType) return;
-
   await db.insert(signals).values([
     {
-      signalTypeId: entryType.id,
       data: { ticker: "AAPL", instrument_type: "Options", direction: "Long", strike: "190", expiration: "2026-03-20", entry_price: "189.50", stop_loss_1: "182.00", take_profit_1: "195.00", take_profit_2: "200.00", take_profit_3: "205.00", raise_stop_method: "Move to Entry at TP1", trade_plan: "Breakout above 188 resistance. Scale out at each TP. Full exit if daily close below SL.", notes: "Golden cross on daily chart. RSI at 55, room for upside." },
       status: "active",
       sourceAppName: "Situ Trader",
     },
     {
-      signalTypeId: slType.id,
-      data: { ticker: "TSLA", direction: "Long", exit_price: "230.00", loss_amount: "950.00", notes: "Bearish divergence on RSI. Social sentiment turned negative." },
+      data: { ticker: "TSLA", instrument_type: "Shares", direction: "Long", exit_price: "230.00", loss_amount: "950.00", notes: "Bearish divergence on RSI. Social sentiment turned negative." },
       status: "active",
       sourceAppName: "Crowned Trader",
     },
     {
-      signalTypeId: entryType.id,
       data: { ticker: "MSFT", instrument_type: "Shares", direction: "Long", entry_price: "415.20", stop_loss_1: "400.00", stop_loss_2: "390.00", take_profit_1: "430.00", take_profit_2: "445.00", take_profit_3: "450.00", raise_stop_method: "Trail by %", raise_stop_value: "3%", trade_plan: "Long shares on strong cloud revenue beat. Trailing stop strategy.", notes: "Strong cloud revenue growth. AI integration driving new revenue." },
       status: "active",
       sourceAppName: "Situ Trader",
     },
     {
-      signalTypeId: tpType.id,
-      data: { ticker: "AMD", direction: "Long", tp_level: "TP1", exit_price: "175.00", profit_amount: "460.00", notes: "First target hit on AMD position." },
+      data: { ticker: "AMD", instrument_type: "Shares", direction: "Long", tp_level: "TP1", exit_price: "175.00", profit_amount: "460.00", notes: "First target hit on AMD position." },
       status: "active",
       sourceAppName: "Crowned Trader",
     },
     {
-      signalTypeId: entryType.id,
       data: { ticker: "NVDA", instrument_type: "Options", direction: "Long", strike: "900", expiration: "2026-04-17", entry_price: "875.30", stop_loss_1: "850.00", take_profit_1: "920.00", take_profit_2: "950.00", raise_stop_method: "Move to TP1 at TP2", trade_plan: "Momentum play on AI sector strength. Partial exits at each level.", notes: "ML model detected bullish pattern. Momentum aligning." },
       status: "active",
       sourceAppName: "Crowned Trader",
     },
     {
-      signalTypeId: entryType.id,
       data: { ticker: "TQQQ", instrument_type: "LETF", direction: "Long", entry_price: "58.50", stop_loss_1: "55.00", take_profit_1: "62.00", take_profit_2: "65.00", raise_stop_method: "Trail by $", raise_stop_value: "2.00", trade_plan: "Leveraged play on QQQ momentum. Quick in/out.", notes: "Bullish tech momentum, leveraged ETF play." },
       status: "active",
       sourceAppName: "Situ Trader",

@@ -22,13 +22,6 @@ export class DatabaseStorage implements IStorage {
   updateAlert = alertMethods.updateAlert;
   deleteAlert = alertMethods.deleteAlert;
 
-  getSignalTypes = signalMethods.getSignalTypes;
-  getSignalType = signalMethods.getSignalType;
-  getSignalTypeByName = signalMethods.getSignalTypeByName;
-  createSignalType = signalMethods.createSignalType;
-  updateSignalType = signalMethods.updateSignalType;
-  deleteSignalType = signalMethods.deleteSignalType;
-
   getSignals = signalMethods.getSignals;
   getSignal = signalMethods.getSignal;
   createSignal = signalMethods.createSignal;

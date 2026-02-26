@@ -25,9 +25,7 @@ Plugged-in apps → Send signals → TradeSync executes IBKR trades + sends Disc
 
 ## Data Model
 
-- **Signal Types**: Template definitions with dynamic variables (including `showWhen` conditional visibility), Discord embed templates (title, description, fields, footer, color), and display settings
-- **Signals**: Trading signals linked to a signal type, with flexible JSON `data` field for all variable values, source app tracking (sourceAppId, sourceAppName)
-- **Common Trade Alert** signal type includes: ticker, instrument type (Options/Shares/LETF), conditional option fields (option_type, strike, expiration), conditional LETF fields (etf_ticker, leverage), entry price, trade plan, multiple stop loss levels (SL1-3), multiple take profit levels (TP1-3), raise stop loss method with value, and notes
+- **Signals**: Trading signals with flexible JSON `data` field containing: ticker, instrumentType (Options/Shares/LETF), direction (Long/Short), optional entryPrice, optional tradePlan (targetLevels, stopLoss, raiseStopLevel, notes). Options also require expiration and strike. Source app tracking via sourceAppId and sourceAppName.
 - **Activity Log**: System event feed tracking all actions
 - **Connected Apps**: Plugged-in trading applications with auto-generated API keys, Discord settings (Send Discord Messages toggle + Shares/Options/Leveraged ETF webhook URLs), and IBKR settings (Execute IBKR Trades toggle + Client ID, Host IP, Port)
 - **System Settings**: Key-value toggle/config store for system controls (signals, trading, system)
@@ -42,13 +40,6 @@ Connected apps push signals to TradeSync via `POST /api/ingest/signals` using th
 - Body: `{ ticker, instrumentType, direction, entryPrice?, tradePlan?, ... }`
 - App must be active and have syncSignals enabled
 - Each signal is tagged with sourceAppId and sourceAppName
-
-## Signal Type Variables
-
-Variables support `showWhen` conditional visibility:
-- `{ field: "instrument_type", value: "Options" }` - show only when instrument_type is Options
-- `{ field: "raise_stop_method", values: ["Trail by %", "Trail by $", "Custom"] }` - show when any of the values match
-- Form automatically clears dependent field values when parent selection changes
 
 ## Pages
 
@@ -92,7 +83,7 @@ All routes prefixed with `/api`:
 - `shared/schema.ts` - Barrel file re-exporting all domain schemas
 - `shared/schema/users.ts` - Users table, insert schema, types
 - `shared/schema/alerts.ts` - Alerts table, insert schema, types
-- `shared/schema/signals.ts` - Signal types + signals tables, insert schemas, types
+- `shared/schema/signals.ts` - Signals table, insert schema, types
 - `shared/schema/activity.ts` - Activity log table, insert schema, types
 - `shared/schema/apps.ts` - Connected apps table, insert schema, types
 - `shared/schema/settings.ts` - System settings table, insert schema, types
@@ -105,7 +96,7 @@ All routes prefixed with `/api`:
 - `server/storage/interface.ts` - IStorage interface definition
 - `server/storage/users.ts` - User CRUD methods
 - `server/storage/alerts.ts` - Alert CRUD methods (uses createCrudMethods)
-- `server/storage/signals.ts` - SignalType + Signal CRUD methods (uses createCrudMethods)
+- `server/storage/signals.ts` - Signal CRUD methods (uses createCrudMethods)
 - `server/storage/activity.ts` - Activity log methods
 - `server/storage/apps.ts` - ConnectedApp CRUD methods (uses createCrudMethods + custom getByApiKey)
 - `server/storage/settings.ts` - SystemSettings methods
@@ -118,7 +109,7 @@ All routes prefixed with `/api`:
 - `server/routes.ts` - Barrel file re-exporting registerRoutes
 - `server/routes/dashboard.ts` - GET /api/dashboard/stats
 - `server/routes/alerts.ts` - /api/alerts CRUD routes
-- `server/routes/signals.ts` - /api/signals CRUD + /api/signal-types + /api/ingest/signals
+- `server/routes/signals.ts` - /api/signals CRUD + /api/ingest/signals
 - `server/routes/activity.ts` - /api/activity
 - `server/routes/apps.ts` - /api/connected-apps CRUD + regenerate-key
 - `server/routes/settings.ts` - /api/settings

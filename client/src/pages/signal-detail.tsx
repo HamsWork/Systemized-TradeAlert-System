@@ -26,7 +26,7 @@ import {
   Package,
   Activity,
 } from "lucide-react";
-import { type Signal, type SignalType, type IbkrOrder, type ActivityLogEntry } from "@shared/schema";
+import { type Signal, type IbkrOrder, type ActivityLogEntry } from "@shared/schema";
 import { formatDistanceToNow, format } from "date-fns";
 import { createChart, ColorType, AreaSeries } from "lightweight-charts";
 
@@ -239,8 +239,6 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const typesQuery = useQuery<SignalType[]>({ queryKey: ["/api/signal-types"] });
-
   const data = (signal?.data || {}) as Record<string, any>;
   const ticker = data.ticker || data.symbol || "";
 
@@ -266,11 +264,6 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
 
   if (!signal) return null;
 
-  const signalTypes = typesQuery.data ?? [];
-  const signalType = signalTypes.find(st => st.id === signal.signalTypeId);
-  const typeName = signalType?.name || "Signal";
-  const color = signalType?.color || "#6b7280";
-
   const instrumentType = data.instrument_type;
   const direction = data.direction;
   const entryPrice = data.entry_price ? parseFloat(data.entry_price) : undefined;
@@ -293,13 +286,6 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
           <DialogTitle className="flex items-center gap-2 flex-wrap">
             <BarChart3 className="h-5 w-5 text-primary" />
             <span className="font-mono font-bold text-lg" data-testid="text-symbol">{ticker || "Signal Detail"}</span>
-            <Badge
-              className="text-xs border font-medium"
-              style={{ backgroundColor: color + "15", color, borderColor: color + "30" }}
-              data-testid="badge-signal-type-detail"
-            >
-              {typeName}
-            </Badge>
             {direction && (
               <Badge variant={direction === "Long" ? "default" : "destructive"} className="text-xs" data-testid="badge-direction">
                 {direction === "Long" ? <ArrowUpRight className="mr-1 h-3 w-3" /> : <ArrowDownRight className="mr-1 h-3 w-3" />}

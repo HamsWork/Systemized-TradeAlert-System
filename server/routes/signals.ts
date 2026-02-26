@@ -1,49 +1,11 @@
 import type { Express } from "express";
 import { storage } from "../storage";
-import { insertSignalSchema, insertSignalTypeSchema } from "@shared/schema";
+import { insertSignalSchema } from "@shared/schema";
 import { asyncHandler } from "../lib/async-handler";
 
 const partialSignalSchema = insertSignalSchema.partial();
-const partialSignalTypeSchema = insertSignalTypeSchema.partial();
 
 export function registerSignalRoutes(app: Express) {
-  app.get("/api/signal-types", asyncHandler(async (_req, res) => {
-    const types = await storage.getSignalTypes();
-    res.json(types);
-  }));
-
-  app.get("/api/signal-types/:id", asyncHandler(async (req, res) => {
-    const st = await storage.getSignalType(req.params.id);
-    if (!st) return res.status(404).json({ message: "Signal type not found" });
-    res.json(st);
-  }));
-
-  app.post("/api/signal-types", asyncHandler(async (req, res) => {
-    const parsed = insertSignalTypeSchema.parse(req.body);
-    const st = await storage.createSignalType(parsed);
-    await storage.createActivity({
-      type: "signal_type_created",
-      title: `Signal type created: ${parsed.name}`,
-      description: `New signal template "${parsed.name}" with ${(parsed.variables as any[])?.length || 0} variables`,
-      symbol: null,
-      metadata: null,
-    });
-    res.status(201).json(st);
-  }));
-
-  app.patch("/api/signal-types/:id", asyncHandler(async (req, res) => {
-    const parsed = partialSignalTypeSchema.parse(req.body);
-    const updated = await storage.updateSignalType(req.params.id, parsed);
-    if (!updated) return res.status(404).json({ message: "Signal type not found" });
-    res.json(updated);
-  }));
-
-  app.delete("/api/signal-types/:id", asyncHandler(async (req, res) => {
-    const deleted = await storage.deleteSignalType(req.params.id);
-    if (!deleted) return res.status(404).json({ message: "Signal type not found" });
-    res.json({ success: true });
-  }));
-
   app.get("/api/signals", asyncHandler(async (_req, res) => {
     const sigs = await storage.getSignals();
     res.json(sigs);
@@ -57,15 +19,13 @@ export function registerSignalRoutes(app: Express) {
 
   app.post("/api/signals", asyncHandler(async (req, res) => {
     const parsed = insertSignalSchema.parse(req.body);
-    const signalType = parsed.signalTypeId ? await storage.getSignalType(parsed.signalTypeId) : null;
     const signal = await storage.createSignal(parsed);
     const data = parsed.data as Record<string, any>;
     const ticker = data.ticker || data.symbol || "";
-    const typeName = signalType?.name;
     await storage.createActivity({
       type: "signal_created",
-      title: typeName ? `Signal: ${typeName} - ${ticker}` : `Signal: ${ticker}`,
-      description: typeName ? `${typeName} created for ${ticker}` : `Signal created for ${ticker}`,
+      title: `Signal: ${ticker}`,
+      description: `Signal created for ${ticker}`,
       symbol: ticker || null,
       metadata: null,
     });
@@ -175,7 +135,6 @@ export function registerSignalRoutes(app: Express) {
     const sourceId = connectedApp ? connectedApp.id : null;
 
     const signalData = {
-      signalTypeId: null,
       data: signalDataObj,
       discordChannelId: body.discordChannelId || null,
       status: "active",

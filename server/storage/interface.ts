@@ -1,7 +1,6 @@
 import {
   type User, type InsertUser,
   type Alert, type InsertAlert,
-  type SignalType, type InsertSignalType,
   type Signal, type InsertSignal,
   type ActivityLogEntry, type InsertActivityLog,
   type ConnectedApp, type InsertConnectedApp,
@@ -21,13 +20,6 @@ export interface IStorage {
   createAlert(alert: InsertAlert): Promise<Alert>;
   updateAlert(id: string, data: Partial<InsertAlert>): Promise<Alert | undefined>;
   deleteAlert(id: string): Promise<boolean>;
-
-  getSignalTypes(): Promise<SignalType[]>;
-  getSignalType(id: string): Promise<SignalType | undefined>;
-  getSignalTypeByName(name: string): Promise<SignalType | undefined>;
-  createSignalType(signalType: InsertSignalType): Promise<SignalType>;
-  updateSignalType(id: string, data: Partial<InsertSignalType>): Promise<SignalType | undefined>;
-  deleteSignalType(id: string): Promise<boolean>;
 
   getSignals(): Promise<Signal[]>;
   getSignal(id: string): Promise<Signal | undefined>;

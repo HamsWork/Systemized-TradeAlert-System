@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import { Link } from "wouter";
-import type { Signal, SignalType, ConnectedApp, ActivityLogEntry, Integration, IbkrPosition, IbkrOrder } from "@shared/schema";
+import type { Signal, ConnectedApp, ActivityLogEntry, Integration, IbkrPosition, IbkrOrder } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { PageHeader } from "@/components/page-header";
 
@@ -118,9 +118,8 @@ function SignalFlowCard({ signals, orders, integrations }: { signals: Signal[]; 
   );
 }
 
-function RecentSignals({ signals, signalTypes }: { signals: Signal[]; signalTypes: SignalType[] }) {
+function RecentSignals({ signals }: { signals: Signal[] }) {
   const recent = signals.slice(0, 5);
-  const typeMap = new Map(signalTypes.map(st => [st.id, st]));
   return (
     <Card data-testid="card-recent-signals">
       <CardHeader className="pb-2">
@@ -142,8 +141,8 @@ function RecentSignals({ signals, signalTypes }: { signals: Signal[]; signalType
             {recent.map((signal) => {
               const data = (signal.data || {}) as Record<string, any>;
               const ticker = data.ticker || data.symbol || "";
-              const st = typeMap.get(signal.signalTypeId);
-              const color = st?.color || "#6b7280";
+              const instrumentType = data.instrument_type;
+              const color = instrumentType === "Options" ? "#3b82f6" : instrumentType === "LETF" ? "#f59e0b" : "#10b981";
               return (
                 <div key={signal.id} className="flex items-center justify-between gap-3 py-2 border-b last:border-b-0" data-testid={`recent-signal-${signal.id}`}>
                   <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -151,7 +150,7 @@ function RecentSignals({ signals, signalTypes }: { signals: Signal[]; signalType
                       <TrendingUp className="h-3.5 w-3.5" style={{ color }} />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium">{ticker} <span className="text-xs text-muted-foreground">{st?.name || ""}</span></p>
+                      <p className="text-sm font-medium">{ticker} <span className="text-xs text-muted-foreground">{instrumentType || ""}</span></p>
                       {data.entry_price && <p className="text-xs text-muted-foreground">${data.entry_price}</p>}
                     </div>
                   </div>
@@ -345,7 +344,6 @@ export default function Dashboard() {
   }>({ queryKey: ["/api/dashboard/stats"] });
 
   const signalsQuery = useQuery<Signal[]>({ queryKey: ["/api/signals"] });
-  const signalTypesQuery = useQuery<SignalType[]>({ queryKey: ["/api/signal-types"] });
   const activityQuery = useQuery<ActivityLogEntry[]>({ queryKey: ["/api/activity"] });
   const appsQuery = useQuery<ConnectedApp[]>({ queryKey: ["/api/connected-apps"] });
   const integrationsQuery = useQuery<Integration[]>({ queryKey: ["/api/integrations"] });
@@ -373,7 +371,6 @@ export default function Dashboard() {
 
   const stats = statsQuery.data;
   const signals = signalsQuery.data ?? [];
-  const signalTypesList = signalTypesQuery.data ?? [];
   const activity = activityQuery.data ?? [];
   const apps = appsQuery.data ?? [];
   const integrations = integrationsQuery.data ?? [];
@@ -428,7 +425,7 @@ export default function Dashboard() {
 
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
         <SignalFlowCard signals={signals} orders={orders} integrations={integrations} />
-        <RecentSignals signals={signals} signalTypes={signalTypesList} />
+        <RecentSignals signals={signals} />
         <ActivityFeed activity={activity} />
       </div>
 
