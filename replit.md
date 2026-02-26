@@ -29,12 +29,7 @@ Connected apps push signals to TradeSync via `POST /api/ingest/signals` using th
 
 ## Pages
 
-1. **Dashboard / System Control Center** (`/`) - Full system visibility with tabs:
-   - System Overview (stats + status indicators)
-   - System Controls (all toggle switches grouped by category)
-   - Integrations (Discord channels, IBKR accounts with notification toggles)
-   - Connected Apps (plugged-in apps with on/off switches)
-   - Trading (execution controls + broker accounts)
+1. **Dashboard** (`/`) - System overview with stat cards, recent alerts, recent signals, activity feed, connections status, and positions summary
 2. **Alerts** (`/alerts`) - Full CRUD for price alerts with filtering
 3. **Signals** (`/signals`) - Full CRUD for trading signals with filtering, shows source app badges
 4. **Activity** (`/activity`) - Complete activity log
@@ -42,6 +37,7 @@ Connected apps push signals to TradeSync via `POST /api/ingest/signals` using th
 6. **Connected Apps** (`/connected-apps`) - Manage plugged-in trading apps with API key management (show/hide, copy, regenerate)
 7. **API Guide** (`/api-guide`) - Full API documentation with interactive signal testing tool
 8. **IBKR Trading** (`/ibkr`) - Dedicated IBKR page with order status, open positions, and order history per connected app
+9. **Settings** (`/settings`) - System controls organized by category (alerts, signals, trading, system) with toggle switches and value inputs
 
 ## API Routes
 
@@ -65,7 +61,8 @@ All routes prefixed with `/api`:
 - `server/storage.ts` - Storage interface and DatabaseStorage implementation
 - `server/routes.ts` - API route handlers including signal ingestion
 - `server/seed.ts` - Seed data for all tables
-- `client/src/pages/dashboard.tsx` - System Control Center dashboard
+- `client/src/pages/dashboard.tsx` - Overview dashboard with stats, recent items, activity feed
+- `client/src/pages/settings.tsx` - System settings controls by category
 - `client/src/pages/connected-apps.tsx` - Connected apps management with API key display
 - `client/src/pages/signals.tsx` - Signals page with source app badges
 - `client/src/components/app-sidebar.tsx` - Navigation sidebar

@@ -16,6 +16,7 @@ import IntegrationsPage from "@/pages/integrations";
 import ConnectedAppsPage from "@/pages/connected-apps";
 import ApiGuidePage from "@/pages/api-guide";
 import IbkrPage from "@/pages/ibkr";
+import SettingsPage from "@/pages/settings";
 
 function Router() {
   return (
@@ -28,6 +29,7 @@ function Router() {
       <Route path="/connected-apps" component={ConnectedAppsPage} />
       <Route path="/ibkr" component={IbkrPage} />
       <Route path="/api-guide" component={ApiGuidePage} />
+      <Route path="/settings" component={SettingsPage} />
       <Route component={NotFound} />
     </Switch>
   );
