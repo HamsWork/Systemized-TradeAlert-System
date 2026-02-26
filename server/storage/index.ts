@@ -36,6 +36,7 @@ export class DatabaseStorage implements IStorage {
   deleteSignal = signalMethods.deleteSignal;
 
   getActivityLog = activityMethods.getActivityLog;
+  getActivityBySymbol = activityMethods.getActivityBySymbol;
   createActivity = activityMethods.createActivity;
 
   getConnectedApps = appMethods.getConnectedApps;
@@ -56,6 +57,7 @@ export class DatabaseStorage implements IStorage {
   deleteIntegration = integrationMethods.deleteIntegration;
 
   getIbkrOrders = ibkrMethods.getIbkrOrders;
+  getIbkrOrdersBySymbol = ibkrMethods.getIbkrOrdersBySymbol;
   getIbkrOrdersByIntegration = ibkrMethods.getIbkrOrdersByIntegration;
   getIbkrOrderByOrderId = ibkrMethods.getIbkrOrderByOrderId;
   createIbkrOrder = ibkrMethods.createIbkrOrder;

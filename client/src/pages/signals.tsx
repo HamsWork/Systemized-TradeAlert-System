@@ -45,6 +45,7 @@ import {
 import { type Signal, type SignalType, type InsertSignal } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
+import { useLocation } from "wouter";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 
@@ -358,6 +359,7 @@ function getDirectionBadge(direction: string | undefined) {
 
 function SignalCard({ signal, signalType, onDelete }: { signal: Signal; signalType?: SignalType; onDelete: (id: string) => void }) {
   const [expanded, setExpanded] = useState(false);
+  const [, navigate] = useLocation();
   const data = (signal.data || {}) as Record<string, any>;
   const ticker = data.ticker || data.symbol || "";
   const typeName = signalType?.name || "Signal";
@@ -379,7 +381,7 @@ function SignalCard({ signal, signalType, onDelete }: { signal: Signal; signalTy
   const hasTradePlan = tpLevels.length > 0 || slLevels.length > 0 || raiseMethod || tradePlan;
 
   return (
-    <Card className="hover-elevate overflow-hidden" data-testid={`card-signal-${signal.id}`}>
+    <Card className="hover-elevate overflow-hidden cursor-pointer" onClick={() => navigate(`/signals/${signal.id}`)} data-testid={`card-signal-${signal.id}`}>
       <CardContent className="p-0">
         <div className="p-4">
           <div className="flex items-start justify-between gap-2">
@@ -429,7 +431,7 @@ function SignalCard({ signal, signalType, onDelete }: { signal: Signal; signalTy
               {hasTradePlan && (
                 <div className="mt-3">
                   <button
-                    onClick={() => setExpanded(!expanded)}
+                    onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
                     className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
                     data-testid="button-toggle-trade-plan"
                   >
@@ -516,7 +518,7 @@ function SignalCard({ signal, signalType, onDelete }: { signal: Signal; signalTy
               size="icon"
               variant="ghost"
               className="shrink-0"
-              onClick={() => onDelete(signal.id)}
+              onClick={(e) => { e.stopPropagation(); onDelete(signal.id); }}
               data-testid={`button-delete-signal-${signal.id}`}
             >
               <Trash2 className="h-4 w-4" />

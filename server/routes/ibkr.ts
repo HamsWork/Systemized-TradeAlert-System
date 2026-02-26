@@ -13,6 +13,11 @@ export function registerIbkrRoutes(app: Express) {
     res.json(orders);
   }));
 
+  app.get("/api/ibkr/orders/by-symbol/:symbol", asyncHandler(async (req, res) => {
+    const orders = await storage.getIbkrOrdersBySymbol(req.params.symbol.toUpperCase());
+    res.json(orders);
+  }));
+
   app.get("/api/ibkr/orders/:integrationId", asyncHandler(async (req, res) => {
     const orders = await storage.getIbkrOrdersByIntegration(req.params.integrationId);
     res.json(orders);

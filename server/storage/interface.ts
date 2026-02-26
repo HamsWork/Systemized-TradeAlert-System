@@ -36,6 +36,7 @@ export interface IStorage {
   deleteSignal(id: string): Promise<boolean>;
 
   getActivityLog(): Promise<ActivityLogEntry[]>;
+  getActivityBySymbol(symbol: string): Promise<ActivityLogEntry[]>;
   createActivity(entry: InsertActivityLog): Promise<ActivityLogEntry>;
 
   getConnectedApps(): Promise<ConnectedApp[]>;
@@ -56,6 +57,7 @@ export interface IStorage {
   deleteIntegration(id: string): Promise<boolean>;
 
   getIbkrOrders(): Promise<IbkrOrder[]>;
+  getIbkrOrdersBySymbol(symbol: string): Promise<IbkrOrder[]>;
   getIbkrOrdersByIntegration(integrationId: string): Promise<IbkrOrder[]>;
   getIbkrOrderByOrderId(orderId: string, integrationId: string): Promise<IbkrOrder | undefined>;
   createIbkrOrder(order: InsertIbkrOrder): Promise<IbkrOrder>;

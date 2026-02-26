@@ -10,6 +10,10 @@ export const ibkrMethods = {
     return db.select().from(ibkrOrders).orderBy(desc(ibkrOrders.submittedAt));
   },
 
+  async getIbkrOrdersBySymbol(symbol: string): Promise<IbkrOrder[]> {
+    return db.select().from(ibkrOrders).where(eq(ibkrOrders.symbol, symbol)).orderBy(desc(ibkrOrders.submittedAt));
+  },
+
   async getIbkrOrdersByIntegration(integrationId: string): Promise<IbkrOrder[]> {
     return db.select().from(ibkrOrders).where(eq(ibkrOrders.integrationId, integrationId)).orderBy(desc(ibkrOrders.submittedAt));
   },

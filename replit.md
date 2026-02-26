@@ -53,7 +53,8 @@ Variables support `showWhen` conditional visibility:
 ## Pages
 
 1. **Dashboard** (`/`) - System overview with signal pipeline flow card, stat cards, recent signals, activity feed, connections status, and positions summary
-2. **Signals** (`/signals`) - Full CRUD for trading signals with filtering, shows source app badges
+2. **Signals** (`/signals`) - Full CRUD for trading signals with filtering, shows source app badges. Clicking a signal card opens the detail page.
+2b. **Signal Detail** (`/signals/:id`) - Trade chart (lightweight-charts) with entry/TP/SL price lines, related IBKR orders list, activity feed, and signal details sidebar
 3. **Activity** (`/activity`) - Complete activity log
 4. **Integrations** (`/integrations`) - Full CRUD for Discord channels and IBKR trading accounts with notification/trading toggles
 5. **Connected Apps** (`/connected-apps`) - Manage plugged-in trading apps with API key management (show/hide, copy, regenerate)
@@ -66,12 +67,12 @@ Variables support `showWhen` conditional visibility:
 All routes prefixed with `/api`:
 - `GET/POST /signals`, `GET/PATCH/DELETE /signals/:id`
 - `POST /ingest/signals` - External signal ingestion (requires Bearer API key auth)
-- `GET /activity`
+- `GET /activity`, `GET /activity/by-symbol/:symbol`
 - `GET/POST /connected-apps`, `GET/PATCH/DELETE /connected-apps/:id`
 - `POST /connected-apps/:id/regenerate-key` - Regenerate API key for an app
 - `GET/PUT /settings` (system settings - upsert by key)
 - `GET/POST /integrations`, `PATCH/DELETE /integrations/:id`
-- `GET /ibkr/orders`, `GET /ibkr/orders/:integrationId`, `POST /ibkr/orders`, `PATCH /ibkr/orders/:id`
+- `GET /ibkr/orders`, `GET /ibkr/orders/by-symbol/:symbol`, `GET /ibkr/orders/:integrationId`, `POST /ibkr/orders`, `PATCH /ibkr/orders/:id`
 - `GET /ibkr/positions`, `GET /ibkr/positions/:integrationId`, `POST /ibkr/positions`, `PATCH /ibkr/positions/:id`
 - `POST /ibkr/connect/:integrationId` - Connect to IBKR TWS/Gateway for an integration
 - `POST /ibkr/disconnect/:integrationId` - Disconnect from IBKR for an integration
@@ -136,7 +137,8 @@ All routes prefixed with `/api`:
 - `client/src/pages/dashboard.tsx` - Overview dashboard with signal pipeline flow, stats, recent signals, activity feed
 - `client/src/pages/settings.tsx` - System settings controls by category
 - `client/src/pages/connected-apps.tsx` - Connected apps management with API key display
-- `client/src/pages/signals.tsx` - Signals page with source app badges
+- `client/src/pages/signals.tsx` - Signals page with source app badges (cards link to detail page)
+- `client/src/pages/signal-detail.tsx` - Signal detail page with trade chart (lightweight-charts), IBKR orders, activity feed
 - `client/src/pages/api-guide.tsx` - Interactive API guide with live code examples
 - `client/src/components/app-sidebar.tsx` - Navigation sidebar
 

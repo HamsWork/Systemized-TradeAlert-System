@@ -7,4 +7,9 @@ export function registerActivityRoutes(app: Express) {
     const log = await storage.getActivityLog();
     res.json(log);
   }));
+
+  app.get("/api/activity/by-symbol/:symbol", asyncHandler(async (req, res) => {
+    const entries = await storage.getActivityBySymbol(req.params.symbol.toUpperCase());
+    res.json(entries);
+  }));
 }
