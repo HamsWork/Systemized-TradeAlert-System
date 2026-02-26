@@ -315,7 +315,7 @@ export default function IbkrPage() {
           <div>
             <h1 className="text-xl font-bold tracking-tight" data-testid="heading-ibkr">IBKR</h1>
             <p className="text-sm text-muted-foreground">
-              {ibkrIntegrations.length} account{ibkrIntegrations.length !== 1 ? "s" : ""} connected
+              Orders and positions, synchronized in real time with IBKR
             </p>
           </div>
         </div>
