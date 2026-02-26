@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { alerts, signals, activityLog, connectedApps, systemSettings, integrations } from "@shared/schema";
+import { alerts, signals, activityLog, connectedApps, systemSettings, integrations, ibkrOrders, ibkrPositions } from "@shared/schema";
 import { sql } from "drizzle-orm";
 import crypto from "crypto";
 
@@ -13,12 +13,15 @@ export async function seedDatabase() {
   const existingIntegrations = await db.select().from(integrations);
   const existingApps = await db.select().from(connectedApps);
 
+  const existingIbkrOrders = await db.select().from(ibkrOrders);
+  const needsIbkrSeed = existingIbkrOrders.length === 0;
+
   const needsAlertSeed = existingAlerts.length === 0;
   const needsSettingsSeed = existingSettings.length === 0;
   const needsIntegrationsSeed = existingIntegrations.length === 0;
   const needsAppsSeed = existingApps.length === 0;
 
-  if (!needsAlertSeed && !needsSettingsSeed && !needsIntegrationsSeed && !needsAppsSeed) {
+  if (!needsAlertSeed && !needsSettingsSeed && !needsIntegrationsSeed && !needsAppsSeed && !needsIbkrSeed) {
     return;
   }
 
@@ -26,6 +29,7 @@ export async function seedDatabase() {
     if (needsSettingsSeed) await seedSettings();
     if (needsIntegrationsSeed) await seedIntegrations();
     if (needsAppsSeed) await seedApps();
+    if (needsIbkrSeed) await seedIbkrData();
     return;
   }
 
@@ -282,6 +286,212 @@ async function seedIntegrations() {
       notifySystem: false,
       autoTrade: false,
       paperTrade: false,
+    },
+  ]);
+}
+
+async function seedIbkrData() {
+  const allIntegrations = await db.select().from(integrations);
+  const ibkrAccounts = allIntegrations.filter(i => i.type === "ibkr");
+  if (ibkrAccounts.length === 0) return;
+
+  const allApps = await db.select().from(connectedApps);
+  const paperAccount = ibkrAccounts.find(a => (a.config as any)?.accountType === "paper") || ibkrAccounts[0];
+  const situTrader = allApps.find(a => a.slug === "situ-trader");
+  const crownedTrader = allApps.find(a => a.slug === "crowned-trader");
+
+  const now = new Date();
+  const h = (hours: number) => new Date(now.getTime() - hours * 3600000);
+
+  await db.insert(ibkrOrders).values([
+    {
+      integrationId: paperAccount.id,
+      sourceAppId: situTrader?.id || null,
+      sourceAppName: situTrader?.name || "Situ Trader",
+      orderId: "ORD-2401001",
+      symbol: "AAPL",
+      side: "buy",
+      orderType: "limit",
+      quantity: 100,
+      limitPrice: 178.50,
+      filledQuantity: 100,
+      avgFillPrice: 178.45,
+      status: "filled",
+      timeInForce: "DAY",
+      commission: 1.00,
+      submittedAt: h(48),
+      filledAt: h(47.5),
+    },
+    {
+      integrationId: paperAccount.id,
+      sourceAppId: situTrader?.id || null,
+      sourceAppName: situTrader?.name || "Situ Trader",
+      orderId: "ORD-2401002",
+      symbol: "TSLA",
+      side: "buy",
+      orderType: "market",
+      quantity: 50,
+      filledQuantity: 50,
+      avgFillPrice: 248.30,
+      status: "filled",
+      timeInForce: "DAY",
+      commission: 1.00,
+      submittedAt: h(36),
+      filledAt: h(36),
+    },
+    {
+      integrationId: paperAccount.id,
+      sourceAppId: crownedTrader?.id || null,
+      sourceAppName: crownedTrader?.name || "Crowned Trader",
+      orderId: "ORD-2401003",
+      symbol: "NVDA",
+      side: "buy",
+      orderType: "limit",
+      quantity: 75,
+      limitPrice: 875.00,
+      filledQuantity: 75,
+      avgFillPrice: 874.50,
+      status: "filled",
+      timeInForce: "GTC",
+      commission: 1.00,
+      submittedAt: h(24),
+      filledAt: h(23),
+    },
+    {
+      integrationId: paperAccount.id,
+      sourceAppId: crownedTrader?.id || null,
+      sourceAppName: crownedTrader?.name || "Crowned Trader",
+      orderId: "ORD-2401004",
+      symbol: "MSFT",
+      side: "sell",
+      orderType: "limit",
+      quantity: 30,
+      limitPrice: 420.00,
+      filledQuantity: 0,
+      status: "pending",
+      timeInForce: "GTC",
+      submittedAt: h(12),
+    },
+    {
+      integrationId: paperAccount.id,
+      sourceAppId: situTrader?.id || null,
+      sourceAppName: situTrader?.name || "Situ Trader",
+      orderId: "ORD-2401005",
+      symbol: "META",
+      side: "buy",
+      orderType: "stop_limit",
+      quantity: 40,
+      limitPrice: 510.00,
+      stopPrice: 505.00,
+      filledQuantity: 0,
+      status: "submitted",
+      timeInForce: "DAY",
+      submittedAt: h(6),
+    },
+    {
+      integrationId: paperAccount.id,
+      sourceAppId: situTrader?.id || null,
+      sourceAppName: situTrader?.name || "Situ Trader",
+      orderId: "ORD-2401006",
+      symbol: "AMZN",
+      side: "sell",
+      orderType: "market",
+      quantity: 20,
+      filledQuantity: 20,
+      avgFillPrice: 185.20,
+      status: "filled",
+      timeInForce: "DAY",
+      commission: 1.00,
+      submittedAt: h(3),
+      filledAt: h(3),
+    },
+    {
+      integrationId: paperAccount.id,
+      sourceAppId: crownedTrader?.id || null,
+      sourceAppName: crownedTrader?.name || "Crowned Trader",
+      orderId: "ORD-2401007",
+      symbol: "SPY",
+      side: "buy",
+      orderType: "limit",
+      quantity: 200,
+      limitPrice: 502.50,
+      filledQuantity: 0,
+      status: "cancelled",
+      timeInForce: "DAY",
+      submittedAt: h(72),
+      cancelledAt: h(71),
+    },
+    {
+      integrationId: paperAccount.id,
+      sourceAppId: situTrader?.id || null,
+      sourceAppName: situTrader?.name || "Situ Trader",
+      orderId: "ORD-2401008",
+      symbol: "GOOGL",
+      side: "buy",
+      orderType: "market",
+      quantity: 25,
+      filledQuantity: 25,
+      avgFillPrice: 172.80,
+      status: "filled",
+      timeInForce: "DAY",
+      commission: 1.00,
+      submittedAt: h(1),
+      filledAt: h(1),
+    },
+  ]);
+
+  await db.insert(ibkrPositions).values([
+    {
+      integrationId: paperAccount.id,
+      sourceAppId: situTrader?.id || null,
+      sourceAppName: situTrader?.name || "Situ Trader",
+      symbol: "AAPL",
+      quantity: 100,
+      avgCost: 178.45,
+      marketPrice: 182.30,
+      marketValue: 18230,
+      unrealizedPnl: 385.00,
+      realizedPnl: 0,
+      currency: "USD",
+    },
+    {
+      integrationId: paperAccount.id,
+      sourceAppId: situTrader?.id || null,
+      sourceAppName: situTrader?.name || "Situ Trader",
+      symbol: "TSLA",
+      quantity: 50,
+      avgCost: 248.30,
+      marketPrice: 255.10,
+      marketValue: 12755,
+      unrealizedPnl: 340.00,
+      realizedPnl: 0,
+      currency: "USD",
+    },
+    {
+      integrationId: paperAccount.id,
+      sourceAppId: crownedTrader?.id || null,
+      sourceAppName: crownedTrader?.name || "Crowned Trader",
+      symbol: "NVDA",
+      quantity: 75,
+      avgCost: 874.50,
+      marketPrice: 890.25,
+      marketValue: 66768.75,
+      unrealizedPnl: 1181.25,
+      realizedPnl: 0,
+      currency: "USD",
+    },
+    {
+      integrationId: paperAccount.id,
+      sourceAppId: situTrader?.id || null,
+      sourceAppName: situTrader?.name || "Situ Trader",
+      symbol: "GOOGL",
+      quantity: 25,
+      avgCost: 172.80,
+      marketPrice: 174.50,
+      marketValue: 4362.50,
+      unrealizedPnl: 42.50,
+      realizedPnl: 0,
+      currency: "USD",
     },
   ]);
 }

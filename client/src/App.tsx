@@ -15,6 +15,7 @@ import ActivityPage from "@/pages/activity";
 import IntegrationsPage from "@/pages/integrations";
 import ConnectedAppsPage from "@/pages/connected-apps";
 import ApiGuidePage from "@/pages/api-guide";
+import IbkrPage from "@/pages/ibkr";
 
 function Router() {
   return (
@@ -25,6 +26,7 @@ function Router() {
       <Route path="/activity" component={ActivityPage} />
       <Route path="/integrations" component={IntegrationsPage} />
       <Route path="/connected-apps" component={ConnectedAppsPage} />
+      <Route path="/ibkr" component={IbkrPage} />
       <Route path="/api-guide" component={ApiGuidePage} />
       <Route component={NotFound} />
     </Switch>

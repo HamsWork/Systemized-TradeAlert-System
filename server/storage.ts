@@ -6,8 +6,10 @@ import {
   type ConnectedApp, type InsertConnectedApp,
   type SystemSetting, type InsertSystemSetting,
   type Integration, type InsertIntegration,
+  type IbkrOrder, type InsertIbkrOrder,
+  type IbkrPosition, type InsertIbkrPosition,
   users, alerts, signals, activityLog, connectedApps,
-  systemSettings, integrations,
+  systemSettings, integrations, ibkrOrders, ibkrPositions,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc } from "drizzle-orm";
@@ -48,6 +50,16 @@ export interface IStorage {
   createIntegration(integration: InsertIntegration): Promise<Integration>;
   updateIntegration(id: string, data: Partial<InsertIntegration>): Promise<Integration | undefined>;
   deleteIntegration(id: string): Promise<boolean>;
+
+  getIbkrOrders(): Promise<IbkrOrder[]>;
+  getIbkrOrdersByIntegration(integrationId: string): Promise<IbkrOrder[]>;
+  createIbkrOrder(order: InsertIbkrOrder): Promise<IbkrOrder>;
+  updateIbkrOrder(id: string, data: Partial<InsertIbkrOrder>): Promise<IbkrOrder | undefined>;
+
+  getIbkrPositions(): Promise<IbkrPosition[]>;
+  getIbkrPositionsByIntegration(integrationId: string): Promise<IbkrPosition[]>;
+  createIbkrPosition(position: InsertIbkrPosition): Promise<IbkrPosition>;
+  updateIbkrPosition(id: string, data: Partial<InsertIbkrPosition>): Promise<IbkrPosition | undefined>;
 
   getDashboardStats(): Promise<{
     totalAlerts: number;
@@ -201,6 +213,42 @@ export class DatabaseStorage implements IStorage {
   async deleteIntegration(id: string): Promise<boolean> {
     const result = await db.delete(integrations).where(eq(integrations.id, id)).returning();
     return result.length > 0;
+  }
+
+  async getIbkrOrders(): Promise<IbkrOrder[]> {
+    return db.select().from(ibkrOrders).orderBy(desc(ibkrOrders.submittedAt));
+  }
+
+  async getIbkrOrdersByIntegration(integrationId: string): Promise<IbkrOrder[]> {
+    return db.select().from(ibkrOrders).where(eq(ibkrOrders.integrationId, integrationId)).orderBy(desc(ibkrOrders.submittedAt));
+  }
+
+  async createIbkrOrder(order: InsertIbkrOrder): Promise<IbkrOrder> {
+    const [created] = await db.insert(ibkrOrders).values(order).returning();
+    return created;
+  }
+
+  async updateIbkrOrder(id: string, data: Partial<InsertIbkrOrder>): Promise<IbkrOrder | undefined> {
+    const [updated] = await db.update(ibkrOrders).set(data).where(eq(ibkrOrders.id, id)).returning();
+    return updated;
+  }
+
+  async getIbkrPositions(): Promise<IbkrPosition[]> {
+    return db.select().from(ibkrPositions).orderBy(desc(ibkrPositions.lastUpdated));
+  }
+
+  async getIbkrPositionsByIntegration(integrationId: string): Promise<IbkrPosition[]> {
+    return db.select().from(ibkrPositions).where(eq(ibkrPositions.integrationId, integrationId)).orderBy(desc(ibkrPositions.lastUpdated));
+  }
+
+  async createIbkrPosition(position: InsertIbkrPosition): Promise<IbkrPosition> {
+    const [created] = await db.insert(ibkrPositions).values(position).returning();
+    return created;
+  }
+
+  async updateIbkrPosition(id: string, data: Partial<InsertIbkrPosition>): Promise<IbkrPosition | undefined> {
+    const [updated] = await db.update(ibkrPositions).set(data).where(eq(ibkrPositions.id, id)).returning();
+    return updated;
   }
 
   async getDashboardStats() {

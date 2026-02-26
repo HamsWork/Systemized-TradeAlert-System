@@ -41,6 +41,7 @@ Connected apps push signals to TradeSync via `POST /api/ingest/signals` using th
 5. **Integrations** (`/integrations`) - Full CRUD for Discord channels and IBKR trading accounts with notification/trading toggles
 6. **Connected Apps** (`/connected-apps`) - Manage plugged-in trading apps with API key management (show/hide, copy, regenerate)
 7. **API Guide** (`/api-guide`) - Full API documentation with interactive signal testing tool
+8. **IBKR Trading** (`/ibkr`) - Dedicated IBKR page with order status, open positions, and order history per connected app
 
 ## API Routes
 
@@ -53,11 +54,13 @@ All routes prefixed with `/api`:
 - `POST /connected-apps/:id/regenerate-key` - Regenerate API key for an app
 - `GET/PUT /settings` (system settings - upsert by key)
 - `GET/POST /integrations`, `PATCH/DELETE /integrations/:id`
+- `GET /ibkr/orders`, `GET /ibkr/orders/:integrationId`, `POST /ibkr/orders`, `PATCH /ibkr/orders/:id`
+- `GET /ibkr/positions`, `GET /ibkr/positions/:integrationId`, `POST /ibkr/positions`, `PATCH /ibkr/positions/:id`
 - `GET /dashboard/stats`
 
 ## Key Files
 
-- `shared/schema.ts` - Data models and Zod validation schemas (users, alerts, signals, activityLog, connectedApps, systemSettings, integrations)
+- `shared/schema.ts` - Data models and Zod validation schemas (users, alerts, signals, activityLog, connectedApps, systemSettings, integrations, ibkrOrders, ibkrPositions)
 - `server/db.ts` - Database connection with keepAlive and error handling
 - `server/storage.ts` - Storage interface and DatabaseStorage implementation
 - `server/routes.ts` - API route handlers including signal ingestion

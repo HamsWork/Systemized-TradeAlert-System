@@ -8,6 +8,7 @@ import {
   Puzzle,
   Radio,
   BookOpen,
+  Landmark,
 } from "lucide-react";
 import {
   Sidebar,
@@ -30,6 +31,7 @@ const navItems = [
   { title: "Activity", url: "/activity", icon: Activity },
   { title: "Integrations", url: "/integrations", icon: Radio },
   { title: "Connected Apps", url: "/connected-apps", icon: Puzzle },
+  { title: "IBKR Trading", url: "/ibkr", icon: Landmark },
   { title: "API Guide", url: "/api-guide", icon: BookOpen },
 ];
 
