@@ -142,10 +142,15 @@ class IbkrSyncManager {
     const openOrders = await client.fetchOpenOrders();
 
     for (const oo of openOrders) {
+      const secType = oo.contract.secType || "STK";
       const orderData: InsertIbkrOrder = {
         integrationId,
         orderId: String(oo.orderId),
         symbol: oo.contract.symbol || "UNKNOWN",
+        secType,
+        expiration: oo.contract.lastTradeDateOrContractMonth || null,
+        strike: secType === "OPT" ? (oo.contract.strike ?? null) : null,
+        right: secType === "OPT" ? (oo.contract.right || null) : null,
         side: oo.order.action?.toLowerCase() === "sell" ? "sell" : "buy",
         orderType: mapOrderType(oo.order.orderType || "MKT"),
         quantity: oo.order.totalQuantity || 0,
@@ -167,20 +172,24 @@ class IbkrSyncManager {
   private async syncPositions(integrationId: string, client: IbkrClient): Promise<void> {
     const livePositions = await client.fetchPositions();
 
-    const positionMap = new Map<string, typeof livePositions[number]>();
-    for (const pos of livePositions) {
-      const symbol = pos.contract.symbol || "UNKNOWN";
-      positionMap.set(symbol, pos);
-    }
-
     await storage.deleteIbkrPositionsByIntegration(integrationId);
 
-    for (const [symbol, pos] of positionMap) {
+    for (const pos of livePositions) {
       if (pos.position === 0) continue;
+
+      const symbol = pos.contract.symbol || "UNKNOWN";
+      const secType = pos.contract.secType || "STK";
+      const posKey = secType === "OPT"
+        ? `${symbol}_${pos.contract.lastTradeDateOrContractMonth}_${pos.contract.strike}_${pos.contract.right}`
+        : symbol;
 
       const posData: InsertIbkrPosition = {
         integrationId,
         symbol,
+        secType,
+        expiration: pos.contract.lastTradeDateOrContractMonth || null,
+        strike: secType === "OPT" ? (pos.contract.strike ?? null) : null,
+        right: secType === "OPT" ? (pos.contract.right || null) : null,
         quantity: pos.position,
         avgCost: pos.avgCost,
         marketPrice: null,
@@ -191,7 +200,7 @@ class IbkrSyncManager {
         lastUpdated: new Date(),
       };
 
-      await storage.upsertIbkrPosition(symbol, integrationId, posData);
+      await storage.upsertIbkrPosition(posKey, integrationId, posData);
     }
   }
 

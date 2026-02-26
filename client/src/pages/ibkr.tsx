@@ -128,6 +128,35 @@ function Pagination({ currentPage, totalPages, onPageChange, totalItems, label }
   );
 }
 
+function formatExpiration(exp: string | null | undefined): string {
+  if (!exp) return "";
+  if (exp.length === 8) {
+    return `${exp.slice(4, 6)}/${exp.slice(6, 8)}/${exp.slice(2, 4)}`;
+  }
+  return exp;
+}
+
+function SymbolDisplay({ symbol, secType, expiration, strike, right }: {
+  symbol: string;
+  secType: string;
+  expiration?: string | null;
+  strike?: number | null;
+  right?: string | null;
+}) {
+  if (secType === "OPT" && (expiration || strike || right)) {
+    const rightLabel = right === "C" || right === "CALL" ? "C" : right === "P" || right === "PUT" ? "P" : right;
+    return (
+      <div className="flex flex-col gap-0.5">
+        <span className="font-semibold text-sm">{symbol}</span>
+        <span className="text-[11px] text-muted-foreground font-mono">
+          {formatExpiration(expiration)} {strike != null ? `$${strike}` : ""} {rightLabel || ""}
+        </span>
+      </div>
+    );
+  }
+  return <span className="font-semibold text-sm">{symbol}</span>;
+}
+
 function OrderStatusBadge({ status }: { status: string }) {
   const variants: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof CheckCircle2; label: string }> = {
     filled: { variant: "default", icon: CheckCircle2, label: "Filled" },
@@ -246,7 +275,7 @@ function OrdersTable({ orders, page, onPageChange }: { orders: IbkrOrder[]; page
             {paged.map((order) => (
               <TableRow key={order.id} data-testid={`row-order-${order.id}`}>
                 <TableCell className="font-mono text-xs">{order.orderId}</TableCell>
-                <TableCell className="font-semibold text-sm">{order.symbol}</TableCell>
+                <TableCell><SymbolDisplay symbol={order.symbol} secType={order.secType} expiration={order.expiration} strike={order.strike} right={order.right} /></TableCell>
                 <TableCell><SideBadge side={order.side} /></TableCell>
                 <TableCell className="text-xs capitalize">{order.orderType.replace("_", " ")}</TableCell>
                 <TableCell className="text-right text-sm">{formatNumber(order.quantity)}</TableCell>
@@ -317,7 +346,7 @@ function PositionsTable({ positions, showSource, page, onPageChange }: { positio
                 : null;
               return (
                 <TableRow key={pos.id} data-testid={`row-position-${pos.id}`}>
-                  <TableCell className="font-semibold text-sm">{pos.symbol}</TableCell>
+                  <TableCell><SymbolDisplay symbol={pos.symbol} secType={pos.secType} expiration={pos.expiration} strike={pos.strike} right={pos.right} /></TableCell>
                   <TableCell className="text-right text-sm">{formatNumber(pos.quantity)}</TableCell>
                   <TableCell className="text-right text-sm font-mono">{formatCurrency(pos.avgCost)}</TableCell>
                   <TableCell className="text-right text-sm font-mono">{formatCurrency(pos.marketPrice)}</TableCell>
