@@ -89,8 +89,11 @@ export async function sendSignalDiscordAlert(
   signal: Signal,
   app: ConnectedApp | null,
 ): Promise<DiscordSendResult> {
-  if (!app || !app.sendDiscordMessages) {
-    return { sent: false, error: null };
+  if (!app) {
+    return { sent: false, error: "No connected app provided" };
+  }
+  if (!app.sendDiscordMessages) {
+    return { sent: false, error: `Discord messages disabled for ${app.name}` };
   }
 
   const data = signal.data as Record<string, any>;
@@ -237,8 +240,11 @@ export async function sendTradeExecutedDiscordAlert(
   app: ConnectedApp | null,
   tradeResult: { orderId: number; status: string; symbol: string; side: string; quantity: number },
 ): Promise<DiscordSendResult> {
-  if (!app || !app.sendDiscordMessages) {
-    return { sent: false, error: null };
+  if (!app) {
+    return { sent: false, error: "No connected app provided" };
+  }
+  if (!app.sendDiscordMessages) {
+    return { sent: false, error: `Discord messages disabled for ${app.name}` };
   }
 
   const data = signal.data as Record<string, any>;
