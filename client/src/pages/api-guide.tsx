@@ -568,7 +568,7 @@ const sections: SectionDef[] = [
         params: [
           { name: "ticker", type: "string", required: true, description: "Ticker symbol (e.g., 'AAPL', 'TSLA', 'SPY')." },
           { name: "instrumentType", type: "string", required: true, description: "Instrument type.", enumValues: ["Options", "Shares", "LETF"] },
-          { name: "direction", type: "string", required: true, description: "Trade direction.", enumValues: ["Long", "Short"] },
+          { name: "direction", type: "string", required: true, description: "Trade direction. Use Call/Put for Options, Long/Short for Shares and LETF.", enumValues: ["Call", "Put", "Long", "Short"] },
           { name: "expiration", type: "string", required: false, description: "Expiration date (e.g., '2026-03-01'). Required for Options." },
           { name: "strike", type: "string", required: false, description: "Option strike price (e.g., '190'). Required for Options." },
           { name: "entryPrice", type: "string", required: false, description: "Entry price for the trade (e.g., '189.50')." },
@@ -605,7 +605,7 @@ Example:
     "data": {
       "ticker": "AAPL",
       "instrument_type": "Options",
-      "direction": "Long",
+      "direction": "Call",
       "entry_price": "189.50",
       "expiration": "2026-03-20",
       "strike": "190",
@@ -644,7 +644,7 @@ Example:
     "data": {
       "ticker": "AAPL",
       "instrument_type": "Options",
-      "direction": "Long",
+      "direction": "Call",
       "entry_price": "189.50",
       "expiration": "2026-03-20",
       "strike": "190",
@@ -865,11 +865,11 @@ export default function ApiGuidePage() {
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-base font-semibold">Code Examples</h3>
-                    <CopyButton text={`curl -X POST ${baseUrl}/api/ingest/signals \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer ts_your_api_key" \\\n  -d '{"symbol":"AAPL","direction":"buy","confidence":75}'`} />
+                    <CopyButton text={`curl -X POST ${baseUrl}/api/ingest/signals \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer ts_your_api_key" \\\n  -d '{"ticker":"AAPL","instrumentType":"Options","direction":"Call","expiration":"2026-03-20","strike":"190","entryPrice":"189.50"}'`} />
                   </div>
                   <div className="rounded-lg bg-zinc-900/80 border border-zinc-800/60 overflow-hidden">
                     <pre className="p-4 overflow-x-auto text-[13px] font-mono text-zinc-300 leading-relaxed whitespace-pre-wrap">
-                      <code>{`curl -X POST ${baseUrl}/api/ingest/signals \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer ts_your_api_key" \\\n  -d '{"symbol":"AAPL","direction":"buy","confidence":75,"entryPrice":185.50}'`}</code>
+                      <code>{`curl -X POST ${baseUrl}/api/ingest/signals \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer ts_your_api_key" \\\n  -d '{"ticker":"AAPL","instrumentType":"Options","direction":"Call","expiration":"2026-03-20","strike":"190","entryPrice":"189.50"}'`}</code>
                     </pre>
                   </div>
                 </div>

@@ -76,7 +76,7 @@ export async function executeIbkrTrade(
   const data = signal.data as Record<string, any>;
   const ticker = data.ticker;
   const direction = data.direction || "Long";
-  const side = direction === "Long" ? "BUY" : "SELL";
+  const side = (direction === "Long" || direction === "Call") ? "BUY" : "SELL";
 
   const ibkrHost = app.ibkrHost;
   const ibkrPort = app.ibkrPort ? parseInt(app.ibkrPort) : undefined;

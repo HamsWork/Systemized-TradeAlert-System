@@ -26,7 +26,8 @@ interface ProcessResult {
 }
 
 const VALID_INSTRUMENT_TYPES = ["Options", "Shares", "LETF"];
-const VALID_DIRECTIONS = ["Long", "Short"];
+const VALID_DIRECTIONS_OPTIONS = ["Call", "Put"];
+const VALID_DIRECTIONS_DEFAULT = ["Long", "Short"];
 
 function validateIngestBody(body: Record<string, any>): string[] {
   const errors: string[] = [];
@@ -42,9 +43,10 @@ function validateIngestBody(body: Record<string, any>): string[] {
     );
   }
 
-  if (!direction || !VALID_DIRECTIONS.includes(direction)) {
+  const validDirections = instrumentType === "Options" ? VALID_DIRECTIONS_OPTIONS : VALID_DIRECTIONS_DEFAULT;
+  if (!direction || !validDirections.includes(direction)) {
     errors.push(
-      `direction is required and must be one of: ${VALID_DIRECTIONS.join(", ")}`,
+      `direction is required and must be one of: ${validDirections.join(", ")}`,
     );
   }
 

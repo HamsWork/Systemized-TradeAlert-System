@@ -406,8 +406,8 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
             <BarChart3 className="h-5 w-5 text-primary" />
             <span className="font-mono font-bold text-lg" data-testid="text-symbol">{ticker || "Signal Detail"}</span>
             {direction && (
-              <Badge variant={direction === "Long" ? "default" : "destructive"} className="text-xs" data-testid="badge-direction">
-                {direction === "Long" ? <ArrowUpRight className="mr-1 h-3 w-3" /> : <ArrowDownRight className="mr-1 h-3 w-3" />}
+              <Badge variant={(direction === "Long" || direction === "Call") ? "default" : "destructive"} className="text-xs" data-testid="badge-direction">
+                {(direction === "Long" || direction === "Call") ? <ArrowUpRight className="mr-1 h-3 w-3" /> : <ArrowDownRight className="mr-1 h-3 w-3" />}
                 {direction}
               </Badge>
             )}

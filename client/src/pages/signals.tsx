@@ -150,7 +150,7 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
             </div>
             <div className="col-span-2 sm:col-span-1">
               <Label className="text-sm font-medium mb-1.5 block">Instrument Type <span className="text-red-500">*</span></Label>
-              <Select value={instrumentType} onValueChange={(v) => { setInstrumentType(v); setExpiration(""); setStrike(""); }}>
+              <Select value={instrumentType} onValueChange={(v) => { setInstrumentType(v); setDirection(""); setExpiration(""); setStrike(""); }}>
                 <SelectTrigger data-testid="select-signal-instrumentType">
                   <SelectValue placeholder="Select..." />
                 </SelectTrigger>
@@ -171,8 +171,17 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                   <SelectValue placeholder="Select..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Long">Long</SelectItem>
-                  <SelectItem value="Short">Short</SelectItem>
+                  {instrumentType === "Options" ? (
+                    <>
+                      <SelectItem value="Call">Call</SelectItem>
+                      <SelectItem value="Put">Put</SelectItem>
+                    </>
+                  ) : (
+                    <>
+                      <SelectItem value="Long">Long</SelectItem>
+                      <SelectItem value="Short">Short</SelectItem>
+                    </>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -308,14 +317,14 @@ function getSignalIcon(instrumentType: string | undefined) {
 
 function getDirectionBadge(direction: string | undefined) {
   if (!direction) return null;
-  const isLong = direction.toLowerCase() === "long";
+  const isBullish = direction === "Long" || direction === "Call";
   return (
     <Badge
       variant="outline"
-      className={`text-xs gap-1 ${isLong ? "text-emerald-500 border-emerald-500/30 bg-emerald-500/5" : "text-red-500 border-red-500/30 bg-red-500/5"}`}
+      className={`text-xs gap-1 ${isBullish ? "text-emerald-500 border-emerald-500/30 bg-emerald-500/5" : "text-red-500 border-red-500/30 bg-red-500/5"}`}
       data-testid="badge-direction"
     >
-      {isLong ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+      {isBullish ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
       {direction}
     </Badge>
   );

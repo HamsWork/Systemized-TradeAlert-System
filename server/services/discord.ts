@@ -121,8 +121,8 @@ export async function sendSignalDiscordAlert(
 
   const direction = data.direction || "Long";
   const entryPrice = data.entry_price ? Number(data.entry_price) : null;
-  const isLong = direction === "Long";
-  const color = isLong ? GREEN : RED;
+  const isBullish = direction === "Long" || direction === "Call";
+  const color = isBullish ? GREEN : RED;
 
   const heading = `**🚨 ${ticker} Trade Alert**`;
 
