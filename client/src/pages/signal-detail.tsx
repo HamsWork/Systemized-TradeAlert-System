@@ -393,6 +393,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
   const tpLevels = targets.map(t => t.price);
   const stopLoss = data.stop_loss !== undefined && data.stop_loss !== null ? Number(data.stop_loss) : undefined;
   const slLevels = stopLoss !== undefined ? [stopLoss] : [];
+  const timeStop = data.time_stop || null;
 
   const orders = ordersQuery.data ?? [];
   const activity = activityQuery.data ?? [];
@@ -556,6 +557,21 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                           </Badge>
                         ))}
                       </div>
+                    </div>
+                  </>
+                )}
+
+                {timeStop && (
+                  <>
+                    <Separator />
+                    <div data-testid="detail-time-stop">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Clock className="h-3.5 w-3.5 text-amber-500/70" />
+                        <span className="text-[10px] font-medium text-amber-500/80 uppercase tracking-wider">Time Stop</span>
+                      </div>
+                      <Badge variant="outline" className="font-mono text-xs text-amber-500 border-amber-500/30 bg-amber-500/5">
+                        {new Date(timeStop).toLocaleString()}
+                      </Badge>
                     </div>
                   </>
                 )}

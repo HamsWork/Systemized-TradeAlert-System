@@ -152,6 +152,9 @@ export async function sendSignalDiscordAlert(
   if (data.stop_loss != null) {
     tradePlanParts.push(`🛑 Stop Loss: ${fmtPrice(data.stop_loss)}`);
   }
+  if (data.time_stop) {
+    tradePlanParts.push(`⏱️ Time Stop: ${data.time_stop}`);
+  }
 
   if (tradePlanParts.length > 0) {
     fields.push({

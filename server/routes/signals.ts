@@ -81,7 +81,7 @@ export function registerSignalRoutes(app: Express) {
 
     const body = req.body;
 
-    const { ticker, instrumentType, direction, expiration, strike, entryPrice, targets, stop_loss } = body;
+    const { ticker, instrumentType, direction, expiration, strike, entryPrice, targets, stop_loss, time_stop } = body;
 
     if (!ticker) {
       return res.status(400).json({ message: "ticker is required" });
@@ -124,6 +124,10 @@ export function registerSignalRoutes(app: Express) {
 
     if (stop_loss !== undefined && stop_loss !== null) {
       signalDataObj.stop_loss = stop_loss;
+    }
+
+    if (time_stop) {
+      signalDataObj.time_stop = time_stop;
     }
 
     if (body.expiration) {

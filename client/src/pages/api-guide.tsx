@@ -573,6 +573,7 @@ const sections: SectionDef[] = [
           { name: "strike", type: "string", required: false, description: "Option strike price (e.g., '190'). Required for Options." },
           { name: "entryPrice", type: "string", required: false, description: "Entry price for the trade (e.g., '189.50')." },
           { name: "stop_loss", type: "number", required: false, description: "Stop loss price (e.g., 80)." },
+          { name: "time_stop", type: "string", required: false, description: "Time-based stop — exit the trade if not filled or profitable by this datetime (e.g., '2026-03-01T15:00:00Z')." },
           { name: "targets", type: "json", required: false, description: "Take-profit targets with optional raise-stop-loss levels per target.", explanation: `The targets object defines your profit-taking strategy. Each key (tp1, tp2, etc.) maps to a target with a price and an optional raise_stop_loss that adjusts your stop loss when the target is hit.
 
 Structure:
@@ -612,7 +613,8 @@ Example:
         "tp1": { "price": 195, "raise_stop_loss": { "price": 189.50 } },
         "tp2": { "price": 200, "raise_stop_loss": { "price": 195 } }
       },
-      "stop_loss": 182
+      "stop_loss": 182,
+      "time_stop": "2026-03-01T15:00:00Z"
     },
     "status": "active",
     "sourceAppName": "Situ Trader",
@@ -645,7 +647,8 @@ Example:
         "tp1": { "price": 195, "raise_stop_loss": { "price": 189.50 } },
         "tp2": { "price": 200, "raise_stop_loss": { "price": 195 } }
       },
-      "stop_loss": 182
+      "stop_loss": 182,
+      "time_stop": "2026-03-01T15:00:00Z"
     },
     "status": "active",
     "sourceAppName": "Situ Trader",
