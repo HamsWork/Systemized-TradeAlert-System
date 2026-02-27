@@ -2,6 +2,7 @@ import { IBApi, EventName, Contract, SecType, OrderAction, OrderType, TimeInForc
 import type { Signal, ConnectedApp } from "@shared/schema";
 import { ibkrSyncManager } from "./ibkr-sync";
 import { storage } from "../storage";
+import { sendTradeExecutedDiscordAlert } from "./discord";
 
 interface TradeResult {
   orderId: number;
@@ -217,6 +218,8 @@ export async function executeIbkrTrade(
       signalId: signal.id,
       metadata: { orderId: result.orderId, status: result.status, sourceApp: app.name },
     });
+
+    await sendTradeExecutedDiscordAlert(signal, app, result);
 
     return { executed: true, trade: result, error: null };
   } catch (err: any) {

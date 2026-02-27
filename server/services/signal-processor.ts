@@ -1,6 +1,6 @@
 import type { Signal, ConnectedApp } from "@shared/schema";
 import { executeIbkrTrade } from "./trade-executor";
-import { sendSignalDiscordAlert, sendTradeExecutedDiscordAlert } from "./discord";
+import { sendSignalDiscordAlert } from "./discord";
 
 interface ProcessResult {
   discordSent: boolean;
@@ -37,10 +37,6 @@ export async function processSignal(
   result.tradeResult = tradeExecution.trade;
   if (tradeExecution.error) {
     result.errors.push(`IBKR trade failed: ${tradeExecution.error}`);
-  }
-
-  if (tradeExecution.trade) {
-    await sendTradeExecutedDiscordAlert(signal, app, tradeExecution.trade);
   }
 
   return result;
