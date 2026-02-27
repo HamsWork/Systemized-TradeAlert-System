@@ -195,12 +195,7 @@ export async function processSignal(
     return result;
   }
 
-  const ticker = signalDataObj.ticker;
-  const instrumentType = signalDataObj.instrument_type;
-  const direction = signalDataObj.direction;
-  const expiration = signalDataObj.expiration;
-  const strike = signalDataObj.strike;
-
+  const { ticker, instrument_type: instrumentType, direction, expiration, strike } = signalDataObj;
   const sourceName = app.name;
   const sourceId = app.id;
 
