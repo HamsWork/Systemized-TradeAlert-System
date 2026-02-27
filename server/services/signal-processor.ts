@@ -91,7 +91,7 @@ function buildSignalData(body: Record<string, any>): Record<string, any> {
 }
 
 export async function processSignal(
-  body: Record<string, any>,
+  signalData: Record<string, any>,
   app: ConnectedApp | null,
 ): Promise<ProcessResult> {
   const result: ProcessResult = {
@@ -101,21 +101,21 @@ export async function processSignal(
     validationErrors: [],
   };
 
-  const validationErrors = validateIngestBody(body);
+  const validationErrors = validateIngestBody(signalData);
   if (validationErrors.length > 0) {
     result.validationErrors = validationErrors;
     return result;
   }
 
-  const signalDataObj = buildSignalData(body);
-  const { ticker, instrumentType, direction, expiration, strike } = body;
+  const signalDataObj = buildSignalData(signalData);
+  const { ticker, instrumentType, direction, expiration, strike } = signalData;
 
   const sourceName = app ? app.name : "Manual";
   const sourceId = app ? app.id : null;
 
   const signalPayload = {
     data: signalDataObj,
-    discordChannelId: body.discordChannelId || null,
+    discordChannelId: signalData.discordChannelId || null,
     status: "active",
     sourceAppId: sourceId,
     sourceAppName: sourceName,
@@ -140,7 +140,7 @@ export async function processSignal(
 
   fetchPolygonBars({ symbol: ticker, secType: "STK" }).catch(() => {});
   if (instrumentType === "Options" && strike && expiration) {
-    const right = body.optionType?.toUpperCase().startsWith("P") ? "P" : "C";
+    const right = signalData.optionType?.toUpperCase().startsWith("P") ? "P" : "C";
     fetchPolygonBars({ symbol: ticker, secType: "OPT", strike: Number(strike), expiration, right }).catch(() => {});
   }
 
