@@ -29,6 +29,7 @@ export function registerSignalRoutes(app: Express) {
       title: `Signal: ${ticker}`,
       description: `Signal created for ${ticker}`,
       symbol: ticker || null,
+      signalId: signal.id,
       metadata: null,
     });
 
@@ -152,6 +153,7 @@ export function registerSignalRoutes(app: Express) {
       title: `Signal from ${sourceName}: ${ticker} ${direction}`,
       description: `${instrumentType} signal for ${ticker} (${direction})`,
       symbol: ticker,
+      signalId: signal.id,
       metadata: { sourceApp: sourceName, sourceAppId: sourceId },
     });
 

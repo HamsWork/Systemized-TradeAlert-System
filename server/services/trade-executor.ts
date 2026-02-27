@@ -172,6 +172,7 @@ export async function executeIbkrTrade(
     const secType = contract.secType === SecType.OPT ? "OPT" : "STK";
     await storage.upsertIbkrOrder(String(result.orderId), ibkrIntegration.id, {
       integrationId: ibkrIntegration.id,
+      signalId: signal.id,
       orderId: String(result.orderId),
       symbol: ticker,
       secType,

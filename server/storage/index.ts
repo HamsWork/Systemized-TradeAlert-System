@@ -7,6 +7,7 @@ import { appMethods } from "./apps";
 import { settingsMethods } from "./settings";
 import { integrationMethods } from "./integrations";
 import { ibkrMethods } from "./ibkr";
+import { discordMethods } from "./discord";
 import { dashboardMethods } from "./dashboard";
 
 export { type IStorage } from "./interface";
@@ -30,6 +31,7 @@ export class DatabaseStorage implements IStorage {
 
   getActivityLog = activityMethods.getActivityLog;
   getActivityBySymbol = activityMethods.getActivityBySymbol;
+  getActivityBySignal = activityMethods.getActivityBySignal;
   createActivity = activityMethods.createActivity;
 
   getConnectedApps = appMethods.getConnectedApps;
@@ -52,6 +54,7 @@ export class DatabaseStorage implements IStorage {
   getIbkrOrders = ibkrMethods.getIbkrOrders;
   getIbkrOrdersBySymbol = ibkrMethods.getIbkrOrdersBySymbol;
   getIbkrOrdersByIntegration = ibkrMethods.getIbkrOrdersByIntegration;
+  getIbkrOrdersBySignal = ibkrMethods.getIbkrOrdersBySignal;
   getIbkrOrderByOrderId = ibkrMethods.getIbkrOrderByOrderId;
   createIbkrOrder = ibkrMethods.createIbkrOrder;
   updateIbkrOrder = ibkrMethods.updateIbkrOrder;
@@ -65,6 +68,10 @@ export class DatabaseStorage implements IStorage {
   updateIbkrPosition = ibkrMethods.updateIbkrPosition;
   upsertIbkrPosition = ibkrMethods.upsertIbkrPosition;
   deleteIbkrPositionsByIntegration = ibkrMethods.deleteIbkrPositionsByIntegration;
+
+  getDiscordMessages = discordMethods.getDiscordMessages;
+  getDiscordMessagesBySignal = discordMethods.getDiscordMessagesBySignal;
+  createDiscordMessage = discordMethods.createDiscordMessage;
 
   getDashboardStats = dashboardMethods.getDashboardStats;
 }

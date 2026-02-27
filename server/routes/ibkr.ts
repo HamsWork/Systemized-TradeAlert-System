@@ -19,6 +19,11 @@ export function registerIbkrRoutes(app: Express) {
     res.json(orders);
   }));
 
+  app.get("/api/ibkr/orders/by-signal/:signalId", asyncHandler(async (req, res) => {
+    const orders = await storage.getIbkrOrdersBySignal(req.params.signalId);
+    res.json(orders);
+  }));
+
   app.get("/api/ibkr/orders/:integrationId", asyncHandler(async (req, res) => {
     const orders = await storage.getIbkrOrdersByIntegration(req.params.integrationId);
     res.json(orders);

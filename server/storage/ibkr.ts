@@ -18,6 +18,10 @@ export const ibkrMethods = {
     return db.select().from(ibkrOrders).where(eq(ibkrOrders.integrationId, integrationId)).orderBy(desc(ibkrOrders.submittedAt));
   },
 
+  async getIbkrOrdersBySignal(signalId: string): Promise<IbkrOrder[]> {
+    return db.select().from(ibkrOrders).where(eq(ibkrOrders.signalId, signalId)).orderBy(desc(ibkrOrders.submittedAt));
+  },
+
   async getIbkrOrderByOrderId(orderId: string, integrationId: string): Promise<IbkrOrder | undefined> {
     const [order] = await db.select().from(ibkrOrders)
       .where(and(eq(ibkrOrders.orderId, orderId), eq(ibkrOrders.integrationId, integrationId)));

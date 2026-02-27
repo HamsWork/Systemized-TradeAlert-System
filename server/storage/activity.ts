@@ -11,6 +11,10 @@ export const activityMethods = {
     return db.select().from(activityLog).where(eq(activityLog.symbol, symbol)).orderBy(desc(activityLog.createdAt));
   },
 
+  async getActivityBySignal(signalId: string): Promise<ActivityLogEntry[]> {
+    return db.select().from(activityLog).where(eq(activityLog.signalId, signalId)).orderBy(desc(activityLog.createdAt));
+  },
+
   async createActivity(entry: InsertActivityLog): Promise<ActivityLogEntry> {
     const [created] = await db.insert(activityLog).values(entry).returning();
     return created;

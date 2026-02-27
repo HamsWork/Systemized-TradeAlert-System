@@ -79,17 +79,23 @@ function getWebhookForInstrument(app: ConnectedApp, instrumentType: string): str
   }
 }
 
+export interface DiscordSendResult {
+  sent: boolean;
+  webhookUrl: string | null;
+  instrumentType: string;
+}
+
 export async function sendSignalDiscordAlert(
   signal: Signal,
   app: ConnectedApp,
-): Promise<boolean> {
+): Promise<DiscordSendResult> {
   const data = signal.data as Record<string, any>;
   const instrumentType = data.instrument_type || "Options";
   const webhookUrl = getWebhookForInstrument(app, instrumentType);
 
   if (!webhookUrl) {
     console.log(`[Discord] No webhook configured for ${instrumentType} on app ${app.name}`);
-    return false;
+    return { sent: false, webhookUrl: null, instrumentType };
   }
 
   const ticker = data.ticker || "UNKNOWN";
@@ -169,7 +175,8 @@ export async function sendSignalDiscordAlert(
     timestamp: new Date().toISOString(),
   };
 
-  return sendWebhook(webhookUrl, "@everyone", [embed]);
+  const sent = await sendWebhook(webhookUrl, "@everyone", [embed]);
+  return { sent, webhookUrl, instrumentType };
 }
 
 export async function sendTradeExecutedDiscordAlert(

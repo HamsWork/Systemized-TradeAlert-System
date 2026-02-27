@@ -9,6 +9,7 @@ export const activityLog = pgTable("activity_log", {
   title: text("title").notNull(),
   description: text("description").notNull(),
   symbol: text("symbol"),
+  signalId: varchar("signal_id"),
   metadata: jsonb("metadata"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

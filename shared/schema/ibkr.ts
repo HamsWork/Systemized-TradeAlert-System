@@ -6,6 +6,7 @@ import { z } from "zod";
 export const ibkrOrders = pgTable("ibkr_orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   integrationId: varchar("integration_id").notNull(),
+  signalId: varchar("signal_id"),
   sourceAppId: varchar("source_app_id"),
   sourceAppName: text("source_app_name"),
   orderId: text("order_id").notNull(),

@@ -8,6 +8,7 @@ import {
   type Integration, type InsertIntegration,
   type IbkrOrder, type InsertIbkrOrder,
   type IbkrPosition, type InsertIbkrPosition,
+  type DiscordMessage, type InsertDiscordMessage,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -29,6 +30,7 @@ export interface IStorage {
 
   getActivityLog(): Promise<ActivityLogEntry[]>;
   getActivityBySymbol(symbol: string): Promise<ActivityLogEntry[]>;
+  getActivityBySignal(signalId: string): Promise<ActivityLogEntry[]>;
   createActivity(entry: InsertActivityLog): Promise<ActivityLogEntry>;
 
   getConnectedApps(): Promise<ConnectedApp[]>;
@@ -51,6 +53,7 @@ export interface IStorage {
   getIbkrOrders(): Promise<IbkrOrder[]>;
   getIbkrOrdersBySymbol(symbol: string): Promise<IbkrOrder[]>;
   getIbkrOrdersByIntegration(integrationId: string): Promise<IbkrOrder[]>;
+  getIbkrOrdersBySignal(signalId: string): Promise<IbkrOrder[]>;
   getIbkrOrderByOrderId(orderId: string, integrationId: string): Promise<IbkrOrder | undefined>;
   createIbkrOrder(order: InsertIbkrOrder): Promise<IbkrOrder>;
   updateIbkrOrder(id: string, data: Partial<InsertIbkrOrder>): Promise<IbkrOrder | undefined>;
@@ -64,6 +67,10 @@ export interface IStorage {
   updateIbkrPosition(id: string, data: Partial<InsertIbkrPosition>): Promise<IbkrPosition | undefined>;
   upsertIbkrPosition(symbol: string, integrationId: string, data: InsertIbkrPosition): Promise<IbkrPosition>;
   deleteIbkrPositionsByIntegration(integrationId: string): Promise<void>;
+
+  getDiscordMessages(): Promise<DiscordMessage[]>;
+  getDiscordMessagesBySignal(signalId: string): Promise<DiscordMessage[]>;
+  createDiscordMessage(message: InsertDiscordMessage): Promise<DiscordMessage>;
 
   getDashboardStats(): Promise<{
     totalAlerts: number;

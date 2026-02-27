@@ -26,7 +26,8 @@ Plugged-in apps → Send signals via API → Signal Processor checks connected a
 ## Data Model
 
 - **Signals**: Trading signals with flexible JSON `data` field containing: ticker, instrumentType (Options/Shares/LETF), direction (Long/Short), optional entryPrice, targets (object with tp1/tp2/etc each having price + raise_stop_loss), stop_loss (number), expiration. Options also require expiration and strike. Source app tracking via sourceAppId and sourceAppName.
-- **Activity Log**: System event feed tracking all actions
+- **Activity Log**: System event feed tracking all actions. Has `signalId` FK to link activities to signals.
+- **Discord Messages**: Record of every Discord webhook sent/attempted, linked to signals via `signalId`. Tracks webhookUrl, channelType, instrumentType, status (sent/failed/error), messageType (signal_alert/trade_executed), embedData.
 - **Connected Apps**: Plugged-in trading applications with auto-generated API keys, Discord settings (Send Discord Messages toggle + Shares/Options/Leveraged ETF webhook URLs), and IBKR settings (Execute IBKR Trades toggle + Client ID, Host IP, Port)
 - **System Settings**: Key-value toggle/config store for system controls (signals, trading, system)
 - **Integrations**: Discord channels and IBKR trading accounts with per-integration notification and trading toggles
@@ -57,12 +58,13 @@ Connected apps push signals to TradeSync via `POST /api/ingest/signals` using th
 All routes prefixed with `/api`:
 - `GET/POST /signals`, `GET/PATCH/DELETE /signals/:id`
 - `POST /ingest/signals` - External signal ingestion (requires Bearer API key auth)
-- `GET /activity`, `GET /activity/by-symbol/:symbol`
+- `GET /activity`, `GET /activity/by-symbol/:symbol`, `GET /activity/by-signal/:signalId`
+- `GET /discord-messages`, `GET /discord-messages/by-signal/:signalId`
 - `GET/POST /connected-apps`, `GET/PATCH/DELETE /connected-apps/:id`
 - `POST /connected-apps/:id/regenerate-key` - Regenerate API key for an app
 - `GET/PUT /settings` (system settings - upsert by key)
 - `GET/POST /integrations`, `PATCH/DELETE /integrations/:id`
-- `GET /ibkr/orders`, `GET /ibkr/orders/by-symbol/:symbol`, `GET /ibkr/orders/:integrationId`, `POST /ibkr/orders`, `PATCH /ibkr/orders/:id`
+- `GET /ibkr/orders`, `GET /ibkr/orders/by-symbol/:symbol`, `GET /ibkr/orders/by-signal/:signalId`, `GET /ibkr/orders/:integrationId`, `POST /ibkr/orders`, `PATCH /ibkr/orders/:id`
 - `GET /ibkr/positions`, `GET /ibkr/positions/:integrationId`, `POST /ibkr/positions`, `PATCH /ibkr/positions/:id`
 - `POST /ibkr/connect/:integrationId` - Connect to IBKR TWS/Gateway for an integration
 - `POST /ibkr/disconnect/:integrationId` - Disconnect from IBKR for an integration

@@ -6,4 +6,5 @@ export * from "./schema/apps";
 export * from "./schema/settings";
 export * from "./schema/integrations";
 export * from "./schema/ibkr";
+export * from "./schema/discord";
 export * from "./schema/watchlist";
