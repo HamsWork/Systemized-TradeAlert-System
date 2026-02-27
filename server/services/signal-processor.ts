@@ -133,14 +133,6 @@ function buildSignalData(body: Record<string, any>): Record<string, any> {
     signalDataObj.time_stop = time_stop;
   }
 
-  if (body.expiration) {
-    signalDataObj.expiration = body.expiration;
-  }
-
-  if (body.right) {
-    signalDataObj.right = body.right;
-  }
-
   return signalDataObj;
 }
 
