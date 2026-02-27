@@ -21,11 +21,11 @@ A modular trading dashboard where plugged-in apps send signals, which trigger IB
 
 ## System Flow
 
-Plugged-in apps → Send signals → TradeSync executes IBKR trades + sends Discord notifications based on settings
+Plugged-in apps → Send signals via API → Signal Processor checks connected app settings → Executes IBKR trades (if `executeIbkrTrades` enabled) + Sends Discord webhook alerts (if `sendDiscordMessages` enabled) → Activity log entries created for each action
 
 ## Data Model
 
-- **Signals**: Trading signals with flexible JSON `data` field containing: ticker, instrumentType (Options/Shares/LETF), direction (Long/Short), optional entryPrice, optional tradePlan (targetLevels, stopLoss, raiseStopLevel, notes). Options also require expiration and strike. Source app tracking via sourceAppId and sourceAppName.
+- **Signals**: Trading signals with flexible JSON `data` field containing: ticker, instrumentType (Options/Shares/LETF), direction (Long/Short), optional entryPrice, targets (object with tp1/tp2/etc each having price + raise_stop_loss), stop_loss (number), expiration. Options also require expiration and strike. Source app tracking via sourceAppId and sourceAppName.
 - **Activity Log**: System event feed tracking all actions
 - **Connected Apps**: Plugged-in trading applications with auto-generated API keys, Discord settings (Send Discord Messages toggle + Shares/Options/Leveraged ETF webhook URLs), and IBKR settings (Execute IBKR Trades toggle + Client ID, Host IP, Port)
 - **System Settings**: Key-value toggle/config store for system controls (signals, trading, system)
@@ -118,7 +118,10 @@ All routes prefixed with `/api`:
 - `server/routes/ibkr.ts` - /api/ibkr/orders + /api/ibkr/positions
 - `server/routes/index.ts` - registerRoutes composing all domain route registrars + error handler middleware
 
-### IBKR & Market Data Services
+### Services
+- `server/services/signal-processor.ts` - Signal processing pipeline: on signal ingestion, checks connected app settings and triggers IBKR trade execution + Discord webhook alerts
+- `server/services/trade-executor.ts` - IBKR trade execution: creates temporary IBApi connection, places market orders, records to DB
+- `server/services/discord.ts` - Discord webhook sender: formats signal alerts and trade execution notifications as rich embeds
 - `server/services/polygon.ts` - Polygon.io API client: fetches historical OHLCV bars for stocks and option contracts (OPRA format)
 - `server/services/ibkr-client.ts` - IbkrClient class wrapping `@stoqey/ib` IBApi for connection, order/position fetching
 - `server/services/ibkr-sync.ts` - IbkrSyncManager singleton: auto-connects enabled IBKR integrations, syncs orders/positions to DB every 10s

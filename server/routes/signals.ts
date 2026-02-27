@@ -3,6 +3,7 @@ import { storage } from "../storage";
 import { insertSignalSchema } from "@shared/schema";
 import { asyncHandler } from "../lib/async-handler";
 import { fetchPolygonBars } from "../services/polygon";
+import { processSignal } from "../services/signal-processor";
 
 const partialSignalSchema = insertSignalSchema.partial();
 
@@ -30,6 +31,16 @@ export function registerSignalRoutes(app: Express) {
       symbol: ticker || null,
       metadata: null,
     });
+
+    if (signal.sourceAppId) {
+      const sourceApp = await storage.getConnectedApp(signal.sourceAppId);
+      if (sourceApp) {
+        processSignal(signal, sourceApp).catch(err =>
+          console.error("[Signals] Background processing error:", err.message)
+        );
+      }
+    }
+
     res.status(201).json(signal);
   }));
 
@@ -150,6 +161,17 @@ export function registerSignalRoutes(app: Express) {
       fetchPolygonBars({ symbol: ticker, secType: "OPT", strike: Number(strike), expiration, right }).catch(() => {});
     }
 
-    res.status(201).json({ success: true, signal });
+    const processResult = await processSignal(signal, connectedApp);
+
+    res.status(201).json({
+      success: true,
+      signal,
+      processing: {
+        discordSent: processResult.discordSent,
+        tradeExecuted: processResult.tradeExecuted,
+        tradeResult: processResult.tradeResult,
+        errors: processResult.errors,
+      },
+    });
   }));
 }

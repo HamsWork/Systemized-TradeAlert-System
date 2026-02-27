@@ -131,25 +131,26 @@ export async function sendSignalDiscordAlert(
   fields.push({ ...SPACER });
 
   const tradePlanParts: string[] = [];
-  if (data.take_profit_1) tradePlanParts.push(`🎯 TP1: ${fmtPrice(data.take_profit_1)}`);
-  if (data.take_profit_2) tradePlanParts.push(`🎯 TP2: ${fmtPrice(data.take_profit_2)}`);
-  if (data.take_profit_3) tradePlanParts.push(`🎯 TP3: ${fmtPrice(data.take_profit_3)}`);
-  if (data.stop_loss_1) tradePlanParts.push(`🛑 SL1: ${fmtPrice(data.stop_loss_1)}`);
-  if (data.stop_loss_2) tradePlanParts.push(`🛑 SL2: ${fmtPrice(data.stop_loss_2)}`);
-  if (data.stop_loss_3) tradePlanParts.push(`🛑 SL3: ${fmtPrice(data.stop_loss_3)}`);
+  if (data.targets && typeof data.targets === "object") {
+    for (const [key, val] of Object.entries(data.targets)) {
+      const t = val as any;
+      if (t && t.price) {
+        let line = `🎯 ${key.toUpperCase()}: ${fmtPrice(t.price)}`;
+        if (t.raise_stop_loss?.price) {
+          line += ` (SL → ${fmtPrice(t.raise_stop_loss.price)})`;
+        }
+        tradePlanParts.push(line);
+      }
+    }
+  }
+  if (data.stop_loss != null) {
+    tradePlanParts.push(`🛑 Stop Loss: ${fmtPrice(data.stop_loss)}`);
+  }
 
   if (tradePlanParts.length > 0) {
     fields.push({
       name: "📝 Trade Plan",
       value: tradePlanParts.join("\n"),
-      inline: false,
-    });
-  }
-
-  if (data.trade_plan) {
-    fields.push({
-      name: "📋 Notes",
-      value: data.trade_plan,
       inline: false,
     });
   }
