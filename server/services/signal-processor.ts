@@ -216,16 +216,16 @@ export async function processSignal(
   const signal = await storage.createSignal(parsed);
   result.signal = signal;
 
-  await storage.updateConnectedApp(app.id, { lastSyncAt: new Date() } as any);
+  storage.updateConnectedApp(app.id, { lastSyncAt: new Date() } as any).catch(() => {});
 
-  await storage.createActivity({
+  storage.createActivity({
     type: "signal_ingested",
     title: `Signal from ${sourceName}: ${ticker} ${direction}`,
     description: `${instrumentType} signal for ${ticker} (${direction})`,
     symbol: ticker,
     signalId: signal.id,
     metadata: { sourceApp: sourceName, sourceAppId: sourceId },
-  });
+  }).catch(() => {});
 
   fetchPolygonBars({ symbol: ticker, secType: "STK" }).catch(() => {});
   if (instrumentType === "Options" && strike && expiration) {
