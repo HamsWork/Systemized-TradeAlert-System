@@ -20,6 +20,33 @@ interface ProcessResult {
   };
 }
 
+function fetchExpectedData(signal: Signal): {
+  ticker: string;
+  instrumentType: string;
+  direction: string;
+  entryPrice: number | null;
+  targets: Record<string, any> | null;
+  stopLoss: number | null;
+  timeStop: string | null;
+  expiration: string | null;
+  strike: number | null;
+  right: string | null;
+} {
+  const data = signal.data as Record<string, any>;
+  return {
+    ticker: data.ticker || "UNKNOWN",
+    instrumentType: data.instrument_type || "Options",
+    direction: data.direction || "Long",
+    entryPrice: data.entry_price ? Number(data.entry_price) : null,
+    targets: data.targets && typeof data.targets === "object" ? data.targets : null,
+    stopLoss: data.stop_loss != null ? Number(data.stop_loss) : null,
+    timeStop: data.time_stop || null,
+    expiration: data.expiration || null,
+    strike: data.strike ? Number(data.strike) : null,
+    right: data.right || null,
+  };
+}
+
 export async function processSignal(
   signal: Signal,
   app: ConnectedApp | null,
@@ -28,6 +55,9 @@ export async function processSignal(
     discord: { sent: false, errors: [] },
     ibkr: { executed: false, tradeResult: null, errors: [] },
   };
+
+  const expectedData = fetchExpectedData(signal);
+  console.log(`[SignalProcessor] Processing ${expectedData.ticker} (${expectedData.instrumentType}, ${expectedData.direction})`);
 
   const discordResult = await sendSignalDiscordAlert(signal, app);
   result.discord.sent = discordResult.sent;

@@ -98,10 +98,9 @@ function buildEntryDiscordEmbed(data: Record<string, any>): DiscordEmbed {
   const instrumentType = data.instrument_type || "Options";
   const direction = data.direction || "Long";
   const entryPrice = data.entry_price ? Number(data.entry_price) : null;
-  const isLong = direction === "Long";
-  const color = isLong ? GREEN : RED;
+  const color = GREEN;
 
-  const heading = `**🚨 ${ticker} Trade Alert**`;
+  const heading = `**\u{1F6A8} ${ticker} Trade Alert**`;
 
   const fields: DiscordField[] = [
     { name: "🟢 Ticker", value: ticker, inline: true },
