@@ -28,35 +28,48 @@ interface ProcessResult {
 const VALID_INSTRUMENT_TYPES = ["Options", "Shares", "LETF"];
 const VALID_DIRECTIONS = ["Long", "Short"];
 
-function validateAndBuildSignalData(input: Record<string, any>): {
-  updatedSignalData: Record<string, any> | null;
-  validationErrors: string[];
-} {
+function validateIngestBody(body: Record<string, any>): string[] {
   const errors: string[] = [];
-  const { ticker, instrumentType, direction, entryPrice, expiration, strike, targets, stop_loss, time_stop } = input;
+  const { ticker, instrumentType, direction } = body;
 
   if (!ticker) {
     errors.push("ticker is required");
   }
 
   if (!instrumentType || !VALID_INSTRUMENT_TYPES.includes(instrumentType)) {
-    errors.push(`instrumentType is required and must be one of: ${VALID_INSTRUMENT_TYPES.join(", ")}`);
+    errors.push(
+      `instrumentType is required and must be one of: ${VALID_INSTRUMENT_TYPES.join(", ")}`,
+    );
   }
 
   if (!direction || !VALID_DIRECTIONS.includes(direction)) {
-    errors.push(`direction is required and must be one of: ${VALID_DIRECTIONS.join(", ")}`);
+    errors.push(
+      `direction is required and must be one of: ${VALID_DIRECTIONS.join(", ")}`,
+    );
   }
 
   if (instrumentType === "Options") {
-    if (!expiration) errors.push("expiration is required for Options");
-    if (!strike) errors.push("strike is required for Options");
+    if (!body.expiration) errors.push("expiration is required for Options");
+    if (!body.strike) errors.push("strike is required for Options");
   }
 
-  if (errors.length > 0) {
-    return { updatedSignalData: null, validationErrors: errors };
-  }
+  return errors;
+}
 
-  const updatedSignalData: Record<string, any> = {
+function buildSignalData(body: Record<string, any>): Record<string, any> {
+  const {
+    ticker,
+    instrumentType,
+    direction,
+    entryPrice,
+    expiration,
+    strike,
+    targets,
+    stop_loss,
+    time_stop,
+  } = body;
+
+  const signalDataObj: Record<string, any> = {
     ticker,
     instrument_type: instrumentType,
     direction,
@@ -64,36 +77,36 @@ function validateAndBuildSignalData(input: Record<string, any>): {
   };
 
   if (instrumentType === "Options") {
-    updatedSignalData.expiration = expiration;
-    updatedSignalData.strike = strike;
+    signalDataObj.expiration = expiration;
+    signalDataObj.strike = strike;
   }
 
   if (targets && typeof targets === "object") {
-    updatedSignalData.targets = targets;
+    signalDataObj.targets = targets;
   }
 
   if (stop_loss !== undefined && stop_loss !== null) {
-    updatedSignalData.stop_loss = stop_loss;
+    signalDataObj.stop_loss = stop_loss;
   }
 
   if (time_stop) {
-    updatedSignalData.time_stop = time_stop;
+    signalDataObj.time_stop = time_stop;
   }
 
-  if (input.expiration) {
-    updatedSignalData.expiration = input.expiration;
+  if (body.expiration) {
+    signalDataObj.expiration = body.expiration;
   }
 
-  if (input.right) {
-    updatedSignalData.right = input.right;
+  if (body.right) {
+    signalDataObj.right = body.right;
   }
 
-  return { updatedSignalData, validationErrors: [] };
+  return signalDataObj;
 }
 
 export async function processSignal(
-  signalData: Record<string, any>,
-  app: ConnectedApp | null,
+  body: Record<string, any>,
+  app: ConnectedApp,
 ): Promise<ProcessResult> {
   const result: ProcessResult = {
     signal: null,
@@ -102,19 +115,21 @@ export async function processSignal(
     validationErrors: [],
   };
 
-  const { updatedSignalData, validationErrors } = validateAndBuildSignalData(signalData);
+  const validationErrors = validateIngestBody(body);
   if (validationErrors.length > 0) {
     result.validationErrors = validationErrors;
     return result;
   }
 
-  const { ticker, instrumentType, direction, expiration, strike } = signalData;
+  const signalDataObj = buildSignalData(body);
+  const { ticker, instrumentType, direction, expiration, strike } =
+    signalDataObj;
 
-  const sourceName = app ? app.name : "Manual";
-  const sourceId = app ? app.id : null;
+  const sourceName = app.name;
+  const sourceId = app.id;
 
   const signalPayload = {
-    data: updatedSignalData!,
+    data: signalDataObj,
     discordChannelId: signalData.discordChannelId || null,
     status: "active",
     sourceAppId: sourceId,
@@ -125,9 +140,7 @@ export async function processSignal(
   const signal = await storage.createSignal(parsed);
   result.signal = signal;
 
-  if (app) {
-    await storage.updateConnectedApp(app.id, { lastSyncAt: new Date() } as any);
-  }
+  await storage.updateConnectedApp(app.id, { lastSyncAt: new Date() } as any);
 
   await storage.createActivity({
     type: "signal_ingested",
@@ -140,8 +153,16 @@ export async function processSignal(
 
   fetchPolygonBars({ symbol: ticker, secType: "STK" }).catch(() => {});
   if (instrumentType === "Options" && strike && expiration) {
-    const right = signalData.optionType?.toUpperCase().startsWith("P") ? "P" : "C";
-    fetchPolygonBars({ symbol: ticker, secType: "OPT", strike: Number(strike), expiration, right }).catch(() => {});
+    const right = signalData.optionType?.toUpperCase().startsWith("P")
+      ? "P"
+      : "C";
+    fetchPolygonBars({
+      symbol: ticker,
+      secType: "OPT",
+      strike: Number(strike),
+      expiration,
+      right,
+    }).catch(() => {});
   }
 
   const discordResult = await sendSignalDiscordAlert(signal, app);

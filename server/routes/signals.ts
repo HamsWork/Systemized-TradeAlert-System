@@ -21,8 +21,7 @@ async function authenticateApiKey(
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    req.connectedApp = null;
-    return next();
+    return res.status(401).json({ message: "Authorization header with Bearer token is required" });
   }
 
   const apiKey = authHeader.slice(7);
@@ -113,7 +112,7 @@ export function registerSignalRoutes(app: Express) {
     "/api/ingest/signals",
     authenticateApiKey,
     asyncHandler(async (req, res) => {
-      const connectedApp = req.connectedApp ?? null;
+      const connectedApp = req.connectedApp!;
 
       const processResult = await processSignal(req.body, connectedApp);
 
