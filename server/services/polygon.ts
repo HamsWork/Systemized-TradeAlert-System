@@ -36,14 +36,33 @@ function buildOptionsTicker(symbol: string, expiration: string, right: string, s
   return `O:${sym.trim()}${exp}${r}${strikePadded}`;
 }
 
-export async function fetchPolygonBars(params: {
+function buildCacheKey(params: ChartParams): string {
+  if (params.secType === "OPT" && params.strike && params.expiration && params.right) {
+    return `OPT:${params.symbol.toUpperCase()}:${params.strike}:${params.expiration}:${params.right.toUpperCase()}`;
+  }
+  return `STK:${params.symbol.toUpperCase()}`;
+}
+
+export interface ChartParams {
   symbol: string;
   secType?: string;
   strike?: number;
   expiration?: string;
   right?: string;
-  days?: number;
-}): Promise<ChartBar[]> {
+}
+
+interface CacheEntry {
+  bars: ChartBar[];
+  fetchedAt: number;
+}
+
+const chartCache = new Map<string, CacheEntry>();
+const CACHE_TTL_MS = 5 * 60 * 1000;
+const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+let refreshTimer: ReturnType<typeof setInterval> | null = null;
+const trackedSymbols = new Map<string, ChartParams>();
+
+async function fetchFromPolygon(params: ChartParams): Promise<ChartBar[]> {
   const apiKey = process.env.POLYGON_API_KEY;
   if (!apiKey) {
     console.warn("[Polygon] POLYGON_API_KEY not set");
@@ -57,10 +76,9 @@ export async function fetchPolygonBars(params: {
     ticker = params.symbol.toUpperCase();
   }
 
-  const days = params.days || 90;
   const to = new Date();
   const from = new Date();
-  from.setDate(from.getDate() - days);
+  from.setDate(from.getDate() - 90);
 
   const url = `${POLYGON_BASE}/v2/aggs/ticker/${encodeURIComponent(ticker)}/range/1/day/${formatDate(from)}/${formatDate(to)}?adjusted=true&sort=asc&limit=5000&apiKey=${apiKey}`;
 
@@ -93,4 +111,90 @@ export async function fetchPolygonBars(params: {
     console.warn(`[Polygon] Fetch error for ${ticker}: ${err.message}`);
     return [];
   }
+}
+
+export function getCachedBars(params: ChartParams): ChartBar[] | null {
+  const key = buildCacheKey(params);
+  const entry = chartCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.fetchedAt > CACHE_TTL_MS) return null;
+  return entry.bars;
+}
+
+export async function fetchPolygonBars(params: ChartParams): Promise<ChartBar[]> {
+  const key = buildCacheKey(params);
+
+  const cached = getCachedBars(params);
+  if (cached !== null) return cached;
+
+  const bars = await fetchFromPolygon(params);
+  if (bars.length > 0) {
+    chartCache.set(key, { bars, fetchedAt: Date.now() });
+    trackedSymbols.set(key, { ...params });
+  }
+  return bars;
+}
+
+export function trackSymbol(params: ChartParams): void {
+  const key = buildCacheKey(params);
+  trackedSymbols.set(key, { ...params });
+}
+
+async function refreshAllTracked(): Promise<void> {
+  if (trackedSymbols.size === 0) return;
+  console.log(`[Polygon] Refreshing ${trackedSymbols.size} cached symbols...`);
+
+  for (const [key, params] of trackedSymbols) {
+    try {
+      const bars = await fetchFromPolygon(params);
+      if (bars.length > 0) {
+        chartCache.set(key, { bars, fetchedAt: Date.now() });
+      }
+    } catch (err: any) {
+      console.warn(`[Polygon] Refresh error for ${key}: ${err.message}`);
+    }
+  }
+  console.log(`[Polygon] Refresh complete, ${chartCache.size} symbols cached`);
+}
+
+export async function prefetchSignalCharts(signals: Array<{ data: any }>): Promise<void> {
+  if (!process.env.POLYGON_API_KEY) return;
+
+  const seen = new Set<string>();
+  for (const signal of signals) {
+    const d = signal.data;
+    if (!d?.ticker) continue;
+
+    const stkKey = `STK:${d.ticker.toUpperCase()}`;
+    if (!seen.has(stkKey)) {
+      seen.add(stkKey);
+      trackSymbol({ symbol: d.ticker, secType: "STK" });
+    }
+
+    if (d.instrument_type === "Options" && d.strike && d.expiration) {
+      const right = d.option_type?.toUpperCase().startsWith("P") ? "P" : "C";
+      const optKey = `OPT:${d.ticker.toUpperCase()}:${d.strike}:${d.expiration}:${right}`;
+      if (!seen.has(optKey)) {
+        seen.add(optKey);
+        trackSymbol({
+          symbol: d.ticker,
+          secType: "OPT",
+          strike: Number(d.strike),
+          expiration: d.expiration,
+          right,
+        });
+      }
+    }
+  }
+
+  console.log(`[Polygon] Pre-fetching chart data for ${trackedSymbols.size} symbols...`);
+  await refreshAllTracked();
+}
+
+export function startPolygonRefresh(): void {
+  if (refreshTimer) return;
+  refreshTimer = setInterval(() => {
+    refreshAllTracked().catch(err => console.warn(`[Polygon] Refresh cycle error: ${err.message}`));
+  }, REFRESH_INTERVAL_MS);
+  console.log(`[Polygon] Background refresh started (every ${REFRESH_INTERVAL_MS / 1000}s)`);
 }

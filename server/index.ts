@@ -127,4 +127,14 @@ app.use((req, res, next) => {
   ibkrSyncManager.start().catch((err) => {
     console.warn("[IBKR Sync] Initial start failed:", err.message);
   });
+
+  const { prefetchSignalCharts, startPolygonRefresh } = await import("./services/polygon");
+  const { storage: storageInstance } = await import("./storage");
+  try {
+    const signals = await storageInstance.getSignals();
+    await prefetchSignalCharts(signals);
+    startPolygonRefresh();
+  } catch (err: any) {
+    console.warn("[Polygon] Pre-fetch failed:", err.message);
+  }
 })();

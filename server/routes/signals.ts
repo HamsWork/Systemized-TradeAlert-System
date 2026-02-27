@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { storage } from "../storage";
 import { insertSignalSchema } from "@shared/schema";
 import { asyncHandler } from "../lib/async-handler";
+import { fetchPolygonBars } from "../services/polygon";
 
 const partialSignalSchema = insertSignalSchema.partial();
 
@@ -168,6 +169,12 @@ export function registerSignalRoutes(app: Express) {
       symbol: ticker,
       metadata: { sourceApp: sourceName, sourceAppId: sourceId },
     });
+
+    fetchPolygonBars({ symbol: ticker, secType: "STK" }).catch(() => {});
+    if (instrumentType === "Options" && strike && expiration) {
+      const right = body.optionType?.toUpperCase().startsWith("P") ? "P" : "C";
+      fetchPolygonBars({ symbol: ticker, secType: "OPT", strike: Number(strike), expiration, right }).catch(() => {});
+    }
 
     res.status(201).json({ success: true, signal });
   }));
