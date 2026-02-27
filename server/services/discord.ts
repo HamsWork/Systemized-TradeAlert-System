@@ -67,7 +67,10 @@ async function sendWebhook(
   }
 }
 
-function getWebhookForInstrument(app: ConnectedApp, instrumentType: string): string | null {
+function getWebhookForInstrument(
+  app: ConnectedApp,
+  instrumentType: string,
+): string | null {
   switch (instrumentType) {
     case "Options":
       return app.discordWebhookOptions || null;
@@ -76,7 +79,12 @@ function getWebhookForInstrument(app: ConnectedApp, instrumentType: string): str
     case "LETF":
       return app.discordWebhookLetf || null;
     default:
-      return app.discordWebhookOptions || app.discordWebhookShares || app.discordWebhookLetf || null;
+      return (
+        app.discordWebhookOptions ||
+        app.discordWebhookShares ||
+        app.discordWebhookLetf ||
+        null
+      );
   }
 }
 
@@ -102,65 +110,64 @@ export async function sendSignalDiscordAlert(
   const webhookUrl = getWebhookForInstrument(app, instrumentType);
 
   if (!webhookUrl) {
-    console.log(`[Discord] No webhook configured for ${instrumentType} on app ${app.name}`);
-    return { sent: false, error: `No webhook configured for ${instrumentType}` };
+    console.log(
+      `[Discord] No webhook configured for ${instrumentType} on app ${app.name}`,
+    );
+    return {
+      sent: false,
+      error: `No webhook configured for ${instrumentType} on app ${app.name}`,
+    };
   }
 
   const direction = data.direction || "Long";
-  const entryPrice = data.entry_price;
-
+  const entryPrice = data.entry_price ? Number(data.entry_price) : null;
   const isLong = direction === "Long";
   const color = isLong ? GREEN : RED;
-  const directionEmoji = isLong ? "🟢" : "🔴";
-  const arrow = isLong ? "⬆️" : "⬇️";
 
-  let heading = "";
-  if (instrumentType === "Options") {
-    heading = `**🚨 ${ticker} Options Alert**`;
-  } else if (instrumentType === "LETF") {
-    heading = `**🚨 ${ticker} → Swing Alert**`;
-  } else {
-    heading = `**🚨 ${ticker} Shares Alert**`;
-  }
+  const heading = `**🚨 ${ticker} Trade Alert**`;
 
   const fields: DiscordField[] = [
-    { name: `${directionEmoji} Ticker`, value: ticker, inline: true },
-    { name: `${arrow} Direction`, value: direction, inline: true },
-    { name: "📊 Type", value: instrumentType, inline: true },
-    { ...SPACER },
+    { name: "🟢 Ticker", value: ticker, inline: true },
+    { name: "💹 Entry Price", value: entryPrice ? fmtPrice(entryPrice) : "—", inline: true },
   ];
 
-  if (entryPrice) {
-    fields.push({ name: "💰 Entry Price", value: fmtPrice(entryPrice), inline: true });
-  }
-
-  if (instrumentType === "Options" && data.expiration) {
-    fields.push({ name: "📅 Expiration", value: data.expiration, inline: true });
+  if (instrumentType === "Options") {
+    fields.push({ ...SPACER });
+    if (data.expiration) {
+      fields.push({ name: "✖ Expiration", value: data.expiration, inline: true });
+    }
     if (data.strike) {
-      fields.push({ name: "🎯 Strike", value: fmtPrice(data.strike), inline: true });
+      const right = data.right?.toUpperCase() === "P" ? "PUT" : "CALL";
+      fields.push({ name: "🪙 Strike", value: `${data.strike} ${right}`, inline: true });
     }
   }
 
   fields.push({ ...SPACER });
 
   const tradePlanParts: string[] = [];
+
   if (data.targets && typeof data.targets === "object") {
-    for (const [key, val] of Object.entries(data.targets)) {
-      const t = val as any;
-      if (t && t.price) {
-        let line = `🎯 ${key.toUpperCase()}: ${fmtPrice(t.price)}`;
-        if (t.raise_stop_loss?.price) {
-          line += ` (SL → ${fmtPrice(t.raise_stop_loss.price)})`;
-        }
-        tradePlanParts.push(line);
-      }
+    const targetPrices = Object.entries(data.targets)
+      .filter(([, val]) => (val as any)?.price)
+      .map(([, val]) => {
+        const price = Number((val as any).price);
+        const pct = entryPrice ? (((price - entryPrice) / entryPrice) * 100).toFixed(1) : null;
+        return pct ? `${fmtPrice(price)} (${Number(pct) >= 0 ? "+" : ""}${pct}%)` : fmtPrice(price);
+      });
+    if (targetPrices.length > 0) {
+      tradePlanParts.push(`🎯 Targets: ${targetPrices.join(", ")}`);
     }
   }
+
   if (data.stop_loss != null) {
-    tradePlanParts.push(`🛑 Stop Loss: ${fmtPrice(data.stop_loss)}`);
+    const sl = Number(data.stop_loss);
+    const pct = entryPrice ? (((sl - entryPrice) / entryPrice) * 100).toFixed(1) : null;
+    const slText = pct ? `${fmtPrice(sl)} (${Number(pct) >= 0 ? "+" : ""}${pct}%)` : fmtPrice(sl);
+    tradePlanParts.push(`🟠 Stop Loss: ${slText}`);
   }
+
   if (data.time_stop) {
-    tradePlanParts.push(`⏱️ Time Stop: ${data.time_stop}`);
+    tradePlanParts.push(`🌐 Time Horizon: ${data.time_stop}`);
   }
 
   if (tradePlanParts.length > 0) {
@@ -171,11 +178,27 @@ export async function sendSignalDiscordAlert(
     });
   }
 
-  fields.push({
-    name: "📡 Source",
-    value: app.name,
-    inline: false,
-  });
+  if (data.targets && typeof data.targets === "object") {
+    const tpLines: string[] = [];
+    const entries = Object.entries(data.targets).filter(([, val]) => (val as any)?.price);
+    entries.forEach(([key, val], i) => {
+      const t = val as any;
+      const price = Number(t.price);
+      const pct = entryPrice ? (((price - entryPrice) / entryPrice) * 100).toFixed(1) : null;
+      let line = `Take Profit (${i + 1}): At ${pct ? `${Number(pct) >= 0 ? "+" : ""}${pct}%` : fmtPrice(price)}`;
+      if (t.raise_stop_loss?.price) {
+        line += ` raise stop loss to ${fmtPrice(t.raise_stop_loss.price)}`;
+      }
+      tpLines.push(line);
+    });
+    if (tpLines.length > 0) {
+      fields.push({
+        name: "💰 Take Profit Plan",
+        value: tpLines.join("\n"),
+        inline: false,
+      });
+    }
+  }
 
   const embed: DiscordEmbed = {
     description: heading,
@@ -224,7 +247,13 @@ export async function sendSignalDiscordAlert(
 export async function sendTradeExecutedDiscordAlert(
   signal: Signal,
   app: ConnectedApp | null,
-  tradeResult: { orderId: number; status: string; symbol: string; side: string; quantity: number },
+  tradeResult: {
+    orderId: number;
+    status: string;
+    symbol: string;
+    side: string;
+    quantity: number;
+  },
 ): Promise<DiscordSendResult> {
   if (!app) {
     return { sent: false, error: "No connected app provided" };
@@ -239,15 +268,26 @@ export async function sendTradeExecutedDiscordAlert(
   const webhookUrl = getWebhookForInstrument(app, instrumentType);
 
   if (!webhookUrl) {
-    return { sent: false, error: `No webhook configured for ${instrumentType}` };
+    return {
+      sent: false,
+      error: `No webhook configured for ${instrumentType}`,
+    };
   }
 
   const fields: DiscordField[] = [
     { name: "📊 Symbol", value: tradeResult.symbol, inline: true },
     { name: "📈 Side", value: tradeResult.side.toUpperCase(), inline: true },
-    { name: "📦 Quantity", value: tradeResult.quantity.toString(), inline: true },
+    {
+      name: "📦 Quantity",
+      value: tradeResult.quantity.toString(),
+      inline: true,
+    },
     { ...SPACER },
-    { name: "🔑 IBKR Order ID", value: tradeResult.orderId.toString(), inline: true },
+    {
+      name: "🔑 IBKR Order ID",
+      value: tradeResult.orderId.toString(),
+      inline: true,
+    },
     { name: "📋 Status", value: tradeResult.status, inline: true },
   ];
 
@@ -275,7 +315,12 @@ export async function sendTradeExecutedDiscordAlert(
     instrumentType,
     status: sent ? "sent" : "error",
     messageType: "trade_executed",
-    embedData: { ticker, orderId: tradeResult.orderId, side: tradeResult.side, status: tradeResult.status },
+    embedData: {
+      ticker,
+      orderId: tradeResult.orderId,
+      side: tradeResult.side,
+      status: tradeResult.status,
+    },
     error,
     sourceAppId: app.id,
     sourceAppName: app.name,
