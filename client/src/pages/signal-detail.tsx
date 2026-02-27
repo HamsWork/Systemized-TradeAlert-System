@@ -576,31 +576,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                   </>
                 )}
 
-                {raiseMethod && raiseMethod !== "None" && (
-                  <>
-                    <Separator />
-                    <div data-testid="detail-raise-stop">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <TrendingUp className="h-3.5 w-3.5 text-amber-500/70" />
-                        <span className="text-[10px] font-medium text-amber-500/80 uppercase tracking-wider">Raise Stop</span>
-                      </div>
-                      <p className="text-xs">{raiseMethod}{raiseValue ? ` (${raiseValue})` : ""}</p>
-                    </div>
-                  </>
-                )}
 
-                {tradePlan && (
-                  <>
-                    <Separator />
-                    <div data-testid="detail-trade-plan">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <FileText className="h-3.5 w-3.5 text-blue-500/70" />
-                        <span className="text-[10px] font-medium text-blue-500/80 uppercase tracking-wider">Notes</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground whitespace-pre-wrap">{tradePlan}</p>
-                    </div>
-                  </>
-                )}
               </CardContent>
             </Card>
 
