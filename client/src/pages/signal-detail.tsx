@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import { type Signal, type IbkrOrder, type ActivityLogEntry } from "@shared/schema";
 import { formatDistanceToNow, format } from "date-fns";
-import { createChart, ColorType, CandlestickSeries, HistogramSeries } from "lightweight-charts";
+import { createChart, ColorType, CandlestickSeries } from "lightweight-charts";
 
 interface ChartBar {
   time: string;
@@ -193,20 +193,6 @@ function TradeChart({ symbol, instrumentType, strike, expiration, optionType, en
       return { time: t, open: bar.open, high: bar.high, low: bar.low, close: bar.close };
     });
     candleSeries.setData(candleData as any);
-
-    const volumeSeries = chart.addSeries(HistogramSeries, {
-      priceFormat: { type: "volume" },
-      priceScaleId: "",
-    });
-    chart.priceScale("").applyOptions({
-      scaleMargins: { top: 0.8, bottom: 0 },
-    });
-    const volumeData = liveBars.map(bar => {
-      let t = bar.time;
-      if (/^\d{8}$/.test(t)) t = `${t.slice(0, 4)}-${t.slice(4, 6)}-${t.slice(6, 8)}`;
-      return { time: t, value: bar.volume, color: bar.close >= bar.open ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)" };
-    });
-    volumeSeries.setData(volumeData as any);
 
     priceLines.forEach(pl => {
       candleSeries.createPriceLine({
