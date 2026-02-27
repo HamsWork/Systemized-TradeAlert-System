@@ -93,32 +93,9 @@ export interface DiscordSendResult {
   error: string | null;
 }
 
-export async function sendSignalDiscordAlert(
-  signal: Signal,
-  app: ConnectedApp | null,
-): Promise<DiscordSendResult> {
-  if (!app) {
-    return { sent: false, error: "No connected app provided" };
-  }
-  if (!app.sendDiscordMessages) {
-    return { sent: false, error: `Discord messages disabled for ${app.name}` };
-  }
-
-  const data = signal.data as Record<string, any>;
+function buildEntryDiscordEmbed(data: Record<string, any>): DiscordEmbed {
   const ticker = data.ticker || "UNKNOWN";
   const instrumentType = data.instrument_type || "Options";
-  const webhookUrl = getWebhookForInstrument(app, instrumentType);
-
-  if (!webhookUrl) {
-    console.log(
-      `[Discord] No webhook configured for ${instrumentType} on app ${app.name}`,
-    );
-    return {
-      sent: false,
-      error: `No webhook configured for ${instrumentType} on app ${app.name}`,
-    };
-  }
-
   const direction = data.direction || "Long";
   const entryPrice = data.entry_price ? Number(data.entry_price) : null;
   const isLong = direction === "Long";
@@ -200,13 +177,36 @@ export async function sendSignalDiscordAlert(
     }
   }
 
-  const embed: DiscordEmbed = {
+  return {
     description: heading,
     color,
     fields,
     footer: { text: DISCLAIMER },
     timestamp: new Date().toISOString(),
   };
+}
+
+export async function sendSignalDiscordAlert(
+  signal: Signal,
+  app: ConnectedApp | null,
+): Promise<DiscordSendResult> {
+  if (!app) {
+    return { sent: false, error: "No connected app provided" };
+  }
+  if (!app.sendDiscordMessages) {
+    return { sent: false, error: `Discord messages disabled for ${app.name}` };
+  }
+
+  const data = signal.data as Record<string, any>;
+  const instrumentType = data.instrument_type || "Options";
+  const webhookUrl = getWebhookForInstrument(app, instrumentType);
+
+  if (!webhookUrl) {
+    console.log(`[Discord] No webhook configured for ${instrumentType} on app ${app.name}`);
+    return { sent: false, error: `No webhook configured for ${instrumentType} on app ${app.name}` };
+  }
+
+  const embed = buildEntryDiscordEmbed(data);
 
   let sent = false;
   let error: string | null = null;
