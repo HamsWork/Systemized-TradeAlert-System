@@ -1,9 +1,45 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { storage } from "../storage";
 import { insertSignalSchema } from "@shared/schema";
 import { asyncHandler } from "../lib/async-handler";
 import { fetchPolygonBars } from "../services/polygon";
 import { processSignal } from "../services/signal-processor";
+import type { ConnectedApp } from "@shared/schema";
+
+declare global {
+  namespace Express {
+    interface Request {
+      connectedApp?: ConnectedApp | null;
+    }
+  }
+}
+
+async function authenticateApiKey(req: Request, res: Response, next: NextFunction) {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    req.connectedApp = null;
+    return next();
+  }
+
+  const apiKey = authHeader.slice(7);
+  const connectedApp = await storage.getConnectedAppByApiKey(apiKey);
+
+  if (!connectedApp) {
+    return res.status(401).json({ message: "Invalid API key" });
+  }
+
+  if (connectedApp.status !== "active") {
+    return res.status(403).json({ message: "App is inactive. Enable it in TradeSync to send signals." });
+  }
+
+  if (!connectedApp.syncSignals) {
+    return res.status(403).json({ message: "Signal sync is disabled for this app." });
+  }
+
+  req.connectedApp = connectedApp;
+  next();
+}
 
 const partialSignalSchema = insertSignalSchema.partial();
 
@@ -58,27 +94,8 @@ export function registerSignalRoutes(app: Express) {
     res.json({ success: true });
   }));
 
-  app.post("/api/ingest/signals", asyncHandler(async (req, res) => {
-    const authHeader = req.headers.authorization;
-    let connectedApp = null;
-
-    if (authHeader && authHeader.startsWith("Bearer ")) {
-      const apiKey = authHeader.slice(7);
-      connectedApp = await storage.getConnectedAppByApiKey(apiKey);
-
-      if (!connectedApp) {
-        return res.status(401).json({ message: "Invalid API key" });
-      }
-
-      if (connectedApp.status !== "active") {
-        return res.status(403).json({ message: "App is inactive. Enable it in TradeSync to send signals." });
-      }
-
-      if (!connectedApp.syncSignals) {
-        return res.status(403).json({ message: "Signal sync is disabled for this app." });
-      }
-    }
-
+  app.post("/api/ingest/signals", authenticateApiKey, asyncHandler(async (req, res) => {
+    const connectedApp = req.connectedApp ?? null;
     const body = req.body;
 
     const { ticker, instrumentType, direction, expiration, strike, entryPrice, targets, stop_loss, time_stop } = body;
