@@ -3,6 +3,7 @@ import { storage } from "../storage";
 import { insertIbkrOrderSchema, insertIbkrPositionSchema } from "@shared/schema";
 import { asyncHandler } from "../lib/async-handler";
 import { ibkrSyncManager } from "../services/ibkr-sync";
+import { fetchPolygonBars } from "../services/polygon";
 
 const partialIbkrOrderSchema = insertIbkrOrderSchema.partial();
 const partialIbkrPositionSchema = insertIbkrPositionSchema.partial();
@@ -88,7 +89,19 @@ export function registerIbkrRoutes(app: Express) {
     if (!symbol || typeof symbol !== "string") {
       return res.status(400).json({ message: "symbol query parameter is required" });
     }
-    const bars = await ibkrSyncManager.fetchContractHistory({
+
+    const polygonBars = await fetchPolygonBars({
+      symbol,
+      secType: (secType as string) || "STK",
+      strike: strike ? Number(strike) : undefined,
+      expiration: (expiration as string) || undefined,
+      right: (right as string) || undefined,
+    });
+    if (polygonBars.length > 0) {
+      return res.json(polygonBars);
+    }
+
+    const ibkrBars = await ibkrSyncManager.fetchContractHistory({
       symbol,
       secType: (secType as string) || "STK",
       strike: strike ? Number(strike) : undefined,
@@ -96,7 +109,7 @@ export function registerIbkrRoutes(app: Express) {
       right: (right as string) || undefined,
       duration: (duration as string) || undefined,
     });
-    res.json(bars);
+    res.json(ibkrBars);
   }));
 
   app.get("/api/ibkr/status", asyncHandler(async (_req, res) => {

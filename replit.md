@@ -66,7 +66,7 @@ All routes prefixed with `/api`:
 - `GET /ibkr/positions`, `GET /ibkr/positions/:integrationId`, `POST /ibkr/positions`, `PATCH /ibkr/positions/:id`
 - `POST /ibkr/connect/:integrationId` - Connect to IBKR TWS/Gateway for an integration
 - `POST /ibkr/disconnect/:integrationId` - Disconnect from IBKR for an integration
-- `GET /ibkr/chart-data?symbol=X&secType=OPT&strike=N&expiration=DATE&right=C` - Historical chart data from IBKR (backend only, frontend uses TradingView widget instead)
+- `GET /ibkr/chart-data?symbol=X&secType=OPT&strike=N&expiration=DATE&right=C` - Historical chart data (Polygon.io primary, IBKR fallback; supports stocks and option contracts)
 - `GET /ibkr/status` - Get connection status of all IBKR integrations
 - `GET /dashboard/stats`
 - `GET/POST /alerts`, `GET/PATCH/DELETE /alerts/:id` (backend only, not exposed in frontend)
@@ -118,7 +118,8 @@ All routes prefixed with `/api`:
 - `server/routes/ibkr.ts` - /api/ibkr/orders + /api/ibkr/positions
 - `server/routes/index.ts` - registerRoutes composing all domain route registrars + error handler middleware
 
-### IBKR Services
+### IBKR & Market Data Services
+- `server/services/polygon.ts` - Polygon.io API client: fetches historical OHLCV bars for stocks and option contracts (OPRA format)
 - `server/services/ibkr-client.ts` - IbkrClient class wrapping `@stoqey/ib` IBApi for connection, order/position fetching
 - `server/services/ibkr-sync.ts` - IbkrSyncManager singleton: auto-connects enabled IBKR integrations, syncs orders/positions to DB every 10s
 
@@ -129,7 +130,7 @@ All routes prefixed with `/api`:
 - `client/src/pages/settings.tsx` - System settings controls by category
 - `client/src/pages/connected-apps.tsx` - Connected apps management with API key display
 - `client/src/pages/signals.tsx` - Signals page with source app badges (cards link to detail page)
-- `client/src/pages/signal-detail.tsx` - Signal detail dialog with lightweight-charts candlestick chart (real-time IBKR data for stocks and option contracts), entry/TP/SL price lines, volume bars, IBKR orders, activity feed
+- `client/src/pages/signal-detail.tsx` - Signal detail dialog with lightweight-charts candlestick chart (Polygon.io data for stocks and options, IBKR fallback, TradingView fallback), entry/TP/SL price lines, volume bars, IBKR orders, activity feed
 - `client/src/pages/api-guide.tsx` - Interactive API guide with live code examples
 - `client/src/components/app-sidebar.tsx` - Navigation sidebar
 
