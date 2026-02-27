@@ -621,10 +621,15 @@ Example:
     "createdAt": "2026-02-26T12:00:00.000Z"
   },
   "processing": {
-    "discordSent": true,
-    "tradeExecuted": false,
-    "tradeResult": null,
-    "errors": []
+    "discord": {
+      "sent": true,
+      "errors": []
+    },
+    "ibkr": {
+      "executed": false,
+      "tradeResult": null,
+      "errors": []
+    }
   }
 }`,
       },

@@ -173,10 +173,8 @@ export function registerSignalRoutes(app: Express) {
       success: true,
       signal,
       processing: {
-        discordSent: processResult.discordSent,
-        tradeExecuted: processResult.tradeExecuted,
-        tradeResult: processResult.tradeResult,
-        errors: processResult.errors,
+        discord: processResult.discord,
+        ibkr: processResult.ibkr,
       },
     });
   }));
