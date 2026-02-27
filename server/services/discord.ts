@@ -1,4 +1,5 @@
 import type { Signal, ConnectedApp } from "@shared/schema";
+import { storage } from "../storage";
 
 interface DiscordField {
   name: string;
@@ -81,8 +82,7 @@ function getWebhookForInstrument(app: ConnectedApp, instrumentType: string): str
 
 export interface DiscordSendResult {
   sent: boolean;
-  webhookUrl: string | null;
-  instrumentType: string;
+  error: string | null;
 }
 
 export async function sendSignalDiscordAlert(
@@ -90,15 +90,29 @@ export async function sendSignalDiscordAlert(
   app: ConnectedApp,
 ): Promise<DiscordSendResult> {
   const data = signal.data as Record<string, any>;
+  const ticker = data.ticker || "UNKNOWN";
   const instrumentType = data.instrument_type || "Options";
   const webhookUrl = getWebhookForInstrument(app, instrumentType);
 
   if (!webhookUrl) {
     console.log(`[Discord] No webhook configured for ${instrumentType} on app ${app.name}`);
-    return { sent: false, webhookUrl: null, instrumentType };
+
+    await storage.createDiscordMessage({
+      signalId: signal.id,
+      webhookUrl: "",
+      channelType: "signal",
+      instrumentType,
+      status: "failed",
+      messageType: "signal_alert",
+      embedData: { ticker, direction: data.direction, instrumentType },
+      error: `No webhook configured for ${instrumentType}`,
+      sourceAppId: app.id,
+      sourceAppName: app.name,
+    });
+
+    return { sent: false, error: `No webhook configured for ${instrumentType}` };
   }
 
-  const ticker = data.ticker || "UNKNOWN";
   const direction = data.direction || "Long";
   const entryPrice = data.entry_price;
 
@@ -178,20 +192,67 @@ export async function sendSignalDiscordAlert(
     timestamp: new Date().toISOString(),
   };
 
-  const sent = await sendWebhook(webhookUrl, "@everyone", [embed]);
-  return { sent, webhookUrl, instrumentType };
+  let sent = false;
+  let error: string | null = null;
+  try {
+    sent = await sendWebhook(webhookUrl, "@everyone", [embed]);
+    if (!sent) error = "Webhook request failed";
+  } catch (err: any) {
+    error = err.message;
+  }
+
+  await storage.createDiscordMessage({
+    signalId: signal.id,
+    webhookUrl,
+    channelType: "signal",
+    instrumentType,
+    status: sent ? "sent" : "error",
+    messageType: "signal_alert",
+    embedData: { ticker, direction, instrumentType },
+    error,
+    sourceAppId: app.id,
+    sourceAppName: app.name,
+  });
+
+  if (sent) {
+    await storage.createActivity({
+      type: "discord_sent",
+      title: `Discord alert sent for ${ticker}`,
+      description: `Signal alert sent to Discord via ${app.name}`,
+      symbol: ticker,
+      signalId: signal.id,
+      metadata: { sourceApp: app.name, sourceAppId: app.id },
+    });
+  }
+
+  return { sent, error };
 }
 
 export async function sendTradeExecutedDiscordAlert(
   signal: Signal,
   app: ConnectedApp,
   tradeResult: { orderId: number; status: string; symbol: string; side: string; quantity: number },
-): Promise<boolean> {
+): Promise<DiscordSendResult> {
   const data = signal.data as Record<string, any>;
+  const ticker = data.ticker || "UNKNOWN";
   const instrumentType = data.instrument_type || "Options";
   const webhookUrl = getWebhookForInstrument(app, instrumentType);
 
-  if (!webhookUrl) return false;
+  if (!webhookUrl) {
+    await storage.createDiscordMessage({
+      signalId: signal.id,
+      webhookUrl: "",
+      channelType: "signal",
+      instrumentType,
+      status: "failed",
+      messageType: "trade_executed",
+      embedData: { ticker, orderId: tradeResult.orderId, side: tradeResult.side, status: tradeResult.status },
+      error: `No webhook configured for ${instrumentType}`,
+      sourceAppId: app.id,
+      sourceAppName: app.name,
+    });
+    return { sent: false, error: `No webhook configured for ${instrumentType}` };
+  }
 
   const fields: DiscordField[] = [
     { name: "📊 Symbol", value: tradeResult.symbol, inline: true },
@@ -210,5 +271,27 @@ export async function sendTradeExecutedDiscordAlert(
     timestamp: new Date().toISOString(),
   };
 
-  return sendWebhook(webhookUrl, "", [embed]);
+  let sent = false;
+  let error: string | null = null;
+  try {
+    sent = await sendWebhook(webhookUrl, "", [embed]);
+    if (!sent) error = "Webhook request failed";
+  } catch (err: any) {
+    error = err.message;
+  }
+
+  await storage.createDiscordMessage({
+    signalId: signal.id,
+    webhookUrl,
+    channelType: "signal",
+    instrumentType,
+    status: sent ? "sent" : "error",
+    messageType: "trade_executed",
+    embedData: { ticker, orderId: tradeResult.orderId, side: tradeResult.side, status: tradeResult.status },
+    error,
+    sourceAppId: app.id,
+    sourceAppName: app.name,
+  });
+
+  return { sent, error };
 }
