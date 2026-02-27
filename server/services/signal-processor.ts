@@ -227,9 +227,9 @@ export async function processSignal(
     metadata: { sourceApp: sourceName, sourceAppId: sourceId },
   }).catch(() => {});
 
-  fetchPolygonBars({ symbol: ticker, secType: "STK" }).catch(() => {});
   if (instrumentType === "Options" && strike && expiration) {
     const right = direction === "Put" ? "P" : "C";
+    fetchPolygonBars({ symbol: ticker, secType: "STK" }).catch(() => {});
     fetchPolygonBars({
       symbol: ticker,
       secType: "OPT",
@@ -237,6 +237,8 @@ export async function processSignal(
       expiration,
       right,
     }).catch(() => {});
+  } else {
+    fetchPolygonBars({ symbol: ticker, secType: "STK" }).catch(() => {});
   }
 
   const discordResult = await sendSignalDiscordAlert(signal, app);
