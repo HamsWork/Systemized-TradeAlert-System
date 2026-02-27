@@ -325,7 +325,7 @@ function EndpointInteractive({ endpoint, baseUrl, defaultApiKey }: { endpoint: E
                       value={paramValues[param.name] || ""}
                       onChange={(e) => setParam(param.name, e.target.value)}
                       className="w-full bg-zinc-950/60 dark:bg-zinc-950/80 border-zinc-700/30 text-sm font-mono min-h-[140px] resize-y leading-relaxed focus:ring-1 focus:ring-primary/30 placeholder:text-zinc-600 transition-colors"
-                      placeholder={'{\n  "targetLevels": {\n    "tp1": "195.00",\n    "tp2": "200.00",\n    "tp3": "205.00"\n  },\n  "stopLoss": {\n    "sl1": "182.00",\n    "sl2": "178.00"\n  },\n  "raiseStopLevel": {\n    "method": "Move to Entry at TP1",\n    "value": "189.50"\n  },\n  "notes": "Breakout above resistance"\n}'}
+                      placeholder={'{\n  "tp1": {\n    "price": 100,\n    "raise_stop_loss": {\n      "price": 90\n    }\n  },\n  "tp2": {\n    "price": 110,\n    "raise_stop_loss": {\n      "price": 100\n    }\n  }\n}'}
                       data-testid={`input-param-${param.name}`}
                     />
                   </div>
@@ -569,48 +569,32 @@ const sections: SectionDef[] = [
           { name: "ticker", type: "string", required: true, description: "Ticker symbol (e.g., 'AAPL', 'TSLA', 'SPY')." },
           { name: "instrumentType", type: "string", required: true, description: "Instrument type.", enumValues: ["Options", "Shares", "LETF"] },
           { name: "direction", type: "string", required: true, description: "Trade direction.", enumValues: ["Long", "Short"] },
-          { name: "expiration", type: "string", required: false, description: "Option expiration date (e.g., '2026-03-20'). Required for Options." },
+          { name: "expiration", type: "string", required: false, description: "Expiration date (e.g., '2026-03-01'). Required for Options." },
           { name: "strike", type: "string", required: false, description: "Option strike price (e.g., '190'). Required for Options." },
           { name: "entryPrice", type: "string", required: false, description: "Entry price for the trade (e.g., '189.50')." },
-          { name: "tradePlan", type: "json", required: false, description: "Trade plan with target levels, stop losses, and raise stop settings.", explanation: `The tradePlan object defines your exit strategy. All fields are optional — include only what applies to your trade.
+          { name: "stop_loss", type: "number", required: false, description: "Stop loss price (e.g., 80)." },
+          { name: "targets", type: "json", required: false, description: "Take-profit targets with optional raise-stop-loss levels per target.", explanation: `The targets object defines your profit-taking strategy. Each key (tp1, tp2, etc.) maps to a target with a price and an optional raise_stop_loss that adjusts your stop loss when the target is hit.
 
 Structure:
-  targetLevels    Take-profit price targets
-    tp1           First target price (e.g. "195.00")
-    tp2           Second target price (e.g. "200.00")
-    tp3           Third target price (e.g. "205.00")
+  tp1, tp2, ...   Target labels (you can use any key names)
+    price          Target price level
+    raise_stop_loss
+      price        New stop loss price when this target is hit
 
-  stopLoss        Stop-loss price levels
-    sl1           Primary stop loss (e.g. "182.00")
-    sl2           Secondary stop loss (e.g. "178.00")
-    sl3           Tertiary stop loss (e.g. "175.00")
-
-  raiseStopLevel  How to adjust the stop after hitting targets
-    method        Strategy name — one of:
-                    "Move to Entry at TP1"
-                    "Trail by %"
-                    "Trail by $"
-                    "Custom"
-    value         Value for the method (e.g. "189.50" or "2.5")
-
-  notes           Free-text trade thesis or notes (e.g. "Breakout above 188 resistance")
-
-Full example:
+Example:
 {
-  "targetLevels": {
-    "tp1": "195.00",
-    "tp2": "200.00",
-    "tp3": "205.00"
+  "tp1": {
+    "price": 100,
+    "raise_stop_loss": {
+      "price": 90
+    }
   },
-  "stopLoss": {
-    "sl1": "182.00",
-    "sl2": "178.00"
-  },
-  "raiseStopLevel": {
-    "method": "Move to Entry at TP1",
-    "value": "189.50"
-  },
-  "notes": "Breakout above 188 resistance with volume confirmation"
+  "tp2": {
+    "price": 110,
+    "raise_stop_loss": {
+      "price": 100
+    }
+  }
 }` },
         ],
         responseExample: `{
@@ -624,16 +608,21 @@ Full example:
       "entry_price": "189.50",
       "expiration": "2026-03-20",
       "strike": "190",
-      "stop_loss_1": "182.00",
-      "take_profit_1": "195.00",
-      "take_profit_2": "200.00",
-      "take_profit_3": "205.00",
-      "raise_stop_method": "Move to Entry at TP1",
-      "trade_plan": "Breakout above 188 resistance."
+      "targets": {
+        "tp1": { "price": 195, "raise_stop_loss": { "price": 189.50 } },
+        "tp2": { "price": 200, "raise_stop_loss": { "price": 195 } }
+      },
+      "stop_loss": 182
     },
     "status": "active",
     "sourceAppName": "Situ Trader",
     "createdAt": "2026-02-26T12:00:00.000Z"
+  },
+  "processing": {
+    "discordSent": true,
+    "tradeExecuted": false,
+    "tradeResult": null,
+    "errors": []
   }
 }`,
       },
@@ -652,11 +641,11 @@ Full example:
       "entry_price": "189.50",
       "expiration": "2026-03-20",
       "strike": "190",
-      "stop_loss_1": "182.00",
-      "take_profit_1": "195.00",
-      "take_profit_2": "200.00",
-      "raise_stop_method": "Move to Entry at TP1",
-      "trade_plan": "Breakout above 188 resistance."
+      "targets": {
+        "tp1": { "price": 195, "raise_stop_loss": { "price": 189.50 } },
+        "tp2": { "price": 200, "raise_stop_loss": { "price": 195 } }
+      },
+      "stop_loss": 182
     },
     "status": "active",
     "sourceAppName": "Situ Trader",
