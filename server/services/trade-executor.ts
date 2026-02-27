@@ -57,11 +57,21 @@ function buildContract(data: Record<string, any>): Contract {
   return makeStockContract(symbol);
 }
 
+export interface TradeExecutionResult {
+  executed: boolean;
+  trade: TradeResult | null;
+  error: string | null;
+}
+
 export async function executeIbkrTrade(
   signal: Signal,
-  app: ConnectedApp,
+  app: ConnectedApp | null,
   quantity: number = 1,
-): Promise<TradeResult | null> {
+): Promise<TradeExecutionResult> {
+  if (!app || !app.executeIbkrTrades) {
+    return { executed: false, trade: null, error: null };
+  }
+
   const data = signal.data as Record<string, any>;
   const ticker = data.ticker;
   const direction = data.direction || "Long";
@@ -78,7 +88,7 @@ export async function executeIbkrTrade(
 
   if (!ibkrIntegration) {
     console.warn("[TradeExecutor] No enabled IBKR integration found");
-    return null;
+    return { executed: false, trade: null, error: "No enabled IBKR integration found" };
   }
 
   const cfg = ibkrIntegration.config as Record<string, any>;
@@ -107,7 +117,7 @@ export async function executeIbkrTrade(
 
     if (!connected) {
       console.warn(`[TradeExecutor] Failed to connect to IBKR at ${host}:${port}`);
-      return null;
+      return { executed: false, trade: null, error: `Failed to connect to IBKR at ${host}:${port}` };
     }
 
     const nextOrderId = await new Promise<number>((resolve) => {
@@ -198,10 +208,30 @@ export async function executeIbkrTrade(
     });
 
     console.log(`[TradeExecutor] Order ${result.orderId} ${result.status} for ${ticker}`);
-    return result;
+
+    await storage.createActivity({
+      type: "trade_executed",
+      title: `IBKR trade executed: ${side} ${ticker}`,
+      description: `Order #${result.orderId} ${result.status} - ${side} ${result.quantity} ${ticker}`,
+      symbol: ticker,
+      signalId: signal.id,
+      metadata: { orderId: result.orderId, status: result.status, sourceApp: app.name },
+    });
+
+    return { executed: true, trade: result, error: null };
   } catch (err: any) {
     console.error(`[TradeExecutor] Trade execution error: ${err.message}`);
-    return null;
+
+    await storage.createActivity({
+      type: "trade_error",
+      title: `IBKR trade failed for ${ticker}`,
+      description: `IBKR trade execution failed: ${err.message}`,
+      symbol: ticker,
+      signalId: signal.id,
+      metadata: { sourceApp: app.name, error: err.message },
+    });
+
+    return { executed: false, trade: null, error: err.message };
   } finally {
     if (ib) {
       try { ib.disconnect(); } catch {}
