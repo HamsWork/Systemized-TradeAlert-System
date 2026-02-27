@@ -191,6 +191,37 @@ export async function prefetchSignalCharts(signals: Array<{ data: any }>): Promi
   await refreshAllTracked();
 }
 
+export async function fetchLastPrice(ticker: string): Promise<number | null> {
+  const apiKey = process.env.POLYGON_API_KEY;
+  if (!apiKey) return null;
+
+  const url = `${POLYGON_BASE}/v2/aggs/ticker/${encodeURIComponent(ticker)}/prev?adjusted=true&apiKey=${apiKey}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data: PolygonAggResponse = await res.json();
+    if (!data.results || data.results.length === 0) return null;
+    return data.results[0].c;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchOptionContractPrice(
+  symbol: string,
+  expiration: string,
+  strike: number,
+  right: string,
+): Promise<{ exists: boolean; price: number | null }> {
+  const ticker = buildOptionsTicker(symbol, expiration, right, strike);
+  const price = await fetchLastPrice(ticker);
+  return { exists: price !== null, price };
+}
+
+export async function fetchStockPrice(symbol: string): Promise<number | null> {
+  return fetchLastPrice(symbol.toUpperCase());
+}
+
 export function startPolygonRefresh(): void {
   if (refreshTimer) return;
   refreshTimer = setInterval(() => {

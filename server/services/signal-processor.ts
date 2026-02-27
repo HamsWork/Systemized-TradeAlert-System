@@ -3,7 +3,7 @@ import { insertSignalSchema } from "@shared/schema";
 import { storage } from "../storage";
 import { executeIbkrTrade } from "./trade-executor";
 import { sendSignalDiscordAlert } from "./discord";
-import { fetchPolygonBars } from "./polygon";
+import { fetchPolygonBars, fetchOptionContractPrice, fetchStockPrice } from "./polygon";
 
 interface ProcessResult {
   signal: Signal | null;
@@ -96,7 +96,7 @@ function validateIngestBody(body: Record<string, any>): string[] {
   return errors;
 }
 
-function buildSignalData(body: Record<string, any>): Record<string, any> {
+async function buildSignalData(body: Record<string, any>): Promise<{ data: Record<string, any>; errors: string[] }> {
   const {
     ticker,
     instrumentType,
@@ -109,16 +109,50 @@ function buildSignalData(body: Record<string, any>): Record<string, any> {
     time_stop,
   } = body;
 
+  const errors: string[] = [];
+
   const signalDataObj: Record<string, any> = {
     ticker,
     instrument_type: instrumentType,
     direction,
-    entry_price: entryPrice || null,
+    entry_price: entryPrice ? Number(entryPrice) : null,
   };
 
   if (instrumentType === "Options") {
     signalDataObj.expiration = expiration;
     signalDataObj.strike = strike;
+
+    const right = direction === "Put" ? "P" : "C";
+
+    try {
+      const contractResult = await fetchOptionContractPrice(
+        ticker,
+        expiration,
+        Number(strike),
+        right,
+      );
+
+      if (!contractResult.exists) {
+        errors.push(`Option contract not found: ${ticker} ${expiration} ${strike} ${direction}`);
+      } else if (contractResult.price !== null) {
+        if (!signalDataObj.entry_price) {
+          signalDataObj.entry_price = contractResult.price;
+          console.log(`[Signal] Auto-filled entryPrice from Polygon: $${contractResult.price} for ${ticker} ${expiration} ${strike} ${direction}`);
+        }
+      }
+    } catch (err: any) {
+      console.warn(`[Signal] Failed to verify option contract: ${err.message}`);
+    }
+  }
+
+  try {
+    const stockPrice = await fetchStockPrice(ticker);
+    if (stockPrice !== null) {
+      signalDataObj.entry_underlying_price = stockPrice;
+      console.log(`[Signal] Fetched underlying price from Polygon: $${stockPrice} for ${ticker}`);
+    }
+  } catch (err: any) {
+    console.warn(`[Signal] Failed to fetch underlying price: ${err.message}`);
   }
 
   if (targets && typeof targets === "object") {
@@ -133,7 +167,7 @@ function buildSignalData(body: Record<string, any>): Record<string, any> {
     signalDataObj.time_stop = time_stop;
   }
 
-  return signalDataObj;
+  return { data: signalDataObj, errors };
 }
 
 export async function processSignal(
@@ -153,16 +187,26 @@ export async function processSignal(
     return result;
   }
 
-  const signalDataObj = buildSignalData(body);
-  const { ticker, instrumentType, direction, expiration, strike } =
-    signalDataObj;
+  const buildResult = await buildSignalData(body);
+  const signalDataObj = buildResult.data;
+
+  if (buildResult.errors.length > 0) {
+    result.validationErrors = buildResult.errors;
+    return result;
+  }
+
+  const ticker = signalDataObj.ticker;
+  const instrumentType = signalDataObj.instrument_type;
+  const direction = signalDataObj.direction;
+  const expiration = signalDataObj.expiration;
+  const strike = signalDataObj.strike;
 
   const sourceName = app.name;
   const sourceId = app.id;
 
   const signalPayload = {
     data: signalDataObj,
-    discordChannelId: signalData.discordChannelId || null,
+    discordChannelId: body.discordChannelId || null,
     status: "active",
     sourceAppId: sourceId,
     sourceAppName: sourceName,
@@ -185,9 +229,7 @@ export async function processSignal(
 
   fetchPolygonBars({ symbol: ticker, secType: "STK" }).catch(() => {});
   if (instrumentType === "Options" && strike && expiration) {
-    const right = signalData.optionType?.toUpperCase().startsWith("P")
-      ? "P"
-      : "C";
+    const right = direction === "Put" ? "P" : "C";
     fetchPolygonBars({
       symbol: ticker,
       secType: "OPT",
