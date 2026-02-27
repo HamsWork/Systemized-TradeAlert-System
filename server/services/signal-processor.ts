@@ -55,6 +55,44 @@ function validateIngestBody(body: Record<string, any>): string[] {
     if (!body.strike) errors.push("strike is required for Options");
   }
 
+  if (body.entryPrice != null && (isNaN(Number(body.entryPrice)) || Number(body.entryPrice) <= 0)) {
+    errors.push("entryPrice must be a positive number");
+  }
+
+  if (body.targets != null) {
+    if (typeof body.targets !== "object" || Array.isArray(body.targets)) {
+      errors.push("targets must be an object (e.g. { tp1: { price: 100 }, tp2: { price: 110 } })");
+    } else {
+      for (const [key, val] of Object.entries(body.targets)) {
+        const t = val as any;
+        if (!t || typeof t !== "object") {
+          errors.push(`targets.${key} must be an object with a price field`);
+          continue;
+        }
+        if (t.price == null || isNaN(Number(t.price)) || Number(t.price) <= 0) {
+          errors.push(`targets.${key}.price must be a positive number`);
+        }
+        if (t.raise_stop_loss != null) {
+          if (typeof t.raise_stop_loss !== "object") {
+            errors.push(`targets.${key}.raise_stop_loss must be an object with a price field`);
+          } else if (t.raise_stop_loss.price == null || isNaN(Number(t.raise_stop_loss.price)) || Number(t.raise_stop_loss.price) <= 0) {
+            errors.push(`targets.${key}.raise_stop_loss.price must be a positive number`);
+          }
+        }
+      }
+    }
+  }
+
+  if (body.stop_loss != null && (isNaN(Number(body.stop_loss)) || Number(body.stop_loss) <= 0)) {
+    errors.push("stop_loss must be a positive number");
+  }
+
+  if (body.time_stop != null) {
+    if (typeof body.time_stop !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(body.time_stop)) {
+      errors.push("time_stop must be a date string in YYYY-MM-DD format");
+    }
+  }
+
   return errors;
 }
 
