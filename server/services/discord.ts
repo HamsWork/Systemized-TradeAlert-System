@@ -103,20 +103,6 @@ export async function sendSignalDiscordAlert(
 
   if (!webhookUrl) {
     console.log(`[Discord] No webhook configured for ${instrumentType} on app ${app.name}`);
-
-    await storage.createDiscordMessage({
-      signalId: signal.id,
-      webhookUrl: "",
-      channelType: "signal",
-      instrumentType,
-      status: "failed",
-      messageType: "signal_alert",
-      embedData: { ticker, direction: data.direction, instrumentType },
-      error: `No webhook configured for ${instrumentType}`,
-      sourceAppId: app.id,
-      sourceAppName: app.name,
-    });
-
     return { sent: false, error: `No webhook configured for ${instrumentType}` };
   }
 
@@ -253,18 +239,6 @@ export async function sendTradeExecutedDiscordAlert(
   const webhookUrl = getWebhookForInstrument(app, instrumentType);
 
   if (!webhookUrl) {
-    await storage.createDiscordMessage({
-      signalId: signal.id,
-      webhookUrl: "",
-      channelType: "signal",
-      instrumentType,
-      status: "failed",
-      messageType: "trade_executed",
-      embedData: { ticker, orderId: tradeResult.orderId, side: tradeResult.side, status: tradeResult.status },
-      error: `No webhook configured for ${instrumentType}`,
-      sourceAppId: app.id,
-      sourceAppName: app.name,
-    });
     return { sent: false, error: `No webhook configured for ${instrumentType}` };
   }
 
