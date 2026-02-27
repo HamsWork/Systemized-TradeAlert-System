@@ -570,7 +570,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                         <span className="text-[10px] font-medium text-amber-500/80 uppercase tracking-wider">Time Stop</span>
                       </div>
                       <Badge variant="outline" className="font-mono text-xs text-amber-500 border-amber-500/30 bg-amber-500/5">
-                        {new Date(timeStop).toLocaleString()}
+                        {timeStop}
                       </Badge>
                     </div>
                   </>
