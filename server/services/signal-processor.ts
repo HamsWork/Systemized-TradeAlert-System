@@ -1,12 +1,21 @@
 import type { Signal, ConnectedApp } from "@shared/schema";
 import { storage } from "../storage";
 import { executeIbkrTrade } from "./trade-executor";
-import { sendSignalDiscordAlert, sendTradeExecutedDiscordAlert } from "./discord";
+import {
+  sendSignalDiscordAlert,
+  sendTradeExecutedDiscordAlert,
+} from "./discord";
 
 interface ProcessResult {
   discordSent: boolean;
   tradeExecuted: boolean;
-  tradeResult: { orderId: number; status: string; symbol: string; side: string; quantity: number } | null;
+  tradeResult: {
+    orderId: number;
+    status: string;
+    symbol: string;
+    side: string;
+    quantity: number;
+  } | null;
   errors: string[];
 }
 
@@ -24,12 +33,10 @@ export async function processSignal(
   const data = signal.data as Record<string, any>;
   const ticker = data.ticker || "UNKNOWN";
 
-  if (app && app.sendDiscordMessages) {
-    const discordResult = await sendSignalDiscordAlert(signal, app);
-    result.discordSent = discordResult.sent;
-    if (discordResult.error) {
-      result.errors.push(`Discord alert failed: ${discordResult.error}`);
-    }
+  const discordResult = await sendSignalDiscordAlert(signal, app);
+  result.discordSent = discordResult.sent;
+  if (discordResult.error) {
+    result.errors.push(`Discord alert failed: ${discordResult.error}`);
   }
 
   if (app && app.executeIbkrTrades) {
@@ -45,12 +52,14 @@ export async function processSignal(
           description: `Order #${tradeResult.orderId} ${tradeResult.status} - ${tradeResult.side} ${tradeResult.quantity} ${ticker}`,
           symbol: ticker,
           signalId: signal.id,
-          metadata: { orderId: tradeResult.orderId, status: tradeResult.status, sourceApp: app.name },
+          metadata: {
+            orderId: tradeResult.orderId,
+            status: tradeResult.status,
+            sourceApp: app.name,
+          },
         });
 
-        if (app.sendDiscordMessages) {
-          await sendTradeExecutedDiscordAlert(signal, app, tradeResult);
-        }
+        await sendTradeExecutedDiscordAlert(signal, app, tradeResult);
       }
     } catch (err: any) {
       const msg = `IBKR trade execution failed: ${err.message}`;

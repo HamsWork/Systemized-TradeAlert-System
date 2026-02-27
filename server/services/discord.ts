@@ -87,8 +87,12 @@ export interface DiscordSendResult {
 
 export async function sendSignalDiscordAlert(
   signal: Signal,
-  app: ConnectedApp,
+  app: ConnectedApp | null,
 ): Promise<DiscordSendResult> {
+  if (!app || !app.sendDiscordMessages) {
+    return { sent: false, error: null };
+  }
+
   const data = signal.data as Record<string, any>;
   const ticker = data.ticker || "UNKNOWN";
   const instrumentType = data.instrument_type || "Options";
@@ -230,9 +234,13 @@ export async function sendSignalDiscordAlert(
 
 export async function sendTradeExecutedDiscordAlert(
   signal: Signal,
-  app: ConnectedApp,
+  app: ConnectedApp | null,
   tradeResult: { orderId: number; status: string; symbol: string; side: string; quantity: number },
 ): Promise<DiscordSendResult> {
+  if (!app || !app.sendDiscordMessages) {
+    return { sent: false, error: null };
+  }
+
   const data = signal.data as Record<string, any>;
   const ticker = data.ticker || "UNKNOWN";
   const instrumentType = data.instrument_type || "Options";
