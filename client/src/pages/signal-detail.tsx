@@ -231,8 +231,22 @@ function TradeChart({ symbol, instrumentType, strike, expiration, optionType, en
   if (barsQuery.isLoading) {
     return (
       <div data-testid="trading-chart-wrapper">
-        <Skeleton className="w-full h-[350px] rounded-lg" />
-        <p className="text-xs text-muted-foreground text-center mt-2">Fetching chart data from IBKR...</p>
+        <div className="flex items-center gap-2 mb-2">
+          {isOption ? <CandlestickChart className="h-4 w-4 text-blue-500" /> : <BarChart3 className="h-4 w-4 text-muted-foreground" />}
+          <span className="text-sm font-medium">{isOption ? "Option Contract" : "Trade Chart"}</span>
+          <span className="text-xs text-muted-foreground font-mono">— {chartLabel}</span>
+        </div>
+        <div className="w-full h-[350px] rounded-lg bg-card border border-border/50 flex flex-col items-center justify-center gap-4">
+          <div className="relative w-12 h-12">
+            <div className="absolute inset-0 rounded-full border-2 border-muted-foreground/20" />
+            <div className="absolute inset-0 rounded-full border-2 border-t-emerald-500 animate-spin" />
+            <BarChart3 className="absolute inset-0 m-auto h-5 w-5 text-muted-foreground/50" />
+          </div>
+          <div className="text-center">
+            <p className="text-sm text-muted-foreground">Loading chart data</p>
+            <p className="text-[10px] text-muted-foreground/60 mt-0.5">Fetching from Polygon.io</p>
+          </div>
+        </div>
       </div>
     );
   }
