@@ -381,11 +381,18 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
   const expiration = data.expiration;
   const strike = data.strike;
 
-  const tpLevels = [data.take_profit_1, data.take_profit_2, data.take_profit_3].filter(Boolean).map(Number);
-  const slLevels = [data.stop_loss_1, data.stop_loss_2, data.stop_loss_3].filter(Boolean).map(Number);
-  const raiseMethod = data.raise_stop_method;
-  const raiseValue = data.raise_stop_value;
-  const tradePlan = data.trade_plan;
+  const targets: { key: string; price: number; raiseStopLoss?: number }[] = [];
+  if (data.targets && typeof data.targets === "object") {
+    for (const [key, val] of Object.entries(data.targets)) {
+      const t = val as any;
+      if (t && t.price) {
+        targets.push({ key, price: Number(t.price), raiseStopLoss: t.raise_stop_loss?.price ? Number(t.raise_stop_loss.price) : undefined });
+      }
+    }
+  }
+  const tpLevels = targets.map(t => t.price);
+  const stopLoss = data.stop_loss !== undefined && data.stop_loss !== null ? Number(data.stop_loss) : undefined;
+  const slLevels = stopLoss !== undefined ? [stopLoss] : [];
 
   const orders = ordersQuery.data ?? [];
   const activity = activityQuery.data ?? [];

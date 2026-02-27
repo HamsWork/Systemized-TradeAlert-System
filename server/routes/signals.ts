@@ -69,8 +69,7 @@ export function registerSignalRoutes(app: Express) {
 
     const body = req.body;
 
-    const { ticker, instrumentType, direction, expiration, strike, entryPrice } = body;
-    let { tradePlan } = body;
+    const { ticker, instrumentType, direction, expiration, strike, entryPrice, targets, stop_loss } = body;
 
     if (!ticker) {
       return res.status(400).json({ message: "ticker is required" });
@@ -95,10 +94,6 @@ export function registerSignalRoutes(app: Express) {
       }
     }
 
-    if (tradePlan && typeof tradePlan === "string") {
-      try { tradePlan = JSON.parse(tradePlan); } catch { return res.status(400).json({ message: "tradePlan must be a valid JSON object" }); }
-    }
-
     const signalDataObj: Record<string, any> = {
       ticker,
       instrument_type: instrumentType,
@@ -111,37 +106,16 @@ export function registerSignalRoutes(app: Express) {
       signalDataObj.strike = strike;
     }
 
-    if (tradePlan && typeof tradePlan === "object") {
-      if (tradePlan.stopLoss) {
-        const sl = tradePlan.stopLoss;
-        if (Array.isArray(sl)) {
-          if (sl[0]) signalDataObj.stop_loss_1 = sl[0];
-          if (sl[1]) signalDataObj.stop_loss_2 = sl[1];
-          if (sl[2]) signalDataObj.stop_loss_3 = sl[2];
-        } else {
-          if (sl.sl1) signalDataObj.stop_loss_1 = sl.sl1;
-          if (sl.sl2) signalDataObj.stop_loss_2 = sl.sl2;
-          if (sl.sl3) signalDataObj.stop_loss_3 = sl.sl3;
-        }
-      }
-      if (tradePlan.targetLevels) {
-        const tp = tradePlan.targetLevels;
-        if (Array.isArray(tp)) {
-          if (tp[0]) signalDataObj.take_profit_1 = tp[0];
-          if (tp[1]) signalDataObj.take_profit_2 = tp[1];
-          if (tp[2]) signalDataObj.take_profit_3 = tp[2];
-        } else {
-          if (tp.tp1) signalDataObj.take_profit_1 = tp.tp1;
-          if (tp.tp2) signalDataObj.take_profit_2 = tp.tp2;
-          if (tp.tp3) signalDataObj.take_profit_3 = tp.tp3;
-        }
-      }
-      if (tradePlan.raiseStopLevel) {
-        const rs = tradePlan.raiseStopLevel;
-        if (rs.method) signalDataObj.raise_stop_method = rs.method;
-        if (rs.value) signalDataObj.raise_stop_value = rs.value;
-      }
-      if (tradePlan.notes) signalDataObj.trade_plan = tradePlan.notes;
+    if (targets && typeof targets === "object") {
+      signalDataObj.targets = targets;
+    }
+
+    if (stop_loss !== undefined && stop_loss !== null) {
+      signalDataObj.stop_loss = stop_loss;
+    }
+
+    if (body.expiration) {
+      signalDataObj.expiration = body.expiration;
     }
 
     const sourceName = connectedApp ? connectedApp.name : "Manual";
