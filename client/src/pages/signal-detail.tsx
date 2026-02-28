@@ -377,7 +377,7 @@ function ActivityRow({ entry }: { entry: ActivityLogEntry }) {
         </div>
       </div>
       {entry.description && (
-        <p className="text-[10px] text-muted-foreground mt-1 whitespace-pre-wrap break-words w-full">{entry.description}</p>
+        <p className="text-[10px] text-muted-foreground mt-1 pl-8 whitespace-pre-wrap break-words">{entry.description}</p>
       )}
     </div>
   );
