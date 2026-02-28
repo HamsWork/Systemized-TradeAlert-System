@@ -128,9 +128,9 @@ function buildOptionsFields(
     const sl = Number(data.stop_loss);
     const slPct = optionPrice ? fmtPct(optionPrice, sl) : null;
     let slText = `🛑 Stop Loss: ${fmtPrice(sl)}(${slPct || "?"})`;
-    const targetEntries = Object.entries(data.targets || {}).filter(([, val]) => (val as any)?.raise_stop_loss?.price);
-    targetEntries.forEach(([, val], i) => {
-      const rsl = Number((val as any).raise_stop_loss.price);
+    const allTargets = Object.entries(data.targets || {}).filter(([, val]) => (val as any)?.price);
+    allTargets.forEach(([, val], i) => {
+      const rsl = Number((val as any).raise_stop_loss?.price);
       const rslPct = optionPrice ? fmtPct(optionPrice, rsl) : null;
       slText += ` → ${fmtPrice(rsl)}(${rslPct || "?"}) after TP${i + 1}`;
     });
@@ -203,9 +203,9 @@ function buildSharesFields(
     const sl = Number(data.stop_loss);
     const slPct = entryPrice ? fmtPct(entryPrice, sl) : null;
     let slText = `🛑 Stop Loss: ${fmtPrice(sl)}(${slPct || "?"})`;
-    const targetEntries = Object.entries(data.targets || {}).filter(([, val]) => (val as any)?.raise_stop_loss?.price);
-    targetEntries.forEach(([, val], i) => {
-      const rsl = Number((val as any).raise_stop_loss.price);
+    const allTargets = Object.entries(data.targets || {}).filter(([, val]) => (val as any)?.price);
+    allTargets.forEach(([, val], i) => {
+      const rsl = Number((val as any).raise_stop_loss?.price);
       const rslPct = entryPrice ? fmtPct(entryPrice, rsl) : null;
       slText += ` → ${fmtPrice(rsl)}(${rslPct || "?"}) after TP${i + 1}`;
     });
