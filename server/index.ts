@@ -128,6 +128,9 @@ app.use((req, res, next) => {
     console.warn("[IBKR Sync] Initial start failed:", err.message);
   });
 
+  const { startTradeMonitor } = await import("./services/trade-monitor");
+  startTradeMonitor();
+
   const { prefetchSignalCharts, startPolygonRefresh } = await import("./services/polygon");
   const { storage: storageInstance } = await import("./storage");
   try {

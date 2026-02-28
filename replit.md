@@ -127,6 +127,7 @@ All routes prefixed with `/api`:
 - `server/services/polygon.ts` - Polygon.io API client: fetches historical OHLCV bars for stocks and option contracts (OPRA format)
 - `server/services/ibkr-client.ts` - IbkrClient class wrapping `@stoqey/ib` IBApi for connection, order/position fetching
 - `server/services/ibkr-sync.ts` - IbkrSyncManager singleton: auto-connects enabled IBKR integrations, syncs orders/positions to DB every 10s
+- `server/services/trade-monitor.ts` - Background trade monitor: checks active signals every 10s against IBKR lastPrice, fires Discord alerts on target hits/stop loss, raises stop loss on TP hits, marks signals completed/stopped_out
 
 ### Other Key Files
 - `server/db.ts` - Database connection with keepAlive and error handling
