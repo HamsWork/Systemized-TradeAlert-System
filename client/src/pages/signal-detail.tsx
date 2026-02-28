@@ -372,7 +372,7 @@ function ActivityRow({ entry }: { entry: ActivityLogEntry }) {
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-xs font-medium">{entry.title}</p>
-        <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{entry.description}</p>
+        <p className="text-[10px] text-muted-foreground mt-0.5 whitespace-pre-wrap break-words">{entry.description}</p>
       </div>
       <div className="text-[10px] text-muted-foreground shrink-0">
         {entry.createdAt ? formatDistanceToNow(new Date(entry.createdAt), { addSuffix: true }) : ""}
