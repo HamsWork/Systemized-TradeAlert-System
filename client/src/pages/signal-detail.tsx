@@ -366,17 +366,19 @@ function ActivityRow({ entry }: { entry: ActivityLogEntry }) {
   const { icon: Icon, color } = iconMap[entry.type] || { icon: Activity, color: "text-muted-foreground bg-muted" };
 
   return (
-    <div className="flex items-start gap-2 py-2 px-2 rounded-lg hover:bg-muted/50 transition-colors" data-testid={`activity-row-${entry.id}`}>
-      <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${color}`}>
-        <Icon className="h-3 w-3" />
+    <div className="py-2 px-2 rounded-lg hover:bg-muted/50 transition-colors" data-testid={`activity-row-${entry.id}`}>
+      <div className="flex items-center gap-2">
+        <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${color}`}>
+          <Icon className="h-3 w-3" />
+        </div>
+        <p className="text-xs font-medium flex-1 min-w-0">{entry.title}</p>
+        <div className="text-[10px] text-muted-foreground shrink-0">
+          {entry.createdAt ? formatDistanceToNow(new Date(entry.createdAt), { addSuffix: true }) : ""}
+        </div>
       </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium">{entry.title}</p>
-        <p className="text-[10px] text-muted-foreground mt-0.5 whitespace-pre-wrap break-words">{entry.description}</p>
-      </div>
-      <div className="text-[10px] text-muted-foreground shrink-0">
-        {entry.createdAt ? formatDistanceToNow(new Date(entry.createdAt), { addSuffix: true }) : ""}
-      </div>
+      {entry.description && (
+        <p className="text-[10px] text-muted-foreground mt-1 whitespace-pre-wrap break-words w-full">{entry.description}</p>
+      )}
     </div>
   );
 }
