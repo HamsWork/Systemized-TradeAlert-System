@@ -142,12 +142,16 @@ function determineSide(data: Record<string, any>): {
   };
 }
 
+let tradeClientIdCounter = 200;
+
 async function connectIbkr(
   host: string,
   port: number,
   clientId: number,
 ): Promise<IBApi> {
-  const ib = new IBApi({ host, port, clientId: clientId + 100 });
+  const uniqueClientId = clientId + tradeClientIdCounter++;
+  if (tradeClientIdCounter > 999) tradeClientIdCounter = 200;
+  const ib = new IBApi({ host, port, clientId: uniqueClientId });
 
   const connected = await new Promise<boolean>((resolve) => {
     const timeout = setTimeout(() => resolve(false), 10000);
