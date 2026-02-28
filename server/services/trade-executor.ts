@@ -346,7 +346,6 @@ export async function executeIbkrTrade(
   const data = signal.data as Record<string, any>;
   const ticker = data.ticker;
   const { side, exitSide } = determineSide(data);
-  const entryPrice = data.entry_price ? Number(data.entry_price) : null;
   const stopLoss = data.stop_loss ? Number(data.stop_loss) : null;
   const targets = parseTargets(data);
 
@@ -388,7 +387,7 @@ export async function executeIbkrTrade(
           : "C"
         : null;
 
-    const hasChildren = (targets.length > 0 && entryPrice) || stopLoss;
+    const hasChildren = targets.length > 0 || !!stopLoss;
 
     const parentOrder: any = {
       action: side === "BUY" ? OrderAction.BUY : OrderAction.SELL,
@@ -399,7 +398,7 @@ export async function executeIbkrTrade(
     };
 
     console.log(
-      `[TradeExecutor] Placing bracket: ${side} ${quantity} ${ticker} @ ${entryPrice ? `$${entryPrice}` : "MKT"} (parentId=${parentOrderId})`,
+      `[TradeExecutor] Placing bracket: ${side} ${quantity} ${ticker} @ MKT (parentId=${parentOrderId})`,
     );
     ib.placeOrder(parentOrderId, contract, parentOrder);
 
@@ -483,9 +482,9 @@ export async function executeIbkrTrade(
         right: rightVal,
         conId: null,
         side: side.toLowerCase(),
-        orderType: entryPrice ? "limit" : "market",
+        orderType: "market",
         quantity,
-        entryPrice: entryPrice ? String(entryPrice) : null,
+        entryPrice: null,
         stopPrice: null,
         filledQuantity: 0,
         avgFillPrice: null,
@@ -532,9 +531,9 @@ export async function executeIbkrTrade(
       right: rightVal,
       conId: null,
       side: side.toLowerCase(),
-      orderType: entryPrice ? "limit" : "market",
+      orderType: "market",
       quantity,
-      entryPrice: entryPrice ? String(entryPrice) : null,
+      entryPrice: null,
       stopPrice: null,
       filledQuantity: parentStatus.filled || 0,
       avgFillPrice: parentStatus.avgFillPrice || null,
