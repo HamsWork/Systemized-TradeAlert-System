@@ -102,6 +102,21 @@ function splitQuantityByTargets(totalQty: number, targets: TargetInfo[]): number
   return quantities;
 }
 
+function determineSide(data: Record<string, any>): { side: string; exitSide: OrderAction } {
+  const instrumentType = data.instrument_type || "Shares";
+  const direction = data.direction || "Long";
+
+  if (instrumentType === "Options") {
+    return { side: "BUY", exitSide: OrderAction.SELL };
+  }
+
+  const isBullish = direction === "Long";
+  return {
+    side: isBullish ? "BUY" : "SELL",
+    exitSide: isBullish ? OrderAction.SELL : OrderAction.BUY,
+  };
+}
+
 async function connectIbkr(host: string, port: number, clientId: number): Promise<IBApi> {
   const ib = new IBApi({ host, port, clientId: clientId + 100 });
 
@@ -169,9 +184,7 @@ export async function executeIbkrTrade(
 
   const data = signal.data as Record<string, any>;
   const ticker = data.ticker;
-  const direction = data.direction || "Long";
-  const side = (direction === "Long" || direction === "Call") ? "BUY" : "SELL";
-  const exitSide = side === "BUY" ? OrderAction.SELL : OrderAction.BUY;
+  const { side, exitSide } = determineSide(data);
   const entryPrice = data.entry_price ? Number(data.entry_price) : null;
   const stopLoss = data.stop_loss ? Number(data.stop_loss) : null;
   const targets = parseTargets(data);
@@ -195,7 +208,10 @@ export async function executeIbkrTrade(
     const parentOrderId = await getNextOrderId(ib);
     const contract = buildContract(data);
     const secType = contract.secType === SecType.OPT ? "OPT" : "STK";
-    const rightVal = data.direction === "Put" ? "P" : data.direction === "Call" ? "C" : null;
+    const instrumentType = data.instrument_type || "Shares";
+    const rightVal = instrumentType === "Options"
+      ? (data.direction === "Put" ? "P" : "C")
+      : null;
 
     const hasChildren = (targets.length > 0 && entryPrice) || stopLoss;
 
@@ -232,7 +248,8 @@ export async function executeIbkrTrade(
         transmit: isLast,
       };
 
-      console.log(`[TradeExecutor]   TP${i + 1}: LMT ${exitSide === OrderAction.BUY ? "BUY" : "SELL"} ${tpQuantities[i]} @ $${tp.price} (orderId=${nextId})`);
+      const exitLabel = exitSide === OrderAction.BUY ? "BUY" : "SELL";
+      console.log(`[TradeExecutor]   TP${i + 1}: LMT ${exitLabel} ${tpQuantities[i]} @ $${tp.price} (orderId=${nextId})`);
       ib.placeOrder(nextId, contract, tpOrder);
       childOrders.push({ orderId: nextId, type: `TP${i + 1}`, price: tp.price, quantity: tpQuantities[i] });
       nextId++;
@@ -249,7 +266,8 @@ export async function executeIbkrTrade(
         transmit: true,
       };
 
-      console.log(`[TradeExecutor]   SL: STP ${exitSide === OrderAction.BUY ? "BUY" : "SELL"} ${quantity} @ $${stopLoss} (orderId=${nextId})`);
+      const exitLabel = exitSide === OrderAction.BUY ? "BUY" : "SELL";
+      console.log(`[TradeExecutor]   SL: STP ${exitLabel} ${quantity} @ $${stopLoss} (orderId=${nextId})`);
       ib.placeOrder(nextId, contract, slOrder);
       childOrders.push({ orderId: nextId, type: "SL", price: stopLoss, quantity });
       nextId++;
