@@ -381,12 +381,12 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
   const expiration = data.expiration;
   const strike = data.strike;
 
-  const targets: { key: string; price: number; raiseStopLoss?: number }[] = [];
+  const targets: { key: string; price: number; takeOffPercent?: number; raiseStopLoss?: number }[] = [];
   if (data.targets && typeof data.targets === "object") {
     for (const [key, val] of Object.entries(data.targets)) {
       const t = val as any;
       if (t && t.price) {
-        targets.push({ key, price: Number(t.price), raiseStopLoss: t.raise_stop_loss?.price ? Number(t.raise_stop_loss.price) : undefined });
+        targets.push({ key, price: Number(t.price), takeOffPercent: t.take_off_percent ? Number(t.take_off_percent) : undefined, raiseStopLoss: t.raise_stop_loss?.price ? Number(t.raise_stop_loss.price) : undefined });
       }
     }
   }
@@ -532,9 +532,9 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                         <span className="text-[10px] font-medium text-emerald-500/80 uppercase tracking-wider">Targets</span>
                       </div>
                       <div className="flex gap-1.5 flex-wrap">
-                        {tpLevels.map((tp, i) => (
+                        {targets.map((t, i) => (
                           <Badge key={i} variant="outline" className="font-mono text-xs text-emerald-500 border-emerald-500/30 bg-emerald-500/5">
-                            TP{i + 1}: ${tp}
+                            TP{i + 1}: ${t.price}{t.takeOffPercent ? ` (${t.takeOffPercent}%)` : ""}
                           </Badge>
                         ))}
                       </div>

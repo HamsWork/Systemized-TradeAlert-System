@@ -146,9 +146,11 @@ function buildOptionsFields(
       const t = val as any;
       const price = Number(t.price);
       const pct = optionPrice ? fmtPct(optionPrice, price) : null;
+      const takeOff = t.take_off_percent ? `${t.take_off_percent}%` : null;
       let line = `Take Profit (${i + 1}): At ${pct || fmtPrice(price)}`;
+      if (takeOff) line += ` take off ${takeOff} of position`;
       if (t.raise_stop_loss?.price) {
-        line += ` raise stop loss to ${fmtPrice(t.raise_stop_loss.price)}`;
+        line += ` and raise stop loss to ${fmtPrice(t.raise_stop_loss.price)}`;
       }
       tpLines.push(line);
     });
@@ -208,9 +210,11 @@ function buildSharesFields(
       const t = val as any;
       const price = Number(t.price);
       const pct = entryPrice ? fmtPct(entryPrice, price) : null;
+      const takeOff = t.take_off_percent ? `${t.take_off_percent}%` : null;
       let line = `Take Profit (${i + 1}): At ${pct || fmtPrice(price)}`;
+      if (takeOff) line += ` take off ${takeOff} of position`;
       if (t.raise_stop_loss?.price) {
-        line += ` raise stop loss to ${fmtPrice(t.raise_stop_loss.price)}`;
+        line += ` and raise stop loss to ${fmtPrice(t.raise_stop_loss.price)}`;
       }
       tpLines.push(line);
     });

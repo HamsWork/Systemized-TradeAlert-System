@@ -72,6 +72,9 @@ function validateIngestBody(body: Record<string, any>): string[] {
         if (t.price == null || isNaN(Number(t.price)) || Number(t.price) <= 0) {
           errors.push(`targets.${key}.price must be a positive number`);
         }
+        if (t.take_off_percent != null && (isNaN(Number(t.take_off_percent)) || Number(t.take_off_percent) <= 0 || Number(t.take_off_percent) > 100)) {
+          errors.push(`targets.${key}.take_off_percent must be a number between 0 and 100`);
+        }
         if (t.raise_stop_loss != null) {
           if (typeof t.raise_stop_loss !== "object") {
             errors.push(`targets.${key}.raise_stop_loss must be an object with a price field`);

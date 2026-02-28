@@ -325,7 +325,7 @@ function EndpointInteractive({ endpoint, baseUrl, defaultApiKey }: { endpoint: E
                       value={paramValues[param.name] || ""}
                       onChange={(e) => setParam(param.name, e.target.value)}
                       className="w-full bg-zinc-950/60 dark:bg-zinc-950/80 border-zinc-700/30 text-sm font-mono min-h-[140px] resize-y leading-relaxed focus:ring-1 focus:ring-primary/30 placeholder:text-zinc-600 transition-colors"
-                      placeholder={'{\n  "tp1": {\n    "price": 100,\n    "raise_stop_loss": {\n      "price": 90\n    }\n  },\n  "tp2": {\n    "price": 110,\n    "raise_stop_loss": {\n      "price": 100\n    }\n  }\n}'}
+                      placeholder={'{\n  "tp1": {\n    "price": 100,\n    "take_off_percent": 50,\n    "raise_stop_loss": {\n      "price": 90\n    }\n  },\n  "tp2": {\n    "price": 110,\n    "take_off_percent": 50,\n    "raise_stop_loss": {\n      "price": 100\n    }\n  }\n}'}
                       data-testid={`input-param-${param.name}`}
                     />
                   </div>
@@ -574,24 +574,27 @@ const sections: SectionDef[] = [
           { name: "entryPrice", type: "string", required: false, description: "Entry price for the trade (e.g., '189.50')." },
           { name: "stop_loss", type: "number", required: false, description: "Stop loss price (e.g., 80)." },
           { name: "time_stop", type: "string", required: false, description: "Time-based stop — exit the trade by this date (e.g., '2026-03-01')." },
-          { name: "targets", type: "json", required: false, description: "Take-profit targets with optional raise-stop-loss levels per target.", explanation: `The targets object defines your profit-taking strategy. Each key (tp1, tp2, etc.) maps to a target with a price and an optional raise_stop_loss that adjusts your stop loss when the target is hit.
+          { name: "targets", type: "json", required: false, description: "Take-profit targets with take-off percentage and optional raise-stop-loss levels per target.", explanation: `The targets object defines your profit-taking strategy. Each key (tp1, tp2, etc.) maps to a target with a price, a take_off_percent indicating how much of the position to close, and an optional raise_stop_loss that adjusts your stop loss when the target is hit.
 
 Structure:
-  tp1, tp2, ...   Target labels (you can use any key names)
-    price          Target price level
+  tp1, tp2, ...      Target labels (you can use any key names)
+    price             Target price level
+    take_off_percent  Percentage of position to take off at this target (0-100)
     raise_stop_loss
-      price        New stop loss price when this target is hit
+      price           New stop loss price when this target is hit
 
 Example:
 {
   "tp1": {
     "price": 100,
+    "take_off_percent": 50,
     "raise_stop_loss": {
       "price": 90
     }
   },
   "tp2": {
     "price": 110,
+    "take_off_percent": 50,
     "raise_stop_loss": {
       "price": 100
     }
@@ -610,8 +613,8 @@ Example:
       "expiration": "2026-03-20",
       "strike": "190",
       "targets": {
-        "tp1": { "price": 195, "raise_stop_loss": { "price": 189.50 } },
-        "tp2": { "price": 200, "raise_stop_loss": { "price": 195 } }
+        "tp1": { "price": 195, "take_off_percent": 50, "raise_stop_loss": { "price": 189.50 } },
+        "tp2": { "price": 200, "take_off_percent": 50, "raise_stop_loss": { "price": 195 } }
       },
       "stop_loss": 182,
       "time_stop": "2026-03-01"
@@ -649,8 +652,8 @@ Example:
       "expiration": "2026-03-20",
       "strike": "190",
       "targets": {
-        "tp1": { "price": 195, "raise_stop_loss": { "price": 189.50 } },
-        "tp2": { "price": 200, "raise_stop_loss": { "price": 195 } }
+        "tp1": { "price": 195, "take_off_percent": 50, "raise_stop_loss": { "price": 189.50 } },
+        "tp2": { "price": 200, "take_off_percent": 50, "raise_stop_loss": { "price": 195 } }
       },
       "stop_loss": 182,
       "time_stop": "2026-03-01"
