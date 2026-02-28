@@ -195,12 +195,16 @@ export async function processSignal(
     return result;
   }
 
+  const { ticker, instrument_type: instrumentType, direction, expiration, strike } = signalDataObj;
+  const sourceName = app.name;
+  const sourceId = app.id;
+
   const signalPayload = {
     data: signalDataObj,
     discordChannelId: body.discordChannelId || null,
     status: "active",
-    sourceAppId: app.id,
-    sourceAppName: app.name,
+    sourceAppId: sourceId,
+    sourceAppName: sourceName,
   };
 
   const parsed = insertSignalSchema.parse(signalPayload);
@@ -211,24 +215,25 @@ export async function processSignal(
 
   storage.createActivity({
     type: "signal_ingested",
-    title: `Signal from ${app.name}: ${signalDataObj.ticker} ${signalDataObj.direction}`,
-    description: `${signalDataObj.instrument_type} signal for ${signalDataObj.ticker} (${signalDataObj.direction})`,
-    symbol: signalDataObj.ticker,
+    title: `Signal from ${sourceName}: ${ticker} ${direction}`,
+    description: `${instrumentType} signal for ${ticker} (${direction})`,
+    symbol: ticker,
     signalId: signal.id,
-    metadata: { sourceApp: app.name, sourceAppId: app.id },
+    metadata: { sourceApp: sourceName, sourceAppId: sourceId },
   }).catch(() => {});
 
-  if (signalDataObj.instrument_type === "Options" && signalDataObj.strike && signalDataObj.expiration) {
-    fetchPolygonBars({ symbol: signalDataObj.ticker, secType: "STK" }).catch(() => {});
+  if (instrumentType === "Options" && strike && expiration) {
+    const right = direction === "Put" ? "P" : "C";
+    fetchPolygonBars({ symbol: ticker, secType: "STK" }).catch(() => {});
     fetchPolygonBars({
-      symbol: signalDataObj.ticker,
+      symbol: ticker,
       secType: "OPT",
-      strike: Number(signalDataObj.strike),
-      expiration: signalDataObj.expiration,
-      right: signalDataObj.direction === "Put" ? "P" : "C",
+      strike: Number(strike),
+      expiration,
+      right,
     }).catch(() => {});
   } else {
-    fetchPolygonBars({ symbol: signalDataObj.ticker, secType: "STK" }).catch(() => {});
+    fetchPolygonBars({ symbol: ticker, secType: "STK" }).catch(() => {});
   }
 
   const discordResult = await sendSignalDiscordAlert(signal, app);

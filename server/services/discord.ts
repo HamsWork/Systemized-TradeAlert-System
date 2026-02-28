@@ -88,6 +88,155 @@ function getWebhookForInstrument(
   }
 }
 
+function fmtPct(base: number | null, target: number): string {
+  if (!base || base === 0) return "?";
+  return `${(((target - base) / base) * 100).toFixed(1)}%`;
+}
+
+function buildOptionsFields(
+  data: Record<string, any>,
+  ticker: string,
+  direction: string,
+  optionPrice: number | null,
+  stockPrice: number | null,
+): DiscordField[] {
+  const right = direction === "Put" ? "PUT" : "CALL";
+  const fields: DiscordField[] = [
+    { name: "🟢 Ticker", value: ticker, inline: true },
+    { name: "📊 Stock Price", value: stockPrice ? fmtPrice(stockPrice) : "—", inline: true },
+    { ...SPACER },
+    { name: "❌ Expiration", value: data.expiration || "—", inline: true },
+    { name: "✍️ Strike", value: `${data.strike || "—"} ${right}`, inline: true },
+    { name: "💵 Option Price", value: optionPrice ? fmtPrice(optionPrice) : "—", inline: true },
+    { ...SPACER },
+  ];
+
+  const tradePlanParts: string[] = [];
+  if (data.targets && typeof data.targets === "object") {
+    const targetEntries = Object.entries(data.targets).filter(([, val]) => (val as any)?.price);
+    const targetPrices = targetEntries.map(([, val]) => {
+      const price = Number((val as any).price);
+      const pct = stockPrice ? fmtPct(stockPrice, price) : null;
+      return pct ? `${fmtPrice(price)} (${pct})` : fmtPrice(price);
+    });
+    if (targetPrices.length > 0) {
+      tradePlanParts.push(`🎯 Targets: ${targetPrices.join(", ")}`);
+    }
+  }
+
+  if (data.stop_loss != null) {
+    const sl = Number(data.stop_loss);
+    const slPct = stockPrice ? fmtPct(stockPrice, sl) : null;
+    const entryPct = stockPrice ? `${fmtPrice(stockPrice)}(+0%)` : "";
+    tradePlanParts.push(`🛑 Stop Loss: ${fmtPrice(sl)}(${slPct || "?"}), ${entryPct}`);
+  }
+
+  if (data.time_stop) {
+    tradePlanParts.push(`🌐 Time Stop: ${data.time_stop}`);
+  }
+
+  if (tradePlanParts.length > 0) {
+    fields.push({ name: "📝 Trade Plan", value: tradePlanParts.join("\n"), inline: false });
+  }
+
+  if (data.targets && typeof data.targets === "object") {
+    const tpLines: string[] = [];
+    const entries = Object.entries(data.targets).filter(([, val]) => (val as any)?.price);
+    entries.forEach(([, val], i) => {
+      const t = val as any;
+      const price = Number(t.price);
+      const pct = stockPrice ? fmtPct(stockPrice, price) : null;
+      let line = `Take Profit (${i + 1}): At ${pct || fmtPrice(price)}`;
+      if (t.raise_stop_loss?.price) {
+        line += ` raise stop loss to ${fmtPrice(t.raise_stop_loss.price)}`;
+      }
+      tpLines.push(line);
+    });
+    if (tpLines.length > 0) {
+      fields.push({ ...SPACER });
+      fields.push({ name: "💰 Take Profit Plan", value: tpLines.join("\n"), inline: false });
+    }
+  }
+
+  return fields;
+}
+
+function buildSharesFields(
+  data: Record<string, any>,
+  ticker: string,
+  direction: string,
+  entryPrice: number | null,
+): DiscordField[] {
+  const fields: DiscordField[] = [
+    { name: "🟢 Ticker", value: ticker, inline: true },
+    { name: "💹 Entry Price", value: entryPrice ? fmtPrice(entryPrice) : "—", inline: true },
+    { ...SPACER },
+  ];
+
+  const tradePlanParts: string[] = [];
+  if (data.targets && typeof data.targets === "object") {
+    const targetPrices = Object.entries(data.targets)
+      .filter(([, val]) => (val as any)?.price)
+      .map(([, val]) => {
+        const price = Number((val as any).price);
+        const pct = entryPrice ? fmtPct(entryPrice, price) : null;
+        return pct ? `${fmtPrice(price)} (${pct})` : fmtPrice(price);
+      });
+    if (targetPrices.length > 0) {
+      tradePlanParts.push(`🎯 Targets: ${targetPrices.join(", ")}`);
+    }
+  }
+
+  if (data.stop_loss != null) {
+    const sl = Number(data.stop_loss);
+    const pct = entryPrice ? fmtPct(entryPrice, sl) : null;
+    tradePlanParts.push(`🛑 Stop Loss: ${fmtPrice(sl)}${pct ? ` (${pct})` : ""}`);
+  }
+
+  if (data.time_stop) {
+    tradePlanParts.push(`🌐 Time Stop: ${data.time_stop}`);
+  }
+
+  if (tradePlanParts.length > 0) {
+    fields.push({ name: "📝 Trade Plan", value: tradePlanParts.join("\n"), inline: false });
+  }
+
+  if (data.targets && typeof data.targets === "object") {
+    const tpLines: string[] = [];
+    const entries = Object.entries(data.targets).filter(([, val]) => (val as any)?.price);
+    entries.forEach(([, val], i) => {
+      const t = val as any;
+      const price = Number(t.price);
+      const pct = entryPrice ? fmtPct(entryPrice, price) : null;
+      let line = `Take Profit (${i + 1}): At ${pct || fmtPrice(price)}`;
+      if (t.raise_stop_loss?.price) {
+        line += ` raise stop loss to ${fmtPrice(t.raise_stop_loss.price)}`;
+      }
+      tpLines.push(line);
+    });
+    if (tpLines.length > 0) {
+      fields.push({ ...SPACER });
+      fields.push({ name: "💰 Take Profit Plan", value: tpLines.join("\n"), inline: false });
+    }
+  }
+
+  return fields;
+}
+
+function buildEmbedFields(
+  instrumentType: string,
+  data: Record<string, any>,
+  ticker: string,
+  direction: string,
+  entryPrice: number | null,
+  stockPrice: number | null,
+): DiscordField[] {
+  if (instrumentType === "Options") {
+    return buildOptionsFields(data, ticker, direction, entryPrice, stockPrice);
+  }
+  return buildSharesFields(data, ticker, direction, entryPrice || stockPrice);
+}
+
 export interface DiscordSendResult {
   sent: boolean;
   error: string | null;
@@ -121,84 +270,13 @@ export async function sendSignalDiscordAlert(
 
   const direction = data.direction || "Long";
   const entryPrice = data.entry_price ? Number(data.entry_price) : null;
-  const isBullish = direction === "Long" || direction === "Call";
+  const stockPrice = data.entry_underlying_price ? Number(data.entry_underlying_price) : null;
+  const isBullish = direction === "Call" || direction === "Long";
   const color = isBullish ? GREEN : RED;
 
   const heading = `**🚨 ${ticker} Trade Alert**`;
 
-  const fields: DiscordField[] = [
-    { name: "🟢 Ticker", value: ticker, inline: true },
-    { name: "💹 Entry Price", value: entryPrice ? fmtPrice(entryPrice) : "—", inline: true },
-  ];
-
-  if (instrumentType === "Options") {
-    fields.push({ ...SPACER });
-    if (data.expiration) {
-      fields.push({ name: "✖ Expiration", value: data.expiration, inline: true });
-    }
-    if (data.strike) {
-      const right = data.right?.toUpperCase() === "P" ? "PUT" : "CALL";
-      fields.push({ name: "🪙 Strike", value: `${data.strike} ${right}`, inline: true });
-    }
-  }
-
-  fields.push({ ...SPACER });
-
-  const tradePlanParts: string[] = [];
-
-  if (data.targets && typeof data.targets === "object") {
-    const targetPrices = Object.entries(data.targets)
-      .filter(([, val]) => (val as any)?.price)
-      .map(([, val]) => {
-        const price = Number((val as any).price);
-        const pct = entryPrice ? (((price - entryPrice) / entryPrice) * 100).toFixed(1) : null;
-        return pct ? `${fmtPrice(price)} (${Number(pct) >= 0 ? "+" : ""}${pct}%)` : fmtPrice(price);
-      });
-    if (targetPrices.length > 0) {
-      tradePlanParts.push(`🎯 Targets: ${targetPrices.join(", ")}`);
-    }
-  }
-
-  if (data.stop_loss != null) {
-    const sl = Number(data.stop_loss);
-    const pct = entryPrice ? (((sl - entryPrice) / entryPrice) * 100).toFixed(1) : null;
-    const slText = pct ? `${fmtPrice(sl)} (${Number(pct) >= 0 ? "+" : ""}${pct}%)` : fmtPrice(sl);
-    tradePlanParts.push(`🟠 Stop Loss: ${slText}`);
-  }
-
-  if (data.time_stop) {
-    tradePlanParts.push(`🌐 Time Horizon: ${data.time_stop}`);
-  }
-
-  if (tradePlanParts.length > 0) {
-    fields.push({
-      name: "📝 Trade Plan",
-      value: tradePlanParts.join("\n"),
-      inline: false,
-    });
-  }
-
-  if (data.targets && typeof data.targets === "object") {
-    const tpLines: string[] = [];
-    const entries = Object.entries(data.targets).filter(([, val]) => (val as any)?.price);
-    entries.forEach(([key, val], i) => {
-      const t = val as any;
-      const price = Number(t.price);
-      const pct = entryPrice ? (((price - entryPrice) / entryPrice) * 100).toFixed(1) : null;
-      let line = `Take Profit (${i + 1}): At ${pct ? `${Number(pct) >= 0 ? "+" : ""}${pct}%` : fmtPrice(price)}`;
-      if (t.raise_stop_loss?.price) {
-        line += ` raise stop loss to ${fmtPrice(t.raise_stop_loss.price)}`;
-      }
-      tpLines.push(line);
-    });
-    if (tpLines.length > 0) {
-      fields.push({
-        name: "💰 Take Profit Plan",
-        value: tpLines.join("\n"),
-        inline: false,
-      });
-    }
-  }
+  const fields: DiscordField[] = buildEmbedFields(instrumentType, data, ticker, direction, entryPrice, stockPrice);
 
   const embed: DiscordEmbed = {
     description: heading,
