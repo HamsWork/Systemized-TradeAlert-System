@@ -318,31 +318,49 @@ function PositionsTable({ positions, page, onPageChange }: { positions: IbkrPosi
             <TableRow className="bg-muted/50">
               <TableHead className="text-xs font-medium">Symbol</TableHead>
               <TableHead className="text-xs font-medium">Type</TableHead>
-              <TableHead className="text-xs font-medium text-right">Quantity</TableHead>
+              <TableHead className="text-xs font-medium text-right">Qty</TableHead>
               <TableHead className="text-xs font-medium text-right">Avg Cost</TableHead>
-              <TableHead className="text-xs font-medium">Currency</TableHead>
+              <TableHead className="text-xs font-medium text-right">Mkt Price</TableHead>
+              <TableHead className="text-xs font-medium text-right">Mkt Value</TableHead>
+              <TableHead className="text-xs font-medium text-right">Unrealized P&L</TableHead>
+              <TableHead className="text-xs font-medium text-right">Realized P&L</TableHead>
               <TableHead className="text-xs font-medium">Updated</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paged.map((pos) => (
-              <TableRow key={pos.id} data-testid={`row-position-${pos.id}`}>
-                <TableCell><SymbolDisplay symbol={pos.symbol} secType={pos.secType} expiration={pos.expiration} strike={pos.strike} right={pos.right} /></TableCell>
-                <TableCell>
-                  <Badge variant="outline" className="text-xs">
-                    {pos.secType === "OPT" ? "Option" : pos.secType === "STK" ? "Stock" : pos.secType}
-                  </Badge>
-                </TableCell>
-                <TableCell className={`text-right text-sm font-medium ${pos.quantity >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                  {pos.quantity >= 0 ? "+" : ""}{formatNumber(pos.quantity)}
-                </TableCell>
-                <TableCell className="text-right text-sm font-mono">{formatCurrency(pos.avgCost)}</TableCell>
-                <TableCell className="text-xs text-muted-foreground">{pos.currency}</TableCell>
-                <TableCell className="text-xs text-muted-foreground">
-                  {formatRelativeTime(pos.lastUpdated)}
-                </TableCell>
-              </TableRow>
-            ))}
+            {paged.map((pos) => {
+              const unrealizedPnl = pos.unrealizedPnl ?? null;
+              const realizedPnl = pos.realizedPnl ?? null;
+              return (
+                <TableRow key={pos.id} data-testid={`row-position-${pos.id}`}>
+                  <TableCell><SymbolDisplay symbol={pos.symbol} secType={pos.secType} expiration={pos.expiration} strike={pos.strike} right={pos.right} /></TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="text-xs">
+                      {pos.secType === "OPT" ? "Option" : pos.secType === "STK" ? "Stock" : pos.secType}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className={`text-right text-sm font-medium ${pos.quantity >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                    {pos.quantity >= 0 ? "+" : ""}{formatNumber(pos.quantity)}
+                  </TableCell>
+                  <TableCell className="text-right text-sm font-mono">{formatCurrency(pos.avgCost)}</TableCell>
+                  <TableCell className="text-right text-sm font-mono" data-testid={`text-mkt-price-${pos.id}`}>
+                    {pos.marketPrice != null ? formatCurrency(pos.marketPrice) : "—"}
+                  </TableCell>
+                  <TableCell className="text-right text-sm font-mono" data-testid={`text-mkt-value-${pos.id}`}>
+                    {pos.marketValue != null ? formatCurrency(pos.marketValue) : "—"}
+                  </TableCell>
+                  <TableCell className={`text-right text-sm font-mono font-medium ${unrealizedPnl != null ? (unrealizedPnl >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400") : ""}`} data-testid={`text-unrealized-pnl-${pos.id}`}>
+                    {unrealizedPnl != null ? `${unrealizedPnl >= 0 ? "+" : ""}${formatCurrency(unrealizedPnl)}` : "—"}
+                  </TableCell>
+                  <TableCell className={`text-right text-sm font-mono font-medium ${realizedPnl != null ? (realizedPnl >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400") : ""}`} data-testid={`text-realized-pnl-${pos.id}`}>
+                    {realizedPnl != null ? `${realizedPnl >= 0 ? "+" : ""}${formatCurrency(realizedPnl)}` : "—"}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {formatRelativeTime(pos.lastUpdated)}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </div>
