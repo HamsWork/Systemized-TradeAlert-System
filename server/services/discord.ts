@@ -146,11 +146,15 @@ function buildOptionsFields(
       const t = val as any;
       const price = Number(t.price);
       const pct = optionPrice ? fmtPct(optionPrice, price) : null;
-      const takeOff = t.take_off_percent ? `${t.take_off_percent}%` : null;
-      let line = `Take Profit (${i + 1}): At ${pct || fmtPrice(price)}`;
-      if (takeOff) line += ` take off ${takeOff} of position`;
+      const takeOff = t.take_off_percent ? `${t.take_off_percent}%` : "100%";
+      const positionLabel = i === 0 ? "of position" : "of remaining position";
+      let line = `Take Profit (${i + 1}): At ${pct || fmtPrice(price)} take off ${takeOff} ${positionLabel}`;
       if (t.raise_stop_loss?.price) {
-        line += ` and raise stop loss to ${fmtPrice(t.raise_stop_loss.price)}`;
+        const rslPrice = Number(t.raise_stop_loss.price);
+        const isBreakEven = optionPrice && Math.abs(rslPrice - optionPrice) < 0.01;
+        line += isBreakEven ? " and raise stop loss to break even." : ` and raise stop loss to ${fmtPrice(rslPrice)}.`;
+      } else {
+        line += ".";
       }
       tpLines.push(line);
     });
@@ -210,11 +214,15 @@ function buildSharesFields(
       const t = val as any;
       const price = Number(t.price);
       const pct = entryPrice ? fmtPct(entryPrice, price) : null;
-      const takeOff = t.take_off_percent ? `${t.take_off_percent}%` : null;
-      let line = `Take Profit (${i + 1}): At ${pct || fmtPrice(price)}`;
-      if (takeOff) line += ` take off ${takeOff} of position`;
+      const takeOff = t.take_off_percent ? `${t.take_off_percent}%` : "100%";
+      const positionLabel = i === 0 ? "of position" : "of remaining position";
+      let line = `Take Profit (${i + 1}): At ${pct || fmtPrice(price)} take off ${takeOff} ${positionLabel}`;
       if (t.raise_stop_loss?.price) {
-        line += ` and raise stop loss to ${fmtPrice(t.raise_stop_loss.price)}`;
+        const rslPrice = Number(t.raise_stop_loss.price);
+        const isBreakEven = entryPrice && Math.abs(rslPrice - entryPrice) < 0.01;
+        line += isBreakEven ? " and raise stop loss to break even." : ` and raise stop loss to ${fmtPrice(rslPrice)}.`;
+      } else {
+        line += ".";
       }
       tpLines.push(line);
     });
