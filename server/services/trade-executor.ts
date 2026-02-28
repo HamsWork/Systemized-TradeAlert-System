@@ -1,8 +1,16 @@
-import { IBApi, EventName, Contract, SecType, OrderAction, OrderType, TimeInForce, OptionType } from "@stoqey/ib";
+import {
+  IBApi,
+  EventName,
+  Contract,
+  SecType,
+  OrderAction,
+  OrderType,
+  TimeInForce,
+  OptionType,
+} from "@stoqey/ib";
 import type { Signal, ConnectedApp } from "@shared/schema";
 import { ibkrSyncManager } from "./ibkr-sync";
 import { storage } from "../storage";
-
 
 interface TradeResult {
   orderId: number;
@@ -11,7 +19,12 @@ interface TradeResult {
   side: string;
   quantity: number;
   avgFillPrice?: number;
-  childOrders?: { orderId: number; type: string; price: number; quantity: number }[];
+  childOrders?: {
+    orderId: number;
+    type: string;
+    price: number;
+    quantity: number;
+  }[];
 }
 
 function makeStockContract(symbol: string): Contract {
@@ -36,9 +49,10 @@ function makeOptionContract(
     currency: "USD",
     lastTradeDateOrContractMonth: expiration.replace(/-/g, ""),
     strike,
-    right: right.toUpperCase() === "C" || right.toUpperCase() === "CALL"
-      ? OptionType.Call
-      : OptionType.Put,
+    right:
+      right.toUpperCase() === "C" || right.toUpperCase() === "CALL"
+        ? OptionType.Call
+        : OptionType.Put,
     multiplier: 100,
   };
 }
@@ -83,18 +97,26 @@ function parseTargets(data: Record<string, any>): TargetInfo[] {
         key,
         price: Number(t.price),
         takeOffPercent: Number(t.take_off_percent) || 100,
-        raiseStopLoss: t.raise_stop_loss?.price ? Number(t.raise_stop_loss.price) : undefined,
+        raiseStopLoss: t.raise_stop_loss?.price
+          ? Number(t.raise_stop_loss.price)
+          : undefined,
       };
     });
 }
 
-function splitQuantityByTargets(totalQty: number, targets: TargetInfo[]): number[] {
+function splitQuantityByTargets(
+  totalQty: number,
+  targets: TargetInfo[],
+): number[] {
   if (targets.length === 0) return [];
   const quantities: number[] = [];
   let remaining = totalQty;
   for (let i = 0; i < targets.length; i++) {
     const pct = targets[i].takeOffPercent / 100;
-    const qty = i === targets.length - 1 ? remaining : Math.max(1, Math.round(remaining * pct));
+    const qty =
+      i === targets.length - 1
+        ? remaining
+        : Math.max(1, Math.round(remaining * pct));
     quantities.push(Math.min(qty, remaining));
     remaining -= quantities[i];
     if (remaining <= 0) break;
@@ -102,7 +124,10 @@ function splitQuantityByTargets(totalQty: number, targets: TargetInfo[]): number
   return quantities;
 }
 
-function determineSide(data: Record<string, any>): { side: string; exitSide: OrderAction } {
+function determineSide(data: Record<string, any>): {
+  side: string;
+  exitSide: OrderAction;
+} {
   const instrumentType = data.instrument_type || "Shares";
   const direction = data.direction || "Long";
 
@@ -117,18 +142,30 @@ function determineSide(data: Record<string, any>): { side: string; exitSide: Ord
   };
 }
 
-async function connectIbkr(host: string, port: number, clientId: number): Promise<IBApi> {
+async function connectIbkr(
+  host: string,
+  port: number,
+  clientId: number,
+): Promise<IBApi> {
   const ib = new IBApi({ host, port, clientId: clientId + 100 });
 
   const connected = await new Promise<boolean>((resolve) => {
     const timeout = setTimeout(() => resolve(false), 10000);
-    ib.once(EventName.connected, () => { clearTimeout(timeout); resolve(true); });
-    ib.once(EventName.error, () => { clearTimeout(timeout); resolve(false); });
+    ib.once(EventName.connected, () => {
+      clearTimeout(timeout);
+      resolve(true);
+    });
+    ib.once(EventName.error, () => {
+      clearTimeout(timeout);
+      resolve(false);
+    });
     ib.connect();
   });
 
   if (!connected) {
-    try { ib.disconnect(); } catch {}
+    try {
+      ib.disconnect();
+    } catch {}
     throw new Error(`Failed to connect to IBKR at ${host}:${port}`);
   }
 
@@ -145,14 +182,24 @@ async function getNextOrderId(ib: IBApi): Promise<number> {
   });
 }
 
-function waitForOrderStatus(ib: IBApi, orderId: number, timeoutMs: number = 15000): Promise<{ status: string; filled: number; avgFillPrice: number }> {
+function waitForOrderStatus(
+  ib: IBApi,
+  orderId: number,
+  timeoutMs: number = 15000,
+): Promise<{ status: string; filled: number; avgFillPrice: number }> {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       cleanup();
       resolve({ status: "SUBMITTED", filled: 0, avgFillPrice: 0 });
     }, timeoutMs);
 
-    const onStatus = (oid: number, status: string, filled: number, _rem: number, avgFillPrice: number) => {
+    const onStatus = (
+      oid: number,
+      status: string,
+      filled: number,
+      _rem: number,
+      avgFillPrice: number,
+    ) => {
       if (oid !== orderId) return;
       if (status === "Filled") {
         clearTimeout(timeout);
@@ -165,7 +212,9 @@ function waitForOrderStatus(ib: IBApi, orderId: number, timeoutMs: number = 1500
       }
     };
 
-    const cleanup = () => { ib.off(EventName.orderStatus, onStatus); };
+    const cleanup = () => {
+      ib.off(EventName.orderStatus, onStatus);
+    };
     ib.on(EventName.orderStatus, onStatus);
   });
 }
@@ -173,13 +222,17 @@ function waitForOrderStatus(ib: IBApi, orderId: number, timeoutMs: number = 1500
 export async function executeIbkrTrade(
   signal: Signal,
   app: ConnectedApp | null,
-  quantity: number = 1,
+  quantity: number = 100,
 ): Promise<TradeExecutionResult> {
   if (!app) {
     return { executed: false, trade: null, error: "No connected app provided" };
   }
   if (!app.executeIbkrTrades) {
-    return { executed: false, trade: null, error: `IBKR trade execution disabled for ${app.name}` };
+    return {
+      executed: false,
+      trade: null,
+      error: `IBKR trade execution disabled for ${app.name}`,
+    };
   }
 
   const data = signal.data as Record<string, any>;
@@ -190,16 +243,26 @@ export async function executeIbkrTrade(
   const targets = parseTargets(data);
 
   const integrations = await storage.getIntegrations();
-  const ibkrIntegration = integrations.find(i => i.type === "ibkr" && i.enabled);
+  const ibkrIntegration = integrations.find(
+    (i) => i.type === "ibkr" && i.enabled,
+  );
 
   if (!ibkrIntegration) {
-    return { executed: false, trade: null, error: "No enabled IBKR integration found" };
+    return {
+      executed: false,
+      trade: null,
+      error: "No enabled IBKR integration found",
+    };
   }
 
   const cfg = ibkrIntegration.config as Record<string, any>;
   const host = app.ibkrHost || cfg?.host || "127.0.0.1";
-  const port = (app.ibkrPort ? parseInt(app.ibkrPort) : null) || Number(cfg?.port) || 4003;
-  const clientId = (app.ibkrClientId ? parseInt(app.ibkrClientId) : null) || Number(cfg?.clientId) || 0;
+  const port =
+    (app.ibkrPort ? parseInt(app.ibkrPort) : null) || Number(cfg?.port) || 4003;
+  const clientId =
+    (app.ibkrClientId ? parseInt(app.ibkrClientId) : null) ||
+    Number(cfg?.clientId) ||
+    0;
 
   let ib: IBApi | null = null;
 
@@ -209,27 +272,34 @@ export async function executeIbkrTrade(
     const contract = buildContract(data);
     const secType = contract.secType === SecType.OPT ? "OPT" : "STK";
     const instrumentType = data.instrument_type || "Shares";
-    const rightVal = instrumentType === "Options"
-      ? (data.direction === "Put" ? "P" : "C")
-      : null;
+    const rightVal =
+      instrumentType === "Options"
+        ? data.direction === "Put"
+          ? "P"
+          : "C"
+        : null;
 
     const hasChildren = (targets.length > 0 && entryPrice) || stopLoss;
 
     const parentOrder: any = {
       action: side === "BUY" ? OrderAction.BUY : OrderAction.SELL,
-      orderType: entryPrice ? OrderType.LMT : OrderType.MKT,
+      orderType: OrderType.MKT,
       totalQuantity: quantity,
       tif: TimeInForce.DAY,
       transmit: !hasChildren,
     };
-    if (entryPrice) {
-      parentOrder.lmtPrice = entryPrice;
-    }
 
-    console.log(`[TradeExecutor] Placing bracket: ${side} ${quantity} ${ticker} @ ${entryPrice ? `$${entryPrice}` : "MKT"} (parentId=${parentOrderId})`);
+    console.log(
+      `[TradeExecutor] Placing bracket: ${side} ${quantity} ${ticker} @ ${entryPrice ? `$${entryPrice}` : "MKT"} (parentId=${parentOrderId})`,
+    );
     ib.placeOrder(parentOrderId, contract, parentOrder);
 
-    const childOrders: { orderId: number; type: string; price: number; quantity: number }[] = [];
+    const childOrders: {
+      orderId: number;
+      type: string;
+      price: number;
+      quantity: number;
+    }[] = [];
     let nextId = parentOrderId + 1;
 
     const tpQuantities = splitQuantityByTargets(quantity, targets);
@@ -249,9 +319,16 @@ export async function executeIbkrTrade(
       };
 
       const exitLabel = exitSide === OrderAction.BUY ? "BUY" : "SELL";
-      console.log(`[TradeExecutor]   TP${i + 1}: LMT ${exitLabel} ${tpQuantities[i]} @ $${tp.price} (orderId=${nextId})`);
+      console.log(
+        `[TradeExecutor]   TP${i + 1}: LMT ${exitLabel} ${tpQuantities[i]} @ $${tp.price} (orderId=${nextId})`,
+      );
       ib.placeOrder(nextId, contract, tpOrder);
-      childOrders.push({ orderId: nextId, type: `TP${i + 1}`, price: tp.price, quantity: tpQuantities[i] });
+      childOrders.push({
+        orderId: nextId,
+        type: `TP${i + 1}`,
+        price: tp.price,
+        quantity: tpQuantities[i],
+      });
       nextId++;
     }
 
@@ -267,9 +344,16 @@ export async function executeIbkrTrade(
       };
 
       const exitLabel = exitSide === OrderAction.BUY ? "BUY" : "SELL";
-      console.log(`[TradeExecutor]   SL: STP ${exitLabel} ${quantity} @ $${stopLoss} (orderId=${nextId})`);
+      console.log(
+        `[TradeExecutor]   SL: STP ${exitLabel} ${quantity} @ $${stopLoss} (orderId=${nextId})`,
+      );
       ib.placeOrder(nextId, contract, slOrder);
-      childOrders.push({ orderId: nextId, type: "SL", price: stopLoss, quantity });
+      childOrders.push({
+        orderId: nextId,
+        type: "SL",
+        price: stopLoss,
+        quantity,
+      });
       nextId++;
     }
 
@@ -341,35 +425,50 @@ export async function executeIbkrTrade(
       });
     }
 
-    const orderSummary = childOrders.map(c => `${c.type}@$${c.price}`).join(", ");
-    console.log(`[TradeExecutor] Bracket placed: ${result.orderId} ${result.status} for ${ticker} [${orderSummary}]`);
+    const orderSummary = childOrders
+      .map((c) => `${c.type}@$${c.price}`)
+      .join(", ");
+    console.log(
+      `[TradeExecutor] Bracket placed: ${result.orderId} ${result.status} for ${ticker} [${orderSummary}]`,
+    );
 
-    storage.createActivity({
-      type: "trade_executed",
-      title: `IBKR bracket trade: ${side} ${ticker}`,
-      description: `Entry #${result.orderId} ${result.status} - ${side} ${result.quantity} ${ticker}${orderSummary ? ` | ${orderSummary}` : ""}`,
-      symbol: ticker,
-      signalId: signal.id,
-      metadata: { orderId: result.orderId, status: result.status, childOrders, sourceApp: app.name },
-    }).catch(() => {});
+    storage
+      .createActivity({
+        type: "trade_executed",
+        title: `IBKR bracket trade: ${side} ${ticker}`,
+        description: `Entry #${result.orderId} ${result.status} - ${side} ${result.quantity} ${ticker}${orderSummary ? ` | ${orderSummary}` : ""}`,
+        symbol: ticker,
+        signalId: signal.id,
+        metadata: {
+          orderId: result.orderId,
+          status: result.status,
+          childOrders,
+          sourceApp: app.name,
+        },
+      })
+      .catch(() => {});
 
     return { executed: true, trade: result, error: null };
   } catch (err: any) {
     console.error(`[TradeExecutor] Trade execution error: ${err.message}`);
 
-    storage.createActivity({
-      type: "trade_error",
-      title: `IBKR trade failed for ${ticker}`,
-      description: `IBKR trade execution failed: ${err.message}`,
-      symbol: ticker,
-      signalId: signal.id,
-      metadata: { sourceApp: app.name, error: err.message },
-    }).catch(() => {});
+    storage
+      .createActivity({
+        type: "trade_error",
+        title: `IBKR trade failed for ${ticker}`,
+        description: `IBKR trade execution failed: ${err.message}`,
+        symbol: ticker,
+        signalId: signal.id,
+        metadata: { sourceApp: app.name, error: err.message },
+      })
+      .catch(() => {});
 
     return { executed: false, trade: null, error: err.message };
   } finally {
     if (ib) {
-      try { ib.disconnect(); } catch {}
+      try {
+        ib.disconnect();
+      } catch {}
     }
   }
 }
