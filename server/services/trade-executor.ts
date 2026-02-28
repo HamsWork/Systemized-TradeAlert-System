@@ -382,7 +382,7 @@ export async function executeIbkrTrade(
       side: side.toLowerCase(),
       orderType: entryPrice ? "limit" : "market",
       quantity,
-      limitPrice: entryPrice ? String(entryPrice) : null,
+      entryPrice: entryPrice ? String(entryPrice) : null,
       stopPrice: null,
       filledQuantity: parentStatus.filled || 0,
       avgFillPrice: parentStatus.avgFillPrice || null,
