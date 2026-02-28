@@ -69,8 +69,11 @@ export async function executeIbkrTrade(
   app: ConnectedApp | null,
   quantity: number = 1,
 ): Promise<TradeExecutionResult> {
-  if (!app || !app.executeIbkrTrades) {
-    return { executed: false, trade: null, error: null };
+  if (!app) {
+    return { executed: false, trade: null, error: "No connected app provided" };
+  }
+  if (!app.executeIbkrTrades) {
+    return { executed: false, trade: null, error: `IBKR trade execution disabled for ${app.name}` };
   }
 
   const data = signal.data as Record<string, any>;
