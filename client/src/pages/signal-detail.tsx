@@ -345,6 +345,75 @@ function ActivityRow({ entry }: { entry: ActivityLogEntry }) {
   );
 }
 
+function OptionChartTabs({ symbol, strike, expiration, optionType, entryPrice, tpLevels, slLevels, direction }: {
+  symbol: string;
+  strike?: string;
+  expiration?: string;
+  optionType?: string;
+  entryPrice?: number;
+  tpLevels: number[];
+  slLevels: number[];
+  direction?: string;
+}) {
+  const [activeTab, setActiveTab] = useState<"option" | "underlying">("option");
+
+  const optionLabel = strike && expiration ? `${symbol} $${strike} ${expiration}` : symbol;
+
+  return (
+    <div data-testid="option-chart-tabs">
+      <div className="flex items-center gap-1 mb-2">
+        <button
+          onClick={() => setActiveTab("option")}
+          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+            activeTab === "option"
+              ? "bg-primary text-primary-foreground"
+              : "bg-muted text-muted-foreground hover:text-foreground"
+          }`}
+          data-testid="tab-option-chart"
+        >
+          <CandlestickChart className="inline-block h-3 w-3 mr-1.5 -mt-0.5" />
+          Option Contract
+        </button>
+        <button
+          onClick={() => setActiveTab("underlying")}
+          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+            activeTab === "underlying"
+              ? "bg-primary text-primary-foreground"
+              : "bg-muted text-muted-foreground hover:text-foreground"
+          }`}
+          data-testid="tab-underlying-chart"
+        >
+          <BarChart3 className="inline-block h-3 w-3 mr-1.5 -mt-0.5" />
+          Underlying ({symbol})
+        </button>
+        <span className="text-[10px] text-muted-foreground ml-auto font-mono">
+          {activeTab === "option" ? optionLabel : symbol}
+        </span>
+      </div>
+      {activeTab === "option" ? (
+        <TradeChart
+          symbol={symbol}
+          instrumentType="Options"
+          strike={strike}
+          expiration={expiration}
+          optionType={optionType}
+          entryPrice={entryPrice}
+          tpLevels={tpLevels}
+          slLevels={slLevels}
+          direction={direction}
+        />
+      ) : (
+        <TradeChart
+          symbol={symbol}
+          tpLevels={[]}
+          slLevels={[]}
+          direction={direction}
+        />
+      )}
+    </div>
+  );
+}
+
 export function SignalDetailDialog({ signal, open, onOpenChange }: {
   signal: Signal | null;
   open: boolean;
@@ -429,17 +498,27 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
           <div className="space-y-4">
             <Card data-testid="card-chart">
               <CardContent className="p-3">
-                <TradeChart
-                  symbol={ticker}
-                  instrumentType={instrumentType}
-                  strike={strike}
-                  expiration={expiration}
-                  optionType={data.option_type}
-                  entryPrice={entryPrice}
-                  tpLevels={tpLevels}
-                  slLevels={slLevels}
-                  direction={direction}
-                />
+                {instrumentType === "Options" ? (
+                  <OptionChartTabs
+                    symbol={ticker}
+                    strike={strike}
+                    expiration={expiration}
+                    optionType={data.option_type}
+                    entryPrice={entryPrice}
+                    tpLevels={tpLevels}
+                    slLevels={slLevels}
+                    direction={direction}
+                  />
+                ) : (
+                  <TradeChart
+                    symbol={ticker}
+                    instrumentType={instrumentType}
+                    entryPrice={entryPrice}
+                    tpLevels={tpLevels}
+                    slLevels={slLevels}
+                    direction={direction}
+                  />
+                )}
               </CardContent>
             </Card>
 
