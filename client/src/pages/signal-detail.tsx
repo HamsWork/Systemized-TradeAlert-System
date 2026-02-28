@@ -275,42 +275,78 @@ function TradeChart({ symbol, instrumentType, strike, expiration, optionType, en
 
 function OrderRow({ order }: { order: IbkrOrder }) {
   const statusColor = {
-    filled: "text-emerald-500",
-    submitted: "text-blue-500",
-    cancelled: "text-red-500",
-    pending: "text-amber-500",
-  }[order.status] || "text-muted-foreground";
+    filled: "text-emerald-500 bg-emerald-500/10 border-emerald-500/20",
+    submitted: "text-blue-500 bg-blue-500/10 border-blue-500/20",
+    cancelled: "text-red-500 bg-red-500/10 border-red-500/20",
+    rejected: "text-red-500 bg-red-500/10 border-red-500/20",
+    pending: "text-amber-500 bg-amber-500/10 border-amber-500/20",
+  }[order.status] || "text-muted-foreground bg-muted border-border";
+
+  const typeLabel = (order.orderType || "").replace(/_/g, " ").toUpperCase();
+  const filledQty = order.filledQuantity || 0;
+  const totalQty = order.quantity || 0;
 
   return (
-    <div className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-muted/50 transition-colors" data-testid={`order-row-${order.id}`}>
-      <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${order.side === "buy" ? "bg-emerald-500/10" : "bg-red-500/10"}`}>
+    <div className="flex items-center gap-3 py-2.5 px-2.5 rounded-lg hover:bg-muted/50 transition-colors border border-border/40 mb-1" data-testid={`order-row-${order.id}`}>
+      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${order.side === "buy" ? "bg-emerald-500/10" : "bg-red-500/10"}`}>
         {order.side === "buy"
-          ? <ArrowUpRight className="h-3.5 w-3.5 text-emerald-500" />
-          : <ArrowDownRight className="h-3.5 w-3.5 text-red-500" />
+          ? <ArrowUpRight className="h-4 w-4 text-emerald-500" />
+          : <ArrowDownRight className="h-4 w-4 text-red-500" />
         }
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="font-medium text-xs">{order.side.toUpperCase()} {order.quantity}</span>
-          <span className="font-mono text-xs">{order.symbol}</span>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className={`font-semibold text-xs ${order.side === "buy" ? "text-emerald-500" : "text-red-500"}`}>
+            {order.side.toUpperCase()}
+          </span>
+          <span className="font-mono text-xs font-semibold" data-testid={`text-order-symbol-${order.id}`}>{order.symbol}</span>
           {order.secType === "OPT" && (
-            <span className="text-[10px] text-muted-foreground">
-              {order.expiration} {order.strike}{order.right}
+            <span className="text-[10px] text-muted-foreground font-mono">
+              {order.strike}{order.right} {order.expiration}
             </span>
           )}
-          <Badge variant="outline" className={`text-[10px] ${statusColor}`} data-testid={`badge-order-status-${order.id}`}>
+          <Badge variant="outline" className={`text-[9px] px-1.5 py-0 h-4 ${statusColor}`} data-testid={`badge-order-status-${order.id}`}>
             {order.status}
           </Badge>
         </div>
-        <div className="flex items-center gap-3 mt-0.5 text-[10px] text-muted-foreground">
-          <span>{order.orderType}</span>
-          {order.avgFillPrice && <span className="font-mono">Fill: ${order.avgFillPrice.toFixed(2)}</span>}
-          {order.limitPrice && <span className="font-mono">Limit: ${order.limitPrice.toFixed(2)}</span>}
-          {order.commission != null && <span>Comm: ${order.commission.toFixed(2)}</span>}
-          {order.sourceAppName && <span className="text-blue-500">{order.sourceAppName}</span>}
+        <div className="flex items-center gap-2 mt-1 flex-wrap">
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted font-medium" data-testid={`text-order-type-${order.id}`}>
+            {typeLabel}
+          </span>
+          <span className="text-[10px] text-muted-foreground" data-testid={`text-order-qty-${order.id}`}>
+            Qty: <span className="font-mono font-medium text-foreground">{filledQty}/{totalQty}</span>
+          </span>
+          {order.avgFillPrice != null && order.avgFillPrice > 0 && (
+            <span className="text-[10px] text-muted-foreground" data-testid={`text-order-fill-${order.id}`}>
+              Fill: <span className="font-mono font-medium text-foreground">${order.avgFillPrice.toFixed(2)}</span>
+            </span>
+          )}
+          {order.limitPrice != null && (
+            <span className="text-[10px] text-muted-foreground" data-testid={`text-order-limit-${order.id}`}>
+              Limit: <span className="font-mono font-medium text-foreground">${order.limitPrice.toFixed(2)}</span>
+            </span>
+          )}
+          {order.stopPrice != null && (
+            <span className="text-[10px] text-muted-foreground" data-testid={`text-order-stop-${order.id}`}>
+              Stop: <span className="font-mono font-medium text-foreground">${order.stopPrice.toFixed(2)}</span>
+            </span>
+          )}
+          {order.lastPrice != null && order.lastPrice > 0 && (
+            <span className="text-[10px] text-muted-foreground" data-testid={`text-order-last-${order.id}`}>
+              Last: <span className="font-mono font-medium text-foreground">${order.lastPrice.toFixed(2)}</span>
+            </span>
+          )}
+          {order.commission != null && order.commission > 0 && (
+            <span className="text-[10px] text-muted-foreground" data-testid={`text-order-comm-${order.id}`}>
+              Comm: <span className="font-mono">${order.commission.toFixed(2)}</span>
+            </span>
+          )}
         </div>
       </div>
       <div className="text-right shrink-0">
+        {order.sourceAppName && (
+          <div className="text-[10px] text-blue-500 font-medium mb-0.5" data-testid={`text-order-app-${order.id}`}>{order.sourceAppName}</div>
+        )}
         <div className="text-[10px] text-muted-foreground">
           {order.submittedAt ? format(new Date(order.submittedAt), "MMM d, h:mm a") : ""}
         </div>
