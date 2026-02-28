@@ -354,23 +354,23 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
   const ticker = data.ticker || data.symbol || "";
 
   const ordersQuery = useQuery<IbkrOrder[]>({
-    queryKey: ["/api/ibkr/orders/by-symbol", ticker],
+    queryKey: ["/api/ibkr/orders/by-signal", signal?.id],
     queryFn: async () => {
-      const res = await fetch(`/api/ibkr/orders/by-symbol/${encodeURIComponent(ticker)}`);
+      const res = await fetch(`/api/ibkr/orders/by-signal/${encodeURIComponent(signal!.id)}`);
       if (!res.ok) return [];
       return res.json();
     },
-    enabled: !!ticker && open,
+    enabled: !!signal?.id && open,
   });
 
   const activityQuery = useQuery<ActivityLogEntry[]>({
-    queryKey: ["/api/activity/by-symbol", ticker],
+    queryKey: ["/api/activity/by-signal", signal?.id],
     queryFn: async () => {
-      const res = await fetch(`/api/activity/by-symbol/${encodeURIComponent(ticker)}`);
+      const res = await fetch(`/api/activity/by-signal/${encodeURIComponent(signal!.id)}`);
       if (!res.ok) return [];
       return res.json();
     },
-    enabled: !!ticker && open,
+    enabled: !!signal?.id && open,
   });
 
   if (!signal) return null;
