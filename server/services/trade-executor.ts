@@ -176,14 +176,21 @@ async function connectIbkr(
   return ib;
 }
 
-async function getNextOrderId(ib: IBApi): Promise<number> {
-  return new Promise<number>((resolve) => {
-    const timeout = setTimeout(() => resolve(Date.now() % 100000), 5000);
+let lastUsedOrderId = 0;
+
+async function getNextOrderId(ib: IBApi, childCount: number = 0): Promise<number> {
+  const ibkrId = await new Promise<number>((resolve) => {
+    const timeout = setTimeout(() => resolve(0), 5000);
     ib.once(EventName.nextValidId, (orderId: number) => {
       clearTimeout(timeout);
       resolve(orderId);
     });
   });
+
+  const minId = lastUsedOrderId + 1;
+  const startId = Math.max(ibkrId, minId);
+  lastUsedOrderId = startId + childCount + 1;
+  return startId;
 }
 
 interface OrderStatusResult {
@@ -200,10 +207,23 @@ function waitForOrderStatus(
   timeoutMs: number = 15000,
 ): Promise<OrderStatusResult> {
   return new Promise((resolve, reject) => {
+    const collectedErrors: string[] = [];
+    let resolved = false;
+
     const timeout = setTimeout(() => {
+      if (resolved) return;
+      resolved = true;
       cleanup();
       resolve({ status: "SUBMITTED", filled: 0, avgFillPrice: 0 });
     }, timeoutMs);
+
+    const doResolve = (result: OrderStatusResult) => {
+      if (resolved) return;
+      resolved = true;
+      clearTimeout(timeout);
+      cleanup();
+      resolve(result);
+    };
 
     const onStatus = (
       oid: number,
@@ -214,17 +234,18 @@ function waitForOrderStatus(
     ) => {
       if (oid !== orderId) return;
       if (status === "Filled") {
-        clearTimeout(timeout);
-        cleanup();
-        resolve({ status: "FILLED", filled, avgFillPrice });
+        doResolve({ status: "FILLED", filled, avgFillPrice });
       } else if (status === "Inactive") {
-        clearTimeout(timeout);
-        cleanup();
-        resolve({ status: "REJECTED", filled: 0, avgFillPrice: 0, rejected: true, rejectReason: "Order went inactive — likely rejected by IBKR. Check margin, permissions, or contract validity." });
+        const reason = collectedErrors.length > 0
+          ? collectedErrors.join(" | ")
+          : "Order went inactive — rejected by IBKR (no specific error received). Check margin, permissions, or contract validity.";
+        console.error(`[TradeExecutor] Order ${orderId} Inactive. Errors: ${reason}`);
+        doResolve({ status: "REJECTED", filled: 0, avgFillPrice: 0, rejected: true, rejectReason: reason });
       } else if (status === "Cancelled" || status === "ApiCancelled") {
-        clearTimeout(timeout);
-        cleanup();
-        resolve({ status: "CANCELLED", filled: 0, avgFillPrice: 0, rejected: true, rejectReason: `Order ${oid} was cancelled` });
+        const reason = collectedErrors.length > 0
+          ? `Order cancelled: ${collectedErrors.join(" | ")}`
+          : `Order ${oid} was cancelled`;
+        doResolve({ status: "CANCELLED", filled: 0, avgFillPrice: 0, rejected: true, rejectReason: reason });
       }
     };
 
@@ -237,12 +258,11 @@ function waitForOrderStatus(
       }
 
       const reason = buildRejectReason(code, err.message);
-      console.error(`[TradeExecutor] Order ${orderId} rejected: code=${code}, msg=${err.message}`);
+      console.error(`[TradeExecutor] Order ${orderId} error: code=${code}, ${reason}`);
+      collectedErrors.push(reason);
 
       if (isOrderRejectCode(code)) {
-        clearTimeout(timeout);
-        cleanup();
-        resolve({ status: "REJECTED", filled: 0, avgFillPrice: 0, rejected: true, rejectReason: reason });
+        doResolve({ status: "REJECTED", filled: 0, avgFillPrice: 0, rejected: true, rejectReason: reason });
       }
     };
 
@@ -356,7 +376,8 @@ export async function executeIbkrTrade(
 
   try {
     ib = await connectIbkr(host, port, clientId);
-    const parentOrderId = await getNextOrderId(ib);
+    const childCount = targets.length + (stopLoss ? 1 : 0);
+    const parentOrderId = await getNextOrderId(ib, childCount);
     const contract = buildContract(data);
     const secType = contract.secType === SecType.OPT ? "OPT" : "STK";
     const instrumentType = data.instrument_type || "Shares";
