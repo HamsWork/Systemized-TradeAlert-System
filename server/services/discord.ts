@@ -127,8 +127,14 @@ function buildOptionsFields(
   if (data.stop_loss != null) {
     const sl = Number(data.stop_loss);
     const slPct = optionPrice ? fmtPct(optionPrice, sl) : null;
-    const entryPct = optionPrice ? `${fmtPrice(optionPrice)}(+0%)` : "";
-    tradePlanParts.push(`🛑 Stop Loss: ${fmtPrice(sl)}(${slPct || "?"}), ${entryPct}`);
+    let slText = `🛑 Stop Loss: ${fmtPrice(sl)}(${slPct || "?"})`;
+    const firstTarget = Object.values(data.targets || {})[0] as any;
+    if (firstTarget?.raise_stop_loss?.price) {
+      const rsl = Number(firstTarget.raise_stop_loss.price);
+      const rslPct = optionPrice ? fmtPct(optionPrice, rsl) : null;
+      slText += ` → ${fmtPrice(rsl)}(${rslPct || "?"}) after TP1`;
+    }
+    tradePlanParts.push(slText);
   }
 
   if (data.time_stop) {
@@ -195,8 +201,15 @@ function buildSharesFields(
 
   if (data.stop_loss != null) {
     const sl = Number(data.stop_loss);
-    const pct = entryPrice ? fmtPct(entryPrice, sl) : null;
-    tradePlanParts.push(`🛑 Stop Loss: ${fmtPrice(sl)}${pct ? ` (${pct})` : ""}`);
+    const slPct = entryPrice ? fmtPct(entryPrice, sl) : null;
+    let slText = `🛑 Stop Loss: ${fmtPrice(sl)}(${slPct || "?"})`;
+    const firstTarget = Object.values(data.targets || {})[0] as any;
+    if (firstTarget?.raise_stop_loss?.price) {
+      const rsl = Number(firstTarget.raise_stop_loss.price);
+      const rslPct = entryPrice ? fmtPct(entryPrice, rsl) : null;
+      slText += ` → ${fmtPrice(rsl)}(${rslPct || "?"}) after TP1`;
+    }
+    tradePlanParts.push(slText);
   }
 
   if (data.time_stop) {
