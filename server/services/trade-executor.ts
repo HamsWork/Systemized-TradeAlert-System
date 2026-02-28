@@ -186,11 +186,19 @@ async function getNextOrderId(ib: IBApi): Promise<number> {
   });
 }
 
+interface OrderStatusResult {
+  status: string;
+  filled: number;
+  avgFillPrice: number;
+  rejected?: boolean;
+  rejectReason?: string;
+}
+
 function waitForOrderStatus(
   ib: IBApi,
   orderId: number,
   timeoutMs: number = 15000,
-): Promise<{ status: string; filled: number; avgFillPrice: number }> {
+): Promise<OrderStatusResult> {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       cleanup();
@@ -209,18 +217,89 @@ function waitForOrderStatus(
         clearTimeout(timeout);
         cleanup();
         resolve({ status: "FILLED", filled, avgFillPrice });
+      } else if (status === "Inactive") {
+        clearTimeout(timeout);
+        cleanup();
+        resolve({ status: "REJECTED", filled: 0, avgFillPrice: 0, rejected: true, rejectReason: "Order went inactive — likely rejected by IBKR. Check margin, permissions, or contract validity." });
       } else if (status === "Cancelled" || status === "ApiCancelled") {
         clearTimeout(timeout);
         cleanup();
-        reject(new Error(`Order ${oid} was cancelled`));
+        resolve({ status: "CANCELLED", filled: 0, avgFillPrice: 0, rejected: true, rejectReason: `Order ${oid} was cancelled` });
+      }
+    };
+
+    const onError = (err: Error, code: number, reqId: number) => {
+      if (reqId !== orderId && reqId !== -1) return;
+
+      const reason = buildRejectReason(code, err.message);
+      console.error(`[TradeExecutor] Order ${orderId} error: code=${code}, msg=${err.message}`);
+
+      if (isOrderRejectCode(code)) {
+        clearTimeout(timeout);
+        cleanup();
+        resolve({ status: "REJECTED", filled: 0, avgFillPrice: 0, rejected: true, rejectReason: reason });
       }
     };
 
     const cleanup = () => {
       ib.off(EventName.orderStatus, onStatus);
+      ib.off(EventName.error, onError);
     };
     ib.on(EventName.orderStatus, onStatus);
+    ib.on(EventName.error, onError);
   });
+}
+
+function isOrderRejectCode(code: number): boolean {
+  const rejectCodes = [
+    103, 104, 105, 106, 107, 109, 110, 111, 113,
+    116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126,
+    131, 132, 133, 134, 135, 136, 137, 138, 139, 140,
+    141, 142, 143, 144, 145, 146, 147, 148, 151, 152,
+    153, 154, 155, 156, 157, 158, 159, 160, 161,
+    163, 164, 165, 166, 167, 168, 169, 170, 171,
+    200, 201, 202, 203, 309, 312, 321, 322, 323,
+    324, 325, 326, 327, 328, 329, 330, 347, 364, 399,
+    404, 405, 406, 407, 408, 417, 418, 419, 420, 421, 422,
+    10003, 10005, 10006, 10007, 10008, 10009, 10010, 10011, 10012,
+    10013, 10014, 10020, 10021, 10022, 10023, 10024, 10025, 10026, 10027,
+  ];
+  return rejectCodes.includes(code);
+}
+
+function buildRejectReason(code: number, message: string): string {
+  const codeReasons: Record<number, string> = {
+    103: "Duplicate order ID",
+    104: "Cannot modify a filled order",
+    105: "Order being modified does not match original",
+    110: "Price is below minimum variation",
+    116: "Market order not allowed — use limit order instead",
+    131: "Order would exceed position limit",
+    132: "Order would exceed account margin",
+    133: "Order would be submitted to exchange outside trading hours",
+    135: "Cannot cancel order — already filled or cancelled",
+    136: "Cannot find order to cancel or modify",
+    161: "Cancel attempted — order not cancelled (may be filled)",
+    200: "Contract not found — check ticker, expiration, strike, or right",
+    201: "Order rejected — insufficient margin or buying power",
+    202: "Order cancelled by user or system",
+    203: "Security not available for trading",
+    309: "Max number of orders for this contract has been reached",
+    399: "Order message — check details",
+    404: "Order held — no matching entry order",
+    405: "Order held — contract not available",
+    417: "Order rejected — account not approved for this product",
+    421: "Order rejected — account not approved for short selling",
+    10003: "Order size exceeds the max allowed",
+    10005: "Order price exceeds the max or min allowed",
+    10006: "Order rejected — outside regular trading hours",
+    10020: "Order rejected — insufficient shares available for short sale",
+    10021: "Order rejected — no margin permission",
+  };
+
+  const knownReason = codeReasons[code];
+  if (knownReason) return `[${code}] ${knownReason}: ${message}`;
+  return `[${code}] ${message}`;
 }
 
 export async function executeIbkrTrade(
@@ -362,6 +441,49 @@ export async function executeIbkrTrade(
     }
 
     const parentStatus = await waitForOrderStatus(ib, parentOrderId);
+
+    if (parentStatus.rejected) {
+      const reason = parentStatus.rejectReason || "Unknown rejection reason";
+      console.error(`[TradeExecutor] Order REJECTED for ${ticker}: ${reason}`);
+
+      storage.upsertIbkrOrder(String(parentOrderId), ibkrIntegration.id, {
+        integrationId: ibkrIntegration.id,
+        signalId: signal.id,
+        orderId: String(parentOrderId),
+        symbol: ticker,
+        secType,
+        expiration: data.expiration || null,
+        strike: data.strike ? Number(data.strike) : null,
+        right: rightVal,
+        conId: null,
+        side: side.toLowerCase(),
+        orderType: entryPrice ? "limit" : "market",
+        quantity,
+        entryPrice: entryPrice ? String(entryPrice) : null,
+        stopPrice: null,
+        filledQuantity: 0,
+        avgFillPrice: null,
+        lastPrice: null,
+        status: "rejected",
+        timeInForce: "DAY",
+        commission: null,
+        submittedAt: new Date(),
+        filledAt: null,
+        sourceAppId: app.id,
+        sourceAppName: app.name,
+      }).catch(() => {});
+
+      storage.createActivity({
+        type: "trade_error",
+        title: `IBKR order rejected: ${side} ${ticker}`,
+        description: reason,
+        symbol: ticker,
+        signalId: signal.id,
+        metadata: { orderId: parentOrderId, status: parentStatus.status, rejectReason: reason, sourceApp: app.name },
+      }).catch(() => {});
+
+      return { executed: false, trade: null, error: reason };
+    }
 
     const result: TradeResult = {
       orderId: parentOrderId,
