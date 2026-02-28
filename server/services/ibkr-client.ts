@@ -31,11 +31,22 @@ export interface IbkrPosition {
   avgCost: number;
 }
 
+export type OrderStatusCallback = (data: {
+  orderId: number;
+  status: string;
+  filled: number;
+  remaining: number;
+  avgFillPrice: number;
+  lastFillPrice: number;
+  whyHeld: string;
+}) => void;
+
 export class IbkrClient {
   private ib: IBApi;
   private connected = false;
   private integrationId: string;
   private config: IbkrConnectionConfig;
+  private orderStatusCallbacks: OrderStatusCallback[] = [];
 
   constructor(integration: Integration) {
     this.integrationId = integration.id;
@@ -60,6 +71,10 @@ export class IbkrClient {
     return this.connected;
   }
 
+  onOrderStatus(cb: OrderStatusCallback): void {
+    this.orderStatusCallbacks.push(cb);
+  }
+
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -70,6 +85,26 @@ export class IbkrClient {
         clearTimeout(timeout);
         this.connected = true;
         this.ib.reqMarketDataType(MarketDataType.DELAYED_FROZEN);
+
+        this.ib.on(EventName.orderStatus, (
+          orderId: number,
+          status: string,
+          filled: number,
+          remaining: number,
+          avgFillPrice: number,
+          _permId: number,
+          _parentId: number,
+          lastFillPrice: number,
+          _clientId: number,
+          whyHeld: string,
+        ) => {
+          for (const cb of this.orderStatusCallbacks) {
+            try {
+              cb({ orderId, status, filled, remaining, avgFillPrice, lastFillPrice, whyHeld });
+            } catch {}
+          }
+        });
+
         console.log(`[IBKR] Connected to ${this.config.host}:${this.config.port} (client ${this.config.clientId}), market data type set to DELAYED`);
         resolve();
       });

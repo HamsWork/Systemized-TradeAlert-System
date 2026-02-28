@@ -98,6 +98,28 @@ class IbkrSyncManager {
   private async connectOne(integration: Integration): Promise<void> {
     const client = new IbkrClient(integration);
     try {
+      client.onOrderStatus(async (data) => {
+        try {
+          const mappedStatus = mapOrderStatus(data.status);
+          const existing = await storage.getIbkrOrderByOrderId(String(data.orderId), integration.id);
+          if (!existing) return;
+          if (existing.status === mappedStatus && existing.filledQuantity === data.filled) return;
+
+          const updates: Record<string, any> = {
+            status: mappedStatus,
+            filledQuantity: data.filled,
+          };
+          if (data.avgFillPrice > 0) updates.avgFillPrice = data.avgFillPrice;
+          if (mappedStatus === "filled" && !existing.filledAt) updates.filledAt = new Date();
+          if (mappedStatus === "cancelled" && !existing.cancelledAt) updates.cancelledAt = new Date();
+
+          await storage.updateIbkrOrder(existing.id, updates);
+          console.log(`[IBKR Sync] Order ${data.orderId} status: ${data.status} (filled: ${data.filled}, avg: ${data.avgFillPrice})`);
+        } catch (err: any) {
+          console.warn(`[IBKR Sync] Real-time status update error for order ${data.orderId}: ${err.message}`);
+        }
+      });
+
       await client.connect();
       this.clients.set(integration.id, client);
       await storage.updateIntegration(integration.id, { status: "connected" } as any);
