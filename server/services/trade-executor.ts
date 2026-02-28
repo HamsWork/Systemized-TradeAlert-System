@@ -178,7 +178,10 @@ async function connectIbkr(
 
 let lastUsedOrderId = 0;
 
-async function getNextOrderId(ib: IBApi, childCount: number = 0): Promise<number> {
+async function getNextOrderId(
+  ib: IBApi,
+  childCount: number = 0,
+): Promise<number> {
   const ibkrId = await new Promise<number>((resolve) => {
     const timeout = setTimeout(() => resolve(0), 5000);
     ib.once(EventName.nextValidId, (orderId: number) => {
@@ -203,7 +206,9 @@ interface OrderStatusResult {
 
 function isMarketOpen(): boolean {
   const now = new Date();
-  const et = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const et = new Date(
+    now.toLocaleString("en-US", { timeZone: "America/New_York" }),
+  );
   const day = et.getDay();
   const hour = et.getHours();
   const min = et.getMinutes();
@@ -248,6 +253,13 @@ function waitForOrderStatus(
       if (oid !== orderId) return;
       if (status === "Filled") {
         doResolve({ status: "FILLED", filled, avgFillPrice });
+      } else if (status === "PreSubmitted" || status === "Submitted") {
+        if (!isMarketOpen()) {
+          console.log(`[TradeExecutor] Order ${orderId} ${status} (market closed) — bracket accepted, queued for market open`);
+          doResolve({ status: "PENDING_OPEN", filled: 0, avgFillPrice: 0 });
+        } else {
+          console.log(`[TradeExecutor] Order ${orderId} status: ${status}`);
+        }
       } else if (status === "Inactive") {
         if (!isMarketOpen() && collectedErrors.length === 0) {
           console.log(`[TradeExecutor] Order ${orderId} Inactive (market closed) — bracket queued for market open`);
@@ -260,10 +272,17 @@ function waitForOrderStatus(
           doResolve({ status: "REJECTED", filled: 0, avgFillPrice: 0, rejected: true, rejectReason: reason });
         }
       } else if (status === "Cancelled" || status === "ApiCancelled") {
-        const reason = collectedErrors.length > 0
-          ? `Order cancelled: ${collectedErrors.join(" | ")}`
-          : `Order ${oid} was cancelled`;
-        doResolve({ status: "CANCELLED", filled: 0, avgFillPrice: 0, rejected: true, rejectReason: reason });
+        const reason =
+          collectedErrors.length > 0
+            ? `Order cancelled: ${collectedErrors.join(" | ")}`
+            : `Order ${oid} was cancelled`;
+        doResolve({
+          status: "CANCELLED",
+          filled: 0,
+          avgFillPrice: 0,
+          rejected: true,
+          rejectReason: reason,
+        });
       } else if (status === "PreSubmitted" || status === "Submitted") {
         console.log(`[TradeExecutor] Order ${orderId} status: ${status}`);
       }
@@ -278,11 +297,19 @@ function waitForOrderStatus(
       }
 
       const reason = buildRejectReason(code, err.message);
-      console.error(`[TradeExecutor] Order ${reqId} error: code=${code}, ${reason}`);
+      console.error(
+        `[TradeExecutor] Order ${reqId} error: code=${code}, ${reason}`,
+      );
       collectedErrors.push(`[Order ${reqId}] ${reason}`);
 
       if (isOrderRejectCode(code)) {
-        doResolve({ status: "REJECTED", filled: 0, avgFillPrice: 0, rejected: true, rejectReason: collectedErrors.join(" | ") });
+        doResolve({
+          status: "REJECTED",
+          filled: 0,
+          avgFillPrice: 0,
+          rejected: true,
+          rejectReason: collectedErrors.join(" | "),
+        });
       }
     };
 
@@ -297,17 +324,14 @@ function waitForOrderStatus(
 
 function isOrderRejectCode(code: number): boolean {
   const rejectCodes = [
-    103, 104, 105, 106, 107, 109, 110, 111, 113,
-    116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126,
-    131, 132, 133, 134, 135, 136, 137, 138, 139, 140,
-    141, 142, 143, 144, 145, 146, 147, 148, 151, 152,
-    153, 154, 155, 156, 157, 158, 159, 160, 161,
-    163, 164, 165, 166, 167, 168, 169, 170, 171,
-    200, 201, 202, 203, 309, 312, 321, 322, 323,
-    324, 325, 326, 327, 328, 329, 330, 347, 364,
-    404, 405, 406, 407, 408, 417, 418, 419, 420, 421, 422,
-    10003, 10005, 10006, 10007, 10008, 10009, 10010, 10011, 10012,
-    10013, 10014, 10020, 10021, 10022, 10023, 10024, 10025, 10026, 10027,
+    103, 104, 105, 106, 107, 109, 110, 111, 113, 116, 117, 118, 119, 120, 121,
+    122, 123, 124, 125, 126, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140,
+    141, 142, 143, 144, 145, 146, 147, 148, 151, 152, 153, 154, 155, 156, 157,
+    158, 159, 160, 161, 163, 164, 165, 166, 167, 168, 169, 170, 171, 200, 201,
+    202, 203, 309, 312, 321, 322, 323, 324, 325, 326, 327, 328, 329, 330, 347,
+    364, 404, 405, 406, 407, 408, 417, 418, 419, 420, 421, 422, 10003, 10005,
+    10006, 10007, 10008, 10009, 10010, 10011, 10012, 10013, 10014, 10020, 10021,
+    10022, 10023, 10024, 10025, 10026, 10027,
   ];
   return rejectCodes.includes(code);
 }
@@ -410,6 +434,8 @@ export async function executeIbkrTrade(
     const hasChildren = targets.length > 0 || !!stopLoss;
     const ocaGroup = `TS_${ticker}_${parentOrderId}`;
 
+    console.log(`ocaGroup: ${ocaGroup}`);
+
     const parentOrder: any = {
       action: side === "BUY" ? OrderAction.BUY : OrderAction.SELL,
       orderType: OrderType.MKT,
@@ -490,48 +516,61 @@ export async function executeIbkrTrade(
       nextId++;
     }
 
-    const allOrderIds = [parentOrderId, ...childOrders.map(c => c.orderId)];
-    const parentStatus = await waitForOrderStatus(ib, parentOrderId, allOrderIds);
+    const allOrderIds = [parentOrderId, ...childOrders.map((c) => c.orderId)];
+    const parentStatus = await waitForOrderStatus(
+      ib,
+      parentOrderId,
+      allOrderIds,
+    );
 
     if (parentStatus.rejected) {
       const reason = parentStatus.rejectReason || "Unknown rejection reason";
       console.error(`[TradeExecutor] Order REJECTED for ${ticker}: ${reason}`);
 
-      storage.upsertIbkrOrder(String(parentOrderId), ibkrIntegration.id, {
-        integrationId: ibkrIntegration.id,
-        signalId: signal.id,
-        orderId: String(parentOrderId),
-        symbol: ticker,
-        secType,
-        expiration: data.expiration || null,
-        strike: data.strike ? Number(data.strike) : null,
-        right: rightVal,
-        conId: null,
-        side: side.toLowerCase(),
-        orderType: "market",
-        quantity,
-        entryPrice: null,
-        stopPrice: null,
-        filledQuantity: 0,
-        avgFillPrice: null,
-        lastPrice: null,
-        status: "rejected",
-        timeInForce: "DAY",
-        commission: null,
-        submittedAt: new Date(),
-        filledAt: null,
-        sourceAppId: app.id,
-        sourceAppName: app.name,
-      }).catch(() => {});
+      storage
+        .upsertIbkrOrder(String(parentOrderId), ibkrIntegration.id, {
+          integrationId: ibkrIntegration.id,
+          signalId: signal.id,
+          orderId: String(parentOrderId),
+          symbol: ticker,
+          secType,
+          expiration: data.expiration || null,
+          strike: data.strike ? Number(data.strike) : null,
+          right: rightVal,
+          conId: null,
+          side: side.toLowerCase(),
+          orderType: "market",
+          quantity,
+          entryPrice: null,
+          stopPrice: null,
+          filledQuantity: 0,
+          avgFillPrice: null,
+          lastPrice: null,
+          status: "rejected",
+          timeInForce: "DAY",
+          commission: null,
+          submittedAt: new Date(),
+          filledAt: null,
+          sourceAppId: app.id,
+          sourceAppName: app.name,
+        })
+        .catch(() => {});
 
-      storage.createActivity({
-        type: "trade_error",
-        title: `IBKR order rejected: ${side} ${ticker}`,
-        description: reason,
-        symbol: ticker,
-        signalId: signal.id,
-        metadata: { orderId: parentOrderId, status: parentStatus.status, rejectReason: reason, sourceApp: app.name },
-      }).catch(() => {});
+      storage
+        .createActivity({
+          type: "trade_error",
+          title: `IBKR order rejected: ${side} ${ticker}`,
+          description: reason,
+          symbol: ticker,
+          signalId: signal.id,
+          metadata: {
+            orderId: parentOrderId,
+            status: parentStatus.status,
+            rejectReason: reason,
+            sourceApp: app.name,
+          },
+        })
+        .catch(() => {});
 
       return { executed: false, trade: null, error: reason };
     }
@@ -564,7 +603,12 @@ export async function executeIbkrTrade(
       filledQuantity: parentStatus.filled || 0,
       avgFillPrice: parentStatus.avgFillPrice || null,
       lastPrice: null,
-      status: parentStatus.status === "FILLED" ? "filled" : parentStatus.status === "PENDING_OPEN" ? "pending" : "submitted",
+      status:
+        parentStatus.status === "FILLED"
+          ? "filled"
+          : parentStatus.status === "PENDING_OPEN"
+            ? "pending"
+            : "submitted",
       timeInForce: "DAY",
       commission: null,
       submittedAt: new Date(),
