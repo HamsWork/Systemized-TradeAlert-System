@@ -254,5 +254,13 @@ export async function processSignal(
     result.ibkr.errors.push(tradeExecution.error);
   }
 
+  if (tradeExecution.executed && tradeExecution.trade) {
+    const t = tradeExecution.trade;
+    const children = t.childOrders?.map(c => `${c.type}@$${c.price}(${c.quantity})`).join(", ") || "none";
+    console.log(`[Signal] IBKR trade SUCCESS: ${t.side} ${t.quantity} ${t.symbol} | status=${t.status} | orderId=${t.orderId} | children=[${children}]`);
+  } else if (tradeExecution.error) {
+    console.error(`[Signal] IBKR trade FAILED for ${ticker}: ${tradeExecution.error}`);
+  }
+
   return result;
 }
