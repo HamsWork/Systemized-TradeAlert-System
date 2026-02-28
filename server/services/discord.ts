@@ -116,7 +116,7 @@ function buildOptionsFields(
     const targetEntries = Object.entries(data.targets).filter(([, val]) => (val as any)?.price);
     const targetPrices = targetEntries.map(([, val]) => {
       const price = Number((val as any).price);
-      const pct = stockPrice ? fmtPct(stockPrice, price) : null;
+      const pct = optionPrice ? fmtPct(optionPrice, price) : null;
       return pct ? `${fmtPrice(price)} (${pct})` : fmtPrice(price);
     });
     if (targetPrices.length > 0) {
@@ -126,8 +126,8 @@ function buildOptionsFields(
 
   if (data.stop_loss != null) {
     const sl = Number(data.stop_loss);
-    const slPct = stockPrice ? fmtPct(stockPrice, sl) : null;
-    const entryPct = stockPrice ? `${fmtPrice(stockPrice)}(+0%)` : "";
+    const slPct = optionPrice ? fmtPct(optionPrice, sl) : null;
+    const entryPct = optionPrice ? `${fmtPrice(optionPrice)}(+0%)` : "";
     tradePlanParts.push(`🛑 Stop Loss: ${fmtPrice(sl)}(${slPct || "?"}), ${entryPct}`);
   }
 
@@ -145,7 +145,7 @@ function buildOptionsFields(
     entries.forEach(([, val], i) => {
       const t = val as any;
       const price = Number(t.price);
-      const pct = stockPrice ? fmtPct(stockPrice, price) : null;
+      const pct = optionPrice ? fmtPct(optionPrice, price) : null;
       let line = `Take Profit (${i + 1}): At ${pct || fmtPrice(price)}`;
       if (t.raise_stop_loss?.price) {
         line += ` raise stop loss to ${fmtPrice(t.raise_stop_loss.price)}`;
