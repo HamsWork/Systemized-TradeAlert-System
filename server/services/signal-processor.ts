@@ -29,6 +29,119 @@ const VALID_INSTRUMENT_TYPES = ["Options", "Shares", "LETF"];
 const VALID_DIRECTIONS_OPTIONS = ["Call", "Put"];
 const VALID_DIRECTIONS_DEFAULT = ["Long", "Short"];
 
+const TDI_INSTRUMENT_MAP: Record<string, string> = {
+  "SHARES": "Shares",
+  "SHARE": "Shares",
+  "STOCK": "Shares",
+  "STK": "Shares",
+  "OPTION": "Options",
+  "OPTIONS": "Options",
+  "OPT": "Options",
+  "LETF": "LETF",
+};
+
+const TDI_DIRECTION_MAP: Record<string, string> = {
+  "long": "Long",
+  "LONG": "Long",
+  "short": "Short",
+  "SHORT": "Short",
+  "call": "Call",
+  "CALL": "Call",
+  "put": "Put",
+  "PUT": "Put",
+};
+
+function isTdiFormat(body: Record<string, any>): boolean {
+  return !!(
+    body.symbol && !body.ticker &&
+    (body.entry_price !== undefined || body.stop_price !== undefined || body.strategy_mode || body.timeframe)
+  );
+}
+
+function transformTdiSignal(body: Record<string, any>): Record<string, any> {
+  const rawInstrument = (body.instrument_type || "SHARES").toUpperCase();
+  const instrumentType = TDI_INSTRUMENT_MAP[rawInstrument] || "Shares";
+
+  let direction = TDI_DIRECTION_MAP[body.direction] || body.direction || "Long";
+  if (instrumentType === "Options" && (direction === "Long" || direction === "Short")) {
+    direction = direction === "Long" ? "Call" : "Put";
+  }
+
+  const ticker = body.instrument_ticker || body.instrument_symbol || body.symbol;
+
+  const result: Record<string, any> = {
+    ticker: ticker.toUpperCase(),
+    instrumentType,
+    direction,
+  };
+
+  if (body.entry_price != null) result.entryPrice = Number(body.entry_price);
+  if (body.stop_price != null) result.stop_loss = Number(body.stop_price);
+
+  const targets: Record<string, any> = {};
+  if (body.target_2r != null && Number(body.target_2r) > 0) {
+    targets.tp1 = { price: Number(body.target_2r), take_off_percent: 50 };
+    if (body.entry_price != null) {
+      targets.tp1.raise_stop_loss = { price: Number(body.entry_price) };
+    }
+  }
+  if (body.target_3r != null && Number(body.target_3r) > 0) {
+    targets.tp2 = { price: Number(body.target_3r), take_off_percent: 50 };
+  }
+  if (body.tp1_price != null && Number(body.tp1_price) > 0) {
+    targets.tp1 = targets.tp1 || {};
+    targets.tp1.price = Number(body.tp1_price);
+    targets.tp1.take_off_percent = targets.tp1.take_off_percent || 50;
+  }
+  if (body.tp2_price != null && Number(body.tp2_price) > 0) {
+    targets.tp2 = targets.tp2 || {};
+    targets.tp2.price = Number(body.tp2_price);
+    targets.tp2.take_off_percent = targets.tp2.take_off_percent || 50;
+  }
+  if (Object.keys(targets).length > 0) result.targets = targets;
+
+  if (instrumentType === "Options") {
+    if (body.expiration) result.expiration = body.expiration;
+    if (body.strike) result.strike = body.strike;
+
+    if (!result.expiration && body.option_contract_ticker) {
+      const parsed = parseOptionTicker(body.option_contract_ticker);
+      if (parsed) {
+        result.expiration = parsed.expiration;
+        result.strike = parsed.strike;
+        if (!result.ticker || result.ticker === body.symbol?.toUpperCase()) {
+          result.ticker = body.symbol?.toUpperCase() || ticker.toUpperCase();
+        }
+      }
+    }
+  }
+
+  if (body.underlying_symbol) result.underlying_symbol = body.underlying_symbol;
+
+  result.tdi_metadata = {
+    strategy_mode: body.strategy_mode || null,
+    timeframe: body.timeframe || null,
+    quality_grade: body.quality_grade || null,
+    quality_score: body.quality_score ?? null,
+    alert_date: body.alert_date || null,
+    source_signal_id: body.source_signal_id ?? body.id ?? null,
+    risk: body.risk ?? null,
+    quantity: body.quantity ?? null,
+  };
+
+  console.log(`[Signal] Transformed TDI signal: ${body.symbol} → ${JSON.stringify(result)}`);
+  return result;
+}
+
+function parseOptionTicker(opra: string): { expiration: string; strike: string } | null {
+  const match = opra.match(/^[A-Z]+(\d{6})([CP])(\d+)$/);
+  if (!match) return null;
+  const dateStr = match[1];
+  const expiration = `20${dateStr.slice(0, 2)}-${dateStr.slice(2, 4)}-${dateStr.slice(4, 6)}`;
+  const strike = (parseInt(match[3]) / 1000).toString();
+  return { expiration, strike };
+}
+
 function validateIngestBody(body: Record<string, any>): string[] {
   const errors: string[] = [];
   const { ticker, instrumentType, direction } = body;
