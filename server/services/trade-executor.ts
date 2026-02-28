@@ -231,8 +231,13 @@ function waitForOrderStatus(
     const onError = (err: Error, code: number, reqId: number) => {
       if (reqId !== orderId && reqId !== -1) return;
 
+      if (code === 399) {
+        console.log(`[TradeExecutor] Order ${orderId} info: ${err.message}`);
+        return;
+      }
+
       const reason = buildRejectReason(code, err.message);
-      console.error(`[TradeExecutor] Order ${orderId} error: code=${code}, msg=${err.message}`);
+      console.error(`[TradeExecutor] Order ${orderId} rejected: code=${code}, msg=${err.message}`);
 
       if (isOrderRejectCode(code)) {
         clearTimeout(timeout);
@@ -259,7 +264,7 @@ function isOrderRejectCode(code: number): boolean {
     153, 154, 155, 156, 157, 158, 159, 160, 161,
     163, 164, 165, 166, 167, 168, 169, 170, 171,
     200, 201, 202, 203, 309, 312, 321, 322, 323,
-    324, 325, 326, 327, 328, 329, 330, 347, 364, 399,
+    324, 325, 326, 327, 328, 329, 330, 347, 364,
     404, 405, 406, 407, 408, 417, 418, 419, 420, 421, 422,
     10003, 10005, 10006, 10007, 10008, 10009, 10010, 10011, 10012,
     10013, 10014, 10020, 10021, 10022, 10023, 10024, 10025, 10026, 10027,
@@ -285,7 +290,7 @@ function buildRejectReason(code: number, message: string): string {
     202: "Order cancelled by user or system",
     203: "Security not available for trading",
     309: "Max number of orders for this contract has been reached",
-    399: "Order message — check details",
+    399: "Order info/warning — not a rejection",
     404: "Order held — no matching entry order",
     405: "Order held — contract not available",
     417: "Order rejected — account not approved for this product",
