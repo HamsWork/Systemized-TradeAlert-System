@@ -176,6 +176,51 @@ async function connectIbkr(
   return ib;
 }
 
+function contractsMatch(a: Contract, b: Contract): boolean {
+  if (a.symbol !== b.symbol || a.secType !== b.secType) return false;
+  if (a.secType === SecType.OPT) {
+    return a.lastTradeDateOrContractMonth === b.lastTradeDateOrContractMonth
+      && a.strike === b.strike
+      && a.right === b.right;
+  }
+  return true;
+}
+
+async function cancelExistingOrders(ib: IBApi, contract: Contract): Promise<number> {
+  return new Promise((resolve) => {
+    const matchingOrderIds: number[] = [];
+    const timeout = setTimeout(() => { cleanup(); cancelMatched(); }, 5000);
+
+    const onOpenOrder = (orderId: number, orderContract: Contract) => {
+      if (contractsMatch(contract, orderContract)) {
+        matchingOrderIds.push(orderId);
+      }
+    };
+
+    const onOpenOrderEnd = () => { clearTimeout(timeout); cleanup(); cancelMatched(); };
+
+    const cleanup = () => {
+      ib.off(EventName.openOrder, onOpenOrder);
+      ib.off(EventName.openOrderEnd, onOpenOrderEnd);
+    };
+
+    const cancelMatched = () => {
+      for (const oid of matchingOrderIds) {
+        console.log(`[TradeExecutor] Cancelling existing order ${oid} for ${contract.symbol}`);
+        ib.cancelOrder(oid);
+      }
+      if (matchingOrderIds.length > 0) {
+        console.log(`[TradeExecutor] Cancelled ${matchingOrderIds.length} existing order(s) for ${contract.symbol}`);
+      }
+      resolve(matchingOrderIds.length);
+    };
+
+    ib.on(EventName.openOrder, onOpenOrder);
+    ib.once(EventName.openOrderEnd, onOpenOrderEnd);
+    ib.reqAllOpenOrders();
+  });
+}
+
 let lastUsedOrderId = 0;
 
 async function getNextOrderId(
@@ -419,9 +464,15 @@ export async function executeIbkrTrade(
 
   try {
     ib = await connectIbkr(host, port, clientId);
+    const contract = buildContract(data);
+
+    const cancelled = await cancelExistingOrders(ib, contract);
+    if (cancelled > 0) {
+      await new Promise(r => setTimeout(r, 1000));
+    }
+
     const childCount = targets.length + (stopLoss ? 1 : 0);
     const parentOrderId = await getNextOrderId(ib, childCount);
-    const contract = buildContract(data);
     const secType = contract.secType === SecType.OPT ? "OPT" : "STK";
     const instrumentType = data.instrument_type || "Shares";
     const rightVal =
@@ -433,8 +484,6 @@ export async function executeIbkrTrade(
 
     const hasChildren = targets.length > 0 || !!stopLoss;
     const ocaGroup = `TS_${ticker}_${parentOrderId}`;
-
-    console.log(`ocaGroup: ${ocaGroup}`);
 
     const parentOrder: any = {
       action: side === "BUY" ? OrderAction.BUY : OrderAction.SELL,
