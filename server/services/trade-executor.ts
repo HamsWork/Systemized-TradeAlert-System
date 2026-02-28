@@ -434,7 +434,7 @@ export async function executeIbkrTrade(
 
   const data = signal.data as Record<string, any>;
   const ticker = data.ticker;
-  const { side, exitSide } = determineSide(data);
+  const { side } = determineSide(data);
   const stopLoss = data.stop_loss ? Number(data.stop_loss) : null;
   const targets = parseTargets(data);
 
@@ -471,8 +471,7 @@ export async function executeIbkrTrade(
       await new Promise(r => setTimeout(r, 1000));
     }
 
-    const childCount = targets.length + (stopLoss ? 1 : 0);
-    const parentOrderId = await getNextOrderId(ib, childCount);
+    const entryOrderId = await getNextOrderId(ib, 0);
     const secType = contract.secType === SecType.OPT ? "OPT" : "STK";
     const instrumentType = data.instrument_type || "Shares";
     const rightVal =
@@ -482,94 +481,23 @@ export async function executeIbkrTrade(
           : "C"
         : null;
 
-    const hasChildren = targets.length > 0 || !!stopLoss;
-    const ocaGroup = `TS_${ticker}_${parentOrderId}`;
-
-    const parentOrder: any = {
+    const entryOrder: any = {
       action: side === "BUY" ? OrderAction.BUY : OrderAction.SELL,
       orderType: OrderType.MKT,
       totalQuantity: quantity,
       tif: TimeInForce.DAY,
-      transmit: !hasChildren,
+      transmit: true,
     };
 
     console.log(
-      `[TradeExecutor] Placing bracket: ${side} ${quantity} ${ticker} @ MKT (parentId=${parentOrderId}, OCA=${ocaGroup})`,
+      `[TradeExecutor] Placing entry order: ${side} ${quantity} ${ticker} @ MKT (orderId=${entryOrderId})`,
     );
-    ib.placeOrder(parentOrderId, contract, parentOrder);
+    ib.placeOrder(entryOrderId, contract, entryOrder);
 
-    const childOrders: {
-      orderId: number;
-      type: string;
-      price: number;
-      quantity: number;
-    }[] = [];
-    let nextId = parentOrderId + 1;
-
-    const tpQuantities = splitQuantityByTargets(quantity, targets);
-    for (let i = 0; i < targets.length; i++) {
-      if (i >= tpQuantities.length || tpQuantities[i] <= 0) continue;
-      const tp = targets[i];
-      const isLast = !stopLoss && i === targets.length - 1;
-
-      const tpOrder: any = {
-        action: exitSide,
-        orderType: OrderType.LMT,
-        totalQuantity: tpQuantities[i],
-        lmtPrice: tp.price,
-        parentId: parentOrderId,
-        ocaGroup,
-        ocaType: 1,
-        tif: TimeInForce.GTC,
-        transmit: isLast,
-      };
-
-      const exitLabel = exitSide === OrderAction.BUY ? "BUY" : "SELL";
-      console.log(
-        `[TradeExecutor]   TP${i + 1}: LMT ${exitLabel} ${tpQuantities[i]} @ $${tp.price} (orderId=${nextId})`,
-      );
-      ib.placeOrder(nextId, contract, tpOrder);
-      childOrders.push({
-        orderId: nextId,
-        type: `TP${i + 1}`,
-        price: tp.price,
-        quantity: tpQuantities[i],
-      });
-      nextId++;
-    }
-
-    if (stopLoss) {
-      const slOrder: any = {
-        action: exitSide,
-        orderType: OrderType.STP,
-        totalQuantity: quantity,
-        auxPrice: stopLoss,
-        parentId: parentOrderId,
-        ocaGroup,
-        ocaType: 1,
-        tif: TimeInForce.GTC,
-        transmit: true,
-      };
-
-      const exitLabel = exitSide === OrderAction.BUY ? "BUY" : "SELL";
-      console.log(
-        `[TradeExecutor]   SL: STP ${exitLabel} ${quantity} @ $${stopLoss} (orderId=${nextId})`,
-      );
-      ib.placeOrder(nextId, contract, slOrder);
-      childOrders.push({
-        orderId: nextId,
-        type: "SL",
-        price: stopLoss,
-        quantity,
-      });
-      nextId++;
-    }
-
-    const allOrderIds = [parentOrderId, ...childOrders.map((c) => c.orderId)];
     const parentStatus = await waitForOrderStatus(
       ib,
-      parentOrderId,
-      allOrderIds,
+      entryOrderId,
+      [entryOrderId],
     );
 
     if (parentStatus.rejected) {
@@ -577,10 +505,10 @@ export async function executeIbkrTrade(
       console.error(`[TradeExecutor] Order REJECTED for ${ticker}: ${reason}`);
 
       storage
-        .upsertIbkrOrder(String(parentOrderId), ibkrIntegration.id, {
+        .upsertIbkrOrder(String(entryOrderId), ibkrIntegration.id, {
           integrationId: ibkrIntegration.id,
           signalId: signal.id,
-          orderId: String(parentOrderId),
+          orderId: String(entryOrderId),
           symbol: ticker,
           secType,
           expiration: data.expiration || null,
@@ -613,7 +541,7 @@ export async function executeIbkrTrade(
           symbol: ticker,
           signalId: signal.id,
           metadata: {
-            orderId: parentOrderId,
+            orderId: entryOrderId,
             status: parentStatus.status,
             rejectReason: reason,
             sourceApp: app.name,
@@ -625,19 +553,19 @@ export async function executeIbkrTrade(
     }
 
     const result: TradeResult = {
-      orderId: parentOrderId,
+      orderId: entryOrderId,
       status: parentStatus.status,
       symbol: ticker,
       side,
       quantity: parentStatus.filled || quantity,
       avgFillPrice: parentStatus.avgFillPrice || undefined,
-      childOrders,
+      childOrders: [],
     };
 
-    await storage.upsertIbkrOrder(String(parentOrderId), ibkrIntegration.id, {
+    await storage.upsertIbkrOrder(String(entryOrderId), ibkrIntegration.id, {
       integrationId: ibkrIntegration.id,
       signalId: signal.id,
-      orderId: String(parentOrderId),
+      orderId: String(entryOrderId),
       symbol: ticker,
       secType,
       expiration: data.expiration || null,
@@ -666,42 +594,10 @@ export async function executeIbkrTrade(
       sourceAppName: app.name,
     });
 
-    for (const child of childOrders) {
-      await storage.upsertIbkrOrder(String(child.orderId), ibkrIntegration.id, {
-        integrationId: ibkrIntegration.id,
-        signalId: signal.id,
-        orderId: String(child.orderId),
-        symbol: ticker,
-        secType,
-        expiration: data.expiration || null,
-        strike: data.strike ? Number(data.strike) : null,
-        right: rightVal,
-        conId: null,
-        side: exitSide === OrderAction.BUY ? "buy" : "sell",
-        orderType: child.type === "SL" ? "stop" : "limit",
-        quantity: child.quantity,
-        limitPrice: child.type !== "SL" ? String(child.price) : null,
-        stopPrice: child.type === "SL" ? String(child.price) : null,
-        filledQuantity: 0,
-        avgFillPrice: null,
-        lastPrice: null,
-        status: "submitted",
-        timeInForce: "GTC",
-        commission: null,
-        submittedAt: new Date(),
-        filledAt: null,
-        sourceAppId: app.id,
-        sourceAppName: app.name,
-      });
-    }
-
-    const orderSummary = childOrders
-      .map((c) => `${c.type}@$${c.price}`)
-      .join(", ");
     const isPending = parentStatus.status === "PENDING_OPEN";
     const statusLabel = isPending ? "PENDING (market closed)" : result.status;
     console.log(
-      `[TradeExecutor] Bracket placed: ${result.orderId} ${statusLabel} for ${ticker} [${orderSummary}]`,
+      `[TradeExecutor] Entry order placed: ${result.orderId} ${statusLabel} for ${ticker}`,
     );
 
     storage
@@ -716,7 +612,6 @@ export async function executeIbkrTrade(
         metadata: {
           orderId: result.orderId,
           status: result.status,
-          childOrders,
           sourceApp: app.name,
         },
       })
