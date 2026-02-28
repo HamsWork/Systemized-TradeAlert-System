@@ -408,6 +408,7 @@ export async function executeIbkrTrade(
         : null;
 
     const hasChildren = targets.length > 0 || !!stopLoss;
+    const ocaGroup = `TS_${ticker}_${parentOrderId}`;
 
     const parentOrder: any = {
       action: side === "BUY" ? OrderAction.BUY : OrderAction.SELL,
@@ -418,7 +419,7 @@ export async function executeIbkrTrade(
     };
 
     console.log(
-      `[TradeExecutor] Placing bracket: ${side} ${quantity} ${ticker} @ MKT (parentId=${parentOrderId})`,
+      `[TradeExecutor] Placing bracket: ${side} ${quantity} ${ticker} @ MKT (parentId=${parentOrderId}, OCA=${ocaGroup})`,
     );
     ib.placeOrder(parentOrderId, contract, parentOrder);
 
@@ -442,6 +443,8 @@ export async function executeIbkrTrade(
         totalQuantity: tpQuantities[i],
         lmtPrice: tp.price,
         parentId: parentOrderId,
+        ocaGroup,
+        ocaType: 1,
         tif: TimeInForce.GTC,
         transmit: isLast,
       };
@@ -467,6 +470,8 @@ export async function executeIbkrTrade(
         totalQuantity: quantity,
         auxPrice: stopLoss,
         parentId: parentOrderId,
+        ocaGroup,
+        ocaType: 1,
         tif: TimeInForce.GTC,
         transmit: true,
       };
