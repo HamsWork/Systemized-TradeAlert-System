@@ -45,7 +45,7 @@ import { formatDistanceToNow } from "date-fns";
 import { PageHeader } from "@/components/page-header";
 import { Textarea } from "@/components/ui/textarea";
 
-function IbkrAccountSelector({ form, ibkrAccounts, usedAccountIds, testIdPrefix }: { form: any; ibkrAccounts: Integration[]; usedAccountIds: Set<string>; testIdPrefix: string }) {
+function IbkrAccountSelector({ form, ibkrAccounts, testIdPrefix }: { form: any; ibkrAccounts: Integration[]; testIdPrefix: string }) {
   const [selectedAccountId, setSelectedAccountId] = useState<string>("");
 
   const watchHost = form.watch("ibkrHost");
@@ -85,11 +85,9 @@ function IbkrAccountSelector({ form, ibkrAccounts, usedAccountIds, testIdPrefix 
           <SelectContent>
             {ibkrAccounts.map(account => {
               const cfg = account.config as Record<string, any> | null;
-              const isUsed = usedAccountIds.has(account.id) && account.id !== selectedAccountId;
               return (
-                <SelectItem key={account.id} value={account.id} disabled={isUsed}>
+                <SelectItem key={account.id} value={account.id}>
                   {account.name} ({cfg?.host}:{cfg?.port})
-                  {isUsed && " — already assigned"}
                 </SelectItem>
               );
             })}
@@ -106,7 +104,7 @@ function IbkrAccountSelector({ form, ibkrAccounts, usedAccountIds, testIdPrefix 
   );
 }
 
-function CreateAppDialog({ open, onOpenChange, ibkrAccounts, usedAccountIds }: { open: boolean; onOpenChange: (open: boolean) => void; ibkrAccounts: Integration[]; usedAccountIds: Set<string> }) {
+function CreateAppDialog({ open, onOpenChange, ibkrAccounts }: { open: boolean; onOpenChange: (open: boolean) => void; ibkrAccounts: Integration[] }) {
   const { toast } = useToast();
 
   const form = useForm<InsertConnectedApp>({
@@ -282,7 +280,7 @@ function CreateAppDialog({ open, onOpenChange, ibkrAccounts, usedAccountIds }: {
                   )}
                 />
               </div>
-              <IbkrAccountSelector form={form} ibkrAccounts={ibkrAccounts} usedAccountIds={usedAccountIds} testIdPrefix="create" />
+              <IbkrAccountSelector form={form} ibkrAccounts={ibkrAccounts} testIdPrefix="create" />
             </div>
             <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-create-app">
               {createMutation.isPending ? "Connecting..." : "Connect App"}
@@ -294,7 +292,7 @@ function CreateAppDialog({ open, onOpenChange, ibkrAccounts, usedAccountIds }: {
   );
 }
 
-function EditAppDialog({ app, open, onOpenChange, ibkrAccounts, usedAccountIds }: { app: ConnectedApp; open: boolean; onOpenChange: (open: boolean) => void; ibkrAccounts: Integration[]; usedAccountIds: Set<string> }) {
+function EditAppDialog({ app, open, onOpenChange, ibkrAccounts }: { app: ConnectedApp; open: boolean; onOpenChange: (open: boolean) => void; ibkrAccounts: Integration[] }) {
   const { toast } = useToast();
 
   const form = useForm<InsertConnectedApp>({
@@ -451,7 +449,7 @@ function EditAppDialog({ app, open, onOpenChange, ibkrAccounts, usedAccountIds }
                   )}
                 />
               </div>
-              <IbkrAccountSelector form={form} ibkrAccounts={ibkrAccounts} usedAccountIds={usedAccountIds} testIdPrefix="edit" />
+              <IbkrAccountSelector form={form} ibkrAccounts={ibkrAccounts} testIdPrefix="edit" />
             </div>
             <Button type="submit" className="w-full" disabled={updateMutation.isPending} data-testid="button-save-app">
               {updateMutation.isPending ? "Saving..." : "Save Changes"}
@@ -663,26 +661,6 @@ export default function ConnectedAppsPage() {
   const ibkrQuery = useQuery<Integration[]>({ queryKey: ["/api/integrations"] });
   const ibkrAccounts = (ibkrQuery.data ?? []).filter(i => i.type === "ibkr");
 
-  const getUsedAccountIds = useMemo(() => {
-    return (excludeAppId?: string) => {
-      const apps = appsQuery.data ?? [];
-      const set = new Set<string>();
-      for (const app of apps) {
-        if (excludeAppId && app.id === excludeAppId) continue;
-        if (app.ibkrHost && app.ibkrPort && app.ibkrClientId) {
-          const match = ibkrAccounts.find(a => {
-            const cfg = a.config as Record<string, any> | null;
-            return cfg?.host === app.ibkrHost && String(cfg?.port) === String(app.ibkrPort) && String(cfg?.clientId) === String(app.ibkrClientId);
-          });
-          if (match) set.add(match.id);
-        }
-      }
-      return set;
-    };
-  }, [appsQuery.data, ibkrAccounts]);
-
-  const usedAccountIds = useMemo(() => getUsedAccountIds(), [getUsedAccountIds]);
-
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       await apiRequest("DELETE", `/api/connected-apps/${id}`);
@@ -800,14 +778,13 @@ export default function ConnectedAppsPage() {
         </div>
       )}
 
-      <CreateAppDialog open={dialogOpen} onOpenChange={setDialogOpen} ibkrAccounts={ibkrAccounts} usedAccountIds={usedAccountIds} />
+      <CreateAppDialog open={dialogOpen} onOpenChange={setDialogOpen} ibkrAccounts={ibkrAccounts} />
       {editingApp && (
         <EditAppDialog
           app={editingApp}
           open={!!editingApp}
           onOpenChange={(open) => { if (!open) setEditingApp(null); }}
           ibkrAccounts={ibkrAccounts}
-          usedAccountIds={getUsedAccountIds(editingApp.id)}
         />
       )}
     </div>
