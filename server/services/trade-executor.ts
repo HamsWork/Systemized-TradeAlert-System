@@ -233,11 +233,13 @@ async function getNextOrderId(
       clearTimeout(timeout);
       resolve(orderId);
     });
+    ib.reqIds();
   });
 
   const minId = lastUsedOrderId + 1;
   const startId = Math.max(ibkrId, minId);
   lastUsedOrderId = startId + childCount + 1;
+  console.log(`[TradeExecutor] Next order ID: ${startId} (IBKR said ${ibkrId}, local min ${minId})`);
   return startId;
 }
 
