@@ -333,6 +333,15 @@ export async function processSignal(
   const validationErrors = validateIngestBody(normalizedBody);
   if (validationErrors.length > 0) {
     result.validationErrors = validationErrors;
+    const ticker = normalizedBody.ticker || normalizedBody.symbol || "unknown";
+    storage.createActivity({
+      type: "signal_rejected",
+      title: `Signal rejected from ${app.name}: ${ticker}`,
+      description: `Validation failed: ${validationErrors.join("; ")}`,
+      symbol: ticker,
+      signalId: null,
+      metadata: { sourceApp: app.name, sourceAppId: app.id, errors: validationErrors, rawSignal: body },
+    }).catch(() => {});
     return result;
   }
 
@@ -341,6 +350,15 @@ export async function processSignal(
 
   if (buildResult.errors.length > 0) {
     result.validationErrors = buildResult.errors;
+    const ticker = normalizedBody.ticker || normalizedBody.symbol || "unknown";
+    storage.createActivity({
+      type: "signal_rejected",
+      title: `Signal rejected from ${app.name}: ${ticker}`,
+      description: `Build failed: ${buildResult.errors.join("; ")}`,
+      symbol: ticker,
+      signalId: null,
+      metadata: { sourceApp: app.name, sourceAppId: app.id, errors: buildResult.errors, rawSignal: body },
+    }).catch(() => {});
     return result;
   }
 
