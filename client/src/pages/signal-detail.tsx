@@ -517,6 +517,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
   const stopLoss = data.stop_loss !== undefined && data.stop_loss !== null ? Number(data.stop_loss) : undefined;
   const slLevels = stopLoss !== undefined ? [stopLoss] : [];
   const timeStop = data.time_stop || null;
+  const tradePlanType = data.trade_plan_type || null;
   const hitCount = targets.filter(t => t.isHit).length;
 
   const orders = ordersQuery.data ?? [];
@@ -780,6 +781,21 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                           ${stopLoss}
                         </span>
                       </div>
+                    </div>
+                  </>
+                )}
+
+                {tradePlanType && (
+                  <>
+                    <Separator />
+                    <div data-testid="detail-trade-plan-type">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <BarChart3 className="h-3.5 w-3.5 text-blue-500/70" />
+                        <span className="text-[10px] font-medium text-blue-500/80 uppercase tracking-wider">Plan Type</span>
+                      </div>
+                      <Badge variant="outline" className="text-xs text-blue-500 border-blue-500/30 bg-blue-500/5" data-testid="badge-trade-plan-type">
+                        {tradePlanType === "stock_price_based" ? "Stock Price Based" : "Option Price Based"}
+                      </Badge>
                     </div>
                   </>
                 )}
