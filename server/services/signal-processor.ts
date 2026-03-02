@@ -293,9 +293,7 @@ async function buildSignalData(body: Record<string, any>): Promise<{ data: Recor
     signalDataObj.time_stop = time_stop;
   }
 
-  if (trade_plan_type) {
-    signalDataObj.trade_plan_type = trade_plan_type;
-  }
+  signalDataObj.trade_plan_type = trade_plan_type || "stock_price_based";
 
   if (body.tdi_metadata) {
     signalDataObj.tdi_metadata = body.tdi_metadata;
