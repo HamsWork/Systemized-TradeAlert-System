@@ -26,6 +26,9 @@ import {
   Package,
   Activity,
   CandlestickChart,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
 } from "lucide-react";
 import { type Signal, type IbkrOrder, type ActivityLogEntry } from "@shared/schema";
 import { formatDistanceToNow, format } from "date-fns";
@@ -488,12 +491,25 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
   const expiration = data.expiration;
   const strike = data.strike;
 
-  const targets: { key: string; price: number; takeOffPercent?: number; raiseStopLoss?: number }[] = [];
+  const hitTargetsData = data.hit_targets as Record<string, { hitAt: string; price: number }> | undefined;
+  const isStoppedOut = signal.status === "stopped_out";
+  const isCompleted = signal.status === "completed";
+
+  const targets: { key: string; price: number; takeOffPercent?: number; raiseStopLoss?: number; isHit: boolean; hitAt?: string; hitPrice?: number }[] = [];
   if (data.targets && typeof data.targets === "object") {
     for (const [key, val] of Object.entries(data.targets)) {
       const t = val as any;
       if (t && t.price) {
-        targets.push({ key, price: Number(t.price), takeOffPercent: t.take_off_percent ? Number(t.take_off_percent) : undefined, raiseStopLoss: t.raise_stop_loss?.price ? Number(t.raise_stop_loss.price) : undefined });
+        const hit = hitTargetsData?.[key];
+        targets.push({
+          key,
+          price: Number(t.price),
+          takeOffPercent: t.take_off_percent ? Number(t.take_off_percent) : undefined,
+          raiseStopLoss: t.raise_stop_loss?.price ? Number(t.raise_stop_loss.price) : undefined,
+          isHit: !!hit,
+          hitAt: hit?.hitAt,
+          hitPrice: hit?.price,
+        });
       }
     }
   }
@@ -501,6 +517,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
   const stopLoss = data.stop_loss !== undefined && data.stop_loss !== null ? Number(data.stop_loss) : undefined;
   const slLevels = stopLoss !== undefined ? [stopLoss] : [];
   const timeStop = data.time_stop || null;
+  const hitCount = targets.filter(t => t.isHit).length;
 
   const orders = ordersQuery.data ?? [];
   const activity = activityQuery.data ?? [];
@@ -523,8 +540,20 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                 {instrumentType}
               </Badge>
             )}
-            <Badge variant={signal.status === "active" ? "outline" : "secondary"} className="text-xs" data-testid="badge-signal-status">
-              {signal.status}
+            <Badge
+              variant={signal.status === "active" ? "outline" : "secondary"}
+              className={`text-xs ${
+                isCompleted
+                  ? "text-emerald-500 border-emerald-500/30 bg-emerald-500/10"
+                  : isStoppedOut
+                    ? "text-red-500 border-red-500/30 bg-red-500/10"
+                    : ""
+              }`}
+              data-testid="badge-signal-status"
+            >
+              {isCompleted && <CheckCircle2 className="mr-1 h-3 w-3" />}
+              {isStoppedOut && <XCircle className="mr-1 h-3 w-3" />}
+              {isStoppedOut ? "Stopped Out" : isCompleted ? "Completed" : signal.status}
             </Badge>
           </DialogTitle>
           <DialogDescription className="sr-only">
@@ -640,7 +669,38 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                   </div>
                 </div>
 
-                {tpLevels.length > 0 && (
+                {(targets.length > 0 || (isCompleted || isStoppedOut)) && (
+                  <>
+                    <Separator />
+                    <div data-testid="detail-trade-status">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-1.5">
+                          <Activity className="h-3.5 w-3.5 text-primary/70" />
+                          <span className="text-[10px] font-medium text-primary/80 uppercase tracking-wider">Trade Status</span>
+                        </div>
+                        {targets.length > 0 && (
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            {hitCount}/{targets.length} hit
+                          </span>
+                        )}
+                      </div>
+                      {isCompleted && (
+                        <div className="flex items-center gap-1.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5 mb-2" data-testid="status-completed">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                          <span className="text-xs font-medium text-emerald-500">All targets reached</span>
+                        </div>
+                      )}
+                      {isStoppedOut && (
+                        <div className="flex items-center gap-1.5 rounded-md bg-red-500/10 border border-red-500/20 px-2.5 py-1.5 mb-2" data-testid="status-stopped-out">
+                          <XCircle className="h-3.5 w-3.5 text-red-500" />
+                          <span className="text-xs font-medium text-red-500">Stop loss triggered</span>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {targets.length > 0 && (
                   <>
                     <Separator />
                     <div data-testid="detail-targets">
@@ -648,18 +708,51 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                         <Crosshair className="h-3.5 w-3.5 text-emerald-500/70" />
                         <span className="text-[10px] font-medium text-emerald-500/80 uppercase tracking-wider">Targets</span>
                       </div>
-                      <div className="flex gap-1.5 flex-wrap">
+                      <div className="space-y-1.5">
                         {targets.map((t, i) => (
-                          <Badge key={i} variant="outline" className="font-mono text-xs text-emerald-500 border-emerald-500/30 bg-emerald-500/5">
-                            TP{i + 1}: ${t.price}{t.takeOffPercent ? ` (${t.takeOffPercent}%)` : ""}
-                          </Badge>
+                          <div
+                            key={i}
+                            className={`flex items-center justify-between rounded-md px-2 py-1.5 border ${
+                              t.isHit
+                                ? "border-emerald-500/30 bg-emerald-500/10"
+                                : "border-border bg-muted/30"
+                            }`}
+                            data-testid={`detail-target-${t.key}`}
+                          >
+                            <div className="flex items-center gap-1.5">
+                              {t.isHit
+                                ? <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                                : <Crosshair className="h-3 w-3 text-muted-foreground" />
+                              }
+                              <span className={`text-xs font-mono font-semibold ${t.isHit ? "text-emerald-500" : "text-foreground"}`}>
+                                {t.key.toUpperCase()}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={`font-mono text-xs font-medium ${t.isHit ? "text-emerald-400" : "text-foreground"}`}>
+                                ${t.price}
+                              </span>
+                              {t.takeOffPercent && (
+                                <span className="text-[10px] text-muted-foreground">({t.takeOffPercent}%)</span>
+                              )}
+                            </div>
+                          </div>
                         ))}
                       </div>
+                      {targets.some(t => t.isHit && t.hitPrice) && (
+                        <div className="mt-2 space-y-1">
+                          {targets.filter(t => t.isHit && t.hitAt).map((t, i) => (
+                            <p key={i} className="text-[10px] text-muted-foreground">
+                              {t.key.toUpperCase()} hit at ${t.hitPrice?.toFixed(2)} — {t.hitAt ? format(new Date(t.hitAt), "MMM d, h:mm a") : ""}
+                            </p>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </>
                 )}
 
-                {slLevels.length > 0 && (
+                {stopLoss !== undefined && (
                   <>
                     <Separator />
                     <div data-testid="detail-stop-loss">
@@ -667,12 +760,25 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                         <ShieldAlert className="h-3.5 w-3.5 text-red-500/70" />
                         <span className="text-[10px] font-medium text-red-500/80 uppercase tracking-wider">Stop Loss</span>
                       </div>
-                      <div className="flex gap-1.5 flex-wrap">
-                        {slLevels.map((sl, i) => (
-                          <Badge key={i} variant="outline" className="font-mono text-xs text-red-500 border-red-500/30 bg-red-500/5">
-                            SL{i + 1}: ${sl}
-                          </Badge>
-                        ))}
+                      <div
+                        className={`flex items-center justify-between rounded-md px-2 py-1.5 border ${
+                          isStoppedOut
+                            ? "border-red-500/30 bg-red-500/10"
+                            : "border-border bg-muted/30"
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          {isStoppedOut
+                            ? <XCircle className="h-3 w-3 text-red-500" />
+                            : <ShieldAlert className="h-3 w-3 text-muted-foreground" />
+                          }
+                          <span className={`text-xs font-semibold ${isStoppedOut ? "text-red-500" : "text-foreground"}`}>
+                            {isStoppedOut ? "Triggered" : "Active"}
+                          </span>
+                        </div>
+                        <span className={`font-mono text-xs font-medium ${isStoppedOut ? "text-red-400" : "text-foreground"}`}>
+                          ${stopLoss}
+                        </span>
                       </div>
                     </div>
                   </>

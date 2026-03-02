@@ -143,6 +143,7 @@ function determineSide(data: Record<string, any>): {
 }
 
 let tradeClientIdCounter = 200;
+let initialNextValidId = 0;
 
 async function connectIbkr(
   host: string,
@@ -153,24 +154,45 @@ async function connectIbkr(
   if (tradeClientIdCounter > 999) tradeClientIdCounter = 200;
   const ib = new IBApi({ host, port, clientId: uniqueClientId });
 
-  const connected = await new Promise<boolean>((resolve) => {
-    const timeout = setTimeout(() => resolve(false), 10000);
-    ib.once(EventName.connected, () => {
-      clearTimeout(timeout);
-      resolve(true);
+  const result = await new Promise<{ connected: boolean; nextId: number }>((resolve) => {
+    let isConnected = false;
+    let nextId = 0;
+    const timeout = setTimeout(() => resolve({ connected: isConnected, nextId }), 10000);
+
+    ib.once(EventName.nextValidId, (orderId: number) => {
+      nextId = orderId;
+      if (isConnected) {
+        clearTimeout(timeout);
+        resolve({ connected: true, nextId });
+      }
     });
+
+    ib.once(EventName.connected, () => {
+      isConnected = true;
+      if (nextId > 0) {
+        clearTimeout(timeout);
+        resolve({ connected: true, nextId });
+      }
+    });
+
     ib.once(EventName.error, () => {
       clearTimeout(timeout);
-      resolve(false);
+      resolve({ connected: false, nextId: 0 });
     });
+
     ib.connect();
   });
 
-  if (!connected) {
+  if (!result.connected) {
     try {
       ib.disconnect();
     } catch {}
     throw new Error(`Failed to connect to IBKR at ${host}:${port}`);
+  }
+
+  if (result.nextId > 0) {
+    initialNextValidId = result.nextId;
+    console.log(`[TradeExecutor] Connected to IBKR (clientId=${uniqueClientId}), initial nextValidId=${result.nextId}`);
   }
 
   return ib;
@@ -227,14 +249,20 @@ async function getNextOrderId(
   ib: IBApi,
   childCount: number = 0,
 ): Promise<number> {
-  const ibkrId = await new Promise<number>((resolve) => {
-    const timeout = setTimeout(() => resolve(0), 5000);
-    ib.once(EventName.nextValidId, (orderId: number) => {
-      clearTimeout(timeout);
-      resolve(orderId);
+  let ibkrId = initialNextValidId;
+
+  if (ibkrId <= 0) {
+    ibkrId = await new Promise<number>((resolve) => {
+      const timeout = setTimeout(() => resolve(0), 5000);
+      ib.once(EventName.nextValidId, (orderId: number) => {
+        clearTimeout(timeout);
+        resolve(orderId);
+      });
+      ib.reqIds();
     });
-    ib.reqIds();
-  });
+  } else {
+    initialNextValidId = 0;
+  }
 
   const minId = lastUsedOrderId + 1;
   const startId = Math.max(ibkrId, minId);

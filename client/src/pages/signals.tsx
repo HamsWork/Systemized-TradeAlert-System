@@ -40,6 +40,9 @@ import {
   FileText,
   ChevronDown,
   ChevronUp,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
 } from "lucide-react";
 import { type Signal, type InsertSignal } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
@@ -330,6 +333,78 @@ function getDirectionBadge(direction: string | undefined) {
   );
 }
 
+function getSignalStatusInfo(signal: Signal) {
+  const data = (signal.data || {}) as Record<string, any>;
+  const hitTargets = data.hit_targets as Record<string, { hitAt: string; price: number }> | undefined;
+  const targets = data.targets as Record<string, any> | undefined;
+  const stopLoss = data.stop_loss != null ? Number(data.stop_loss) : null;
+
+  const targetKeys = targets ? Object.keys(targets).sort() : [];
+  const hitKeys = hitTargets ? Object.keys(hitTargets) : [];
+  const totalTargets = targetKeys.length;
+  const hitCount = hitKeys.length;
+  const isStoppedOut = signal.status === "stopped_out";
+  const isCompleted = signal.status === "completed";
+  const hasTargets = totalTargets > 0 || stopLoss != null;
+
+  return { hitTargets, targets, stopLoss, targetKeys, hitKeys, hitCount, totalTargets, isStoppedOut, isCompleted, hasTargets };
+}
+
+function SignalStatusBar({ signal }: { signal: Signal }) {
+  const { hitTargets, targets, stopLoss, targetKeys, hitCount, totalTargets, isStoppedOut, isCompleted, hasTargets } = getSignalStatusInfo(signal);
+
+  if (!hasTargets && !isStoppedOut && !isCompleted) return null;
+
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap" data-testid={`signal-status-bar-${signal.id}`}>
+      {isCompleted && (
+        <Badge variant="outline" className="text-[10px] gap-1 text-emerald-500 border-emerald-500/30 bg-emerald-500/10" data-testid="badge-completed">
+          <CheckCircle2 className="h-3 w-3" />
+          All Targets Hit
+        </Badge>
+      )}
+      {isStoppedOut && (
+        <Badge variant="outline" className="text-[10px] gap-1 text-red-500 border-red-500/30 bg-red-500/10" data-testid="badge-stopped-out">
+          <XCircle className="h-3 w-3" />
+          Stopped Out
+        </Badge>
+      )}
+      {targetKeys.map(key => {
+        const isHit = hitTargets?.[key];
+        return (
+          <Badge
+            key={key}
+            variant="outline"
+            className={`text-[10px] gap-1 font-mono ${
+              isHit
+                ? "text-emerald-500 border-emerald-500/30 bg-emerald-500/10"
+                : "text-muted-foreground border-border"
+            }`}
+            data-testid={`badge-target-${key}-${signal.id}`}
+          >
+            {isHit ? <CheckCircle2 className="h-2.5 w-2.5" /> : <Crosshair className="h-2.5 w-2.5" />}
+            {key.toUpperCase()}
+          </Badge>
+        );
+      })}
+      {stopLoss != null && (
+        <Badge
+          variant="outline"
+          className={`text-[10px] gap-1 font-mono ${
+            isStoppedOut
+              ? "text-red-500 border-red-500/30 bg-red-500/10"
+              : "text-muted-foreground border-border"
+          }`}
+          data-testid={`badge-sl-${signal.id}`}
+        >
+          {isStoppedOut ? <XCircle className="h-2.5 w-2.5" /> : <ShieldAlert className="h-2.5 w-2.5" />}
+          SL
+        </Badge>
+      )}
+    </div>
+  );
+}
+
 function SignalCard({ signal, onDelete, onOpen }: { signal: Signal; onDelete: (id: string) => void; onOpen: (signal: Signal) => void }) {
   const [expanded, setExpanded] = useState(false);
   const data = (signal.data || {}) as Record<string, any>;
@@ -456,9 +531,23 @@ function SignalCard({ signal, onDelete, onOpen }: { signal: Signal; onDelete: (i
                 </div>
               )}
 
-              <div className="mt-3 flex items-center gap-2 flex-wrap">
-                <Badge variant={signal.status === "active" ? "outline" : "secondary"} className="text-[10px]" data-testid="badge-status">
-                  {signal.status}
+              <div className="mt-3">
+                <SignalStatusBar signal={signal} />
+              </div>
+
+              <div className="mt-2 flex items-center gap-2 flex-wrap">
+                <Badge
+                  variant={signal.status === "active" ? "outline" : "secondary"}
+                  className={`text-[10px] ${
+                    signal.status === "completed"
+                      ? "text-emerald-500 border-emerald-500/30 bg-emerald-500/5"
+                      : signal.status === "stopped_out"
+                        ? "text-red-500 border-red-500/30 bg-red-500/5"
+                        : ""
+                  }`}
+                  data-testid="badge-status"
+                >
+                  {signal.status === "stopped_out" ? "Stopped Out" : signal.status === "completed" ? "Completed" : signal.status}
                 </Badge>
                 {signal.sourceAppName && (
                   <Badge variant="outline" className="text-[10px] font-normal text-blue-500 border-blue-500/30" data-testid={`badge-source-${signal.id}`}>
@@ -544,17 +633,22 @@ export default function SignalsPage() {
       />
 
       <div className="flex items-center gap-2 flex-wrap">
-        {["all", "active", "closed", "expired"].map((f) => (
-          <Button
-            key={f}
-            variant={filter === f ? "default" : "secondary"}
-            size="sm"
-            onClick={() => setFilter(f)}
-            data-testid={`button-filter-signal-${f}`}
-          >
-            {f.charAt(0).toUpperCase() + f.slice(1)}
-          </Button>
-        ))}
+        {["all", "active", "completed", "stopped_out", "closed", "expired"].map((f) => {
+          const label = f === "stopped_out" ? "Stopped Out" : f.charAt(0).toUpperCase() + f.slice(1);
+          const count = f === "all" ? signals.length : signals.filter(s => s.status === f).length;
+          return (
+            <Button
+              key={f}
+              variant={filter === f ? "default" : "secondary"}
+              size="sm"
+              onClick={() => setFilter(f)}
+              data-testid={`button-filter-signal-${f}`}
+            >
+              {label}
+              {count > 0 && f !== "all" && <span className="ml-1 text-[10px] opacity-70">({count})</span>}
+            </Button>
+          );
+        })}
       </div>
 
       {filtered.length === 0 ? (
