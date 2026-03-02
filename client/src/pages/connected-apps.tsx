@@ -663,20 +663,25 @@ export default function ConnectedAppsPage() {
   const ibkrQuery = useQuery<Integration[]>({ queryKey: ["/api/integrations"] });
   const ibkrAccounts = (ibkrQuery.data ?? []).filter(i => i.type === "ibkr");
 
-  const usedAccountIds = useMemo(() => {
-    const apps = appsQuery.data ?? [];
-    const set = new Set<string>();
-    for (const app of apps) {
-      if (app.ibkrHost && app.ibkrPort && app.ibkrClientId) {
-        const match = ibkrAccounts.find(a => {
-          const cfg = a.config as Record<string, any> | null;
-          return cfg?.host === app.ibkrHost && String(cfg?.port) === String(app.ibkrPort) && String(cfg?.clientId) === String(app.ibkrClientId);
-        });
-        if (match) set.add(match.id);
+  const getUsedAccountIds = useMemo(() => {
+    return (excludeAppId?: string) => {
+      const apps = appsQuery.data ?? [];
+      const set = new Set<string>();
+      for (const app of apps) {
+        if (excludeAppId && app.id === excludeAppId) continue;
+        if (app.ibkrHost && app.ibkrPort && app.ibkrClientId) {
+          const match = ibkrAccounts.find(a => {
+            const cfg = a.config as Record<string, any> | null;
+            return cfg?.host === app.ibkrHost && String(cfg?.port) === String(app.ibkrPort) && String(cfg?.clientId) === String(app.ibkrClientId);
+          });
+          if (match) set.add(match.id);
+        }
       }
-    }
-    return set;
+      return set;
+    };
   }, [appsQuery.data, ibkrAccounts]);
+
+  const usedAccountIds = useMemo(() => getUsedAccountIds(), [getUsedAccountIds]);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -802,7 +807,7 @@ export default function ConnectedAppsPage() {
           open={!!editingApp}
           onOpenChange={(open) => { if (!open) setEditingApp(null); }}
           ibkrAccounts={ibkrAccounts}
-          usedAccountIds={usedAccountIds}
+          usedAccountIds={getUsedAccountIds(editingApp.id)}
         />
       )}
     </div>
