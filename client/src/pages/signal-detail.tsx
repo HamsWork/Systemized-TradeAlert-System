@@ -324,12 +324,12 @@ function OrderRow({ order }: { order: IbkrOrder }) {
               Fill: <span className="font-mono font-medium text-foreground">${order.avgFillPrice.toFixed(2)}</span>
             </span>
           )}
-          {order.limitPrice != null && (
+          {order.limitPrice != null && order.limitPrice > 0 && (
             <span className="text-[10px] text-muted-foreground" data-testid={`text-order-limit-${order.id}`}>
               Limit: <span className="font-mono font-medium text-foreground">${order.limitPrice.toFixed(2)}</span>
             </span>
           )}
-          {order.stopPrice != null && (
+          {order.stopPrice != null && order.stopPrice > 0 && (
             <span className="text-[10px] text-muted-foreground" data-testid={`text-order-stop-${order.id}`}>
               Stop: <span className="font-mono font-medium text-foreground">${order.stopPrice.toFixed(2)}</span>
             </span>
