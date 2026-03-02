@@ -386,7 +386,7 @@ function ActivityRow({ entry }: { entry: ActivityLogEntry }) {
   );
 }
 
-function OptionChartTabs({ symbol, strike, expiration, optionType, entryPrice, tpLevels, slLevels, direction }: {
+function OptionChartTabs({ symbol, strike, expiration, optionType, entryPrice, tpLevels, slLevels, direction, tradePlanType }: {
   symbol: string;
   strike?: string;
   expiration?: string;
@@ -395,8 +395,10 @@ function OptionChartTabs({ symbol, strike, expiration, optionType, entryPrice, t
   tpLevels: number[];
   slLevels: number[];
   direction?: string;
+  tradePlanType?: string;
 }) {
-  const [activeTab, setActiveTab] = useState<"option" | "underlying">("option");
+  const isStockPriceBased = tradePlanType === "stock_price_based";
+  const [activeTab, setActiveTab] = useState<"option" | "underlying">(isStockPriceBased ? "underlying" : "option");
 
   const optionLabel = strike && expiration ? `${symbol} $${strike} ${expiration}` : symbol;
 
@@ -438,16 +440,17 @@ function OptionChartTabs({ symbol, strike, expiration, optionType, entryPrice, t
           strike={strike}
           expiration={expiration}
           optionType={optionType}
-          entryPrice={entryPrice}
-          tpLevels={tpLevels}
-          slLevels={slLevels}
+          entryPrice={isStockPriceBased ? undefined : entryPrice}
+          tpLevels={isStockPriceBased ? [] : tpLevels}
+          slLevels={isStockPriceBased ? [] : slLevels}
           direction={direction}
         />
       ) : (
         <TradeChart
           symbol={symbol}
-          tpLevels={[]}
-          slLevels={[]}
+          entryPrice={isStockPriceBased ? entryPrice : undefined}
+          tpLevels={isStockPriceBased ? tpLevels : []}
+          slLevels={isStockPriceBased ? slLevels : []}
           direction={direction}
         />
       )}
@@ -576,6 +579,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                     tpLevels={tpLevels}
                     slLevels={slLevels}
                     direction={direction}
+                    tradePlanType={tradePlanType}
                   />
                 ) : (
                   <TradeChart
