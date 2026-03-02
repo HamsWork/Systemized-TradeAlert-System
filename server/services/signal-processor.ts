@@ -120,6 +120,7 @@ function transformTdiSignal(body: Record<string, any>): Record<string, any> {
   if (body.underlying_symbol) result.underlying_symbol = body.underlying_symbol;
 
   if (body.trade_plan_type) result.trade_plan_type = body.trade_plan_type;
+  if (body.auto_track !== undefined) result.auto_track = body.auto_track;
 
   result.tdi_metadata = {
     strategy_mode: body.strategy_mode || null,
@@ -218,6 +219,10 @@ function validateIngestBody(body: Record<string, any>): string[] {
     errors.push(`trade_plan_type must be one of: ${VALID_TRADE_PLAN_TYPES.join(", ")}`);
   }
 
+  if (body.auto_track != null && typeof body.auto_track !== "boolean") {
+    errors.push("auto_track must be a boolean (true or false)");
+  }
+
   return errors;
 }
 
@@ -233,6 +238,7 @@ async function buildSignalData(body: Record<string, any>): Promise<{ data: Recor
     stop_loss,
     time_stop,
     trade_plan_type,
+    auto_track,
   } = body;
 
   const errors: string[] = [];
@@ -294,6 +300,7 @@ async function buildSignalData(body: Record<string, any>): Promise<{ data: Recor
   }
 
   signalDataObj.trade_plan_type = trade_plan_type || "stock_price_based";
+  signalDataObj.auto_track = auto_track !== undefined ? auto_track : true;
 
   if (body.tdi_metadata) {
     signalDataObj.tdi_metadata = body.tdi_metadata;

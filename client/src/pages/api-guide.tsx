@@ -573,7 +573,8 @@ const sections: SectionDef[] = [
           { name: "strike", type: "string", required: false, description: "Option strike price (e.g., '190'). Required for Options." },
           { name: "entryPrice", type: "string", required: false, description: "Entry price for the trade (e.g., '189.50')." },
           { name: "stop_loss", type: "number", required: false, description: "Stop loss price (e.g., 80)." },
-          { name: "trade_plan_type", type: "string", required: false, description: "Whether targets and stop loss are based on the stock price or the option premium price.", enumValues: ["stock_price_based", "option_price_based"] },
+          { name: "trade_plan_type", type: "string", required: false, description: "Whether targets and stop loss are based on the stock price or the option premium price. Defaults to 'stock_price_based'.", enumValues: ["stock_price_based", "option_price_based"] },
+          { name: "auto_track", type: "boolean", required: false, description: "Enable automatic tracking of target hits and stop loss against live price. Defaults to true." },
           { name: "time_stop", type: "string", required: false, description: "Time-based stop — exit the trade by this date (e.g., '2026-03-01')." },
           { name: "targets", type: "json", required: false, description: "Take-profit targets with take-off percentage and optional raise-stop-loss levels per target.", explanation: `The targets object defines your profit-taking strategy. Each key (tp1, tp2, etc.) maps to a target with a price, a take_off_percent indicating how much of the position to close, and an optional raise_stop_loss that adjusts your stop loss when the target is hit.
 
