@@ -285,6 +285,14 @@ async function buildSignalData(body: Record<string, any>): Promise<{ data: Recor
     signalDataObj.time_stop = time_stop;
   }
 
+  if (body.tdi_metadata) {
+    signalDataObj.tdi_metadata = body.tdi_metadata;
+  }
+
+  if (body.underlying_symbol) {
+    signalDataObj.underlying_symbol = body.underlying_symbol;
+  }
+
   return { data: signalDataObj, errors };
 }
 
@@ -299,13 +307,19 @@ export async function processSignal(
     validationErrors: [],
   };
 
-  const validationErrors = validateIngestBody(body);
+  let normalizedBody = body;
+  if (isTdiFormat(body)) {
+    console.log(`[Signal] Detected TDI format from ${app.name}, transforming...`);
+    normalizedBody = transformTdiSignal(body);
+  }
+
+  const validationErrors = validateIngestBody(normalizedBody);
   if (validationErrors.length > 0) {
     result.validationErrors = validationErrors;
     return result;
   }
 
-  const buildResult = await buildSignalData(body);
+  const buildResult = await buildSignalData(normalizedBody);
   const signalDataObj = buildResult.data;
 
   if (buildResult.errors.length > 0) {

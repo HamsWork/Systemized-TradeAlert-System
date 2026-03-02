@@ -22,12 +22,14 @@ export async function seedDatabase() {
   const needsSignalsSeed = existingSignals.length === 0;
   const needsIbkrSeed = existingIbkrOrders.length === 0;
   const hasBuiltInApp = existingApps.some(a => a.slug === "tradesync-api");
+  const hasTdiApp = existingApps.some(a => a.slug === "tdi-core-scanner");
 
-  if (!needsAlertSeed && !needsSettingsSeed && !needsIntegrationsSeed && !needsAppsSeed && !needsSignalsSeed && !needsIbkrSeed && hasBuiltInApp) {
+  if (!needsAlertSeed && !needsSettingsSeed && !needsIntegrationsSeed && !needsAppsSeed && !needsSignalsSeed && !needsIbkrSeed && hasBuiltInApp && hasTdiApp) {
     return;
   }
 
   if (!hasBuiltInApp) await seedBuiltInApp();
+  if (!hasTdiApp) await seedTdiApp();
   if (needsSettingsSeed) await seedSettings();
   if (needsIntegrationsSeed) await seedIntegrations();
   if (needsAppsSeed) await seedApps();
@@ -99,6 +101,21 @@ async function seedBuiltInApp() {
     apiKey: generateApiKey(),
     syncAlerts: true,
     syncSignals: true,
+  });
+}
+
+async function seedTdiApp() {
+  await db.insert(connectedApps).values({
+    name: "TDI Core Scanner",
+    slug: "tdi-core-scanner",
+    description: "TDI-based technical scanner that detects high-probability trade setups using RSI, price action, and volatility band analysis. Sends signals with quality grades, risk/reward targets, and instrument routing.",
+    status: "active",
+    isBuiltIn: false,
+    apiKey: generateApiKey(),
+    syncAlerts: false,
+    syncSignals: true,
+    sendDiscordMessages: true,
+    executeIbkrTrades: true,
   });
 }
 
