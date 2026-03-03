@@ -16,6 +16,7 @@ import ConnectedAppsPage from "@/pages/connected-apps";
 import ApiGuidePage from "@/pages/api-guide";
 import IbkrPage from "@/pages/ibkr";
 import SettingsPage from "@/pages/settings";
+import AuditPage from "@/pages/audit";
 
 function Router() {
   return (
@@ -28,6 +29,7 @@ function Router() {
       <Route path="/ibkr" component={IbkrPage} />
       <Route path="/api-guide" component={ApiGuidePage} />
       <Route path="/settings" component={SettingsPage} />
+      <Route path="/audit" component={AuditPage} />
       <Route component={NotFound} />
     </Switch>
   );

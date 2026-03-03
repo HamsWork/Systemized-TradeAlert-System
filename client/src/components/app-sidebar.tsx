@@ -9,6 +9,7 @@ import {
   BookOpen,
   Landmark,
   Settings2,
+  ClipboardCheck,
 } from "lucide-react";
 import {
   Sidebar,
@@ -33,6 +34,7 @@ const navItems = [
   { title: "IBKR", url: "/ibkr", icon: Landmark },
   { title: "API Guide", url: "/api-guide", icon: BookOpen },
   { title: "Settings", url: "/settings", icon: Settings2 },
+  { title: "System Audit", url: "/audit", icon: ClipboardCheck },
 ];
 
 export function AppSidebar() {

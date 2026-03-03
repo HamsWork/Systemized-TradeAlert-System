@@ -52,6 +52,7 @@ Connected apps push signals to TradeSync via `POST /api/ingest/signals` using th
 6. **API Guide** (`/api-guide`) - Interactive API documentation with Massive.com-style layout, live code generation, and query testing
 7. **IBKR** (`/ibkr`) - Dedicated IBKR page with order status, open positions, and order history per connected app
 8. **Settings** (`/settings`) - System controls organized by category (signals, trading, system) with toggle switches and value inputs
+9. **System Audit** (`/audit`) - Live self-documenting system overview: scans the actual codebase to generate real-time reports of architecture, feature maps, services, endpoints, DB tables, and file statistics. Three views: System Architecture, Feature File Map, JSON Export
 
 ## API Routes
 
@@ -72,6 +73,7 @@ All routes prefixed with `/api`:
 - `GET /ibkr/status` - Get connection status of all IBKR integrations
 - `GET /dashboard/stats`
 - `GET/POST /alerts`, `GET/PATCH/DELETE /alerts/:id` (backend only, not exposed in frontend)
+- `GET /system-audit` - Live codebase scan: architecture, endpoints, DB tables, services, feature map, file stats
 
 ## Key Files
 
@@ -119,6 +121,7 @@ All routes prefixed with `/api`:
 - `server/routes/integrations.ts` - /api/integrations CRUD
 - `server/routes/ibkr.ts` - /api/ibkr/orders + /api/ibkr/positions
 - `server/routes/index.ts` - registerRoutes composing all domain route registrars + error handler middleware
+- `server/routes/audit.ts` - Live codebase scanner: architecture, endpoints, DB tables, services, feature map
 
 ### Services
 - `server/services/signal-processor.ts` - Signal processing pipeline: on signal ingestion, checks connected app settings and triggers IBKR trade execution + Discord webhook alerts
