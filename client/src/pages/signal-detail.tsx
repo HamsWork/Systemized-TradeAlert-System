@@ -29,6 +29,8 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
+  MessageSquare,
+  ChevronRight,
 } from "lucide-react";
 import { type Signal, type IbkrOrder, type ActivityLogEntry } from "@shared/schema";
 import { formatDistanceToNow, format } from "date-fns";
@@ -571,6 +573,172 @@ function LetfChartTabs({ symbol, entryPrice, tpLevels, slLevels, direction }: {
   );
 }
 
+interface DiscordPreviewEmbed {
+  description?: string;
+  color: number;
+  fields?: { name: string; value: string; inline?: boolean }[];
+  footer?: { text: string };
+  timestamp?: string;
+}
+
+interface DiscordPreviewMsg {
+  type: string;
+  label: string;
+  content: string;
+  embed: DiscordPreviewEmbed;
+}
+
+const COLOR_HEX: Record<number, string> = {
+  0x22c55e: "#22c55e",
+  0xef4444: "#ef4444",
+  0x3b82f6: "#3b82f6",
+  0xf59e0b: "#f59e0b",
+  0x6b7280: "#6b7280",
+};
+
+function colorToHex(color: number): string {
+  return COLOR_HEX[color] || `#${color.toString(16).padStart(6, "0")}`;
+}
+
+function DiscordEmbed({ msg }: { msg: DiscordPreviewMsg }) {
+  const embed = msg.embed;
+  const borderColor = colorToHex(embed.color);
+  const fields = embed.fields?.filter(f => f.name !== "\u200b") || [];
+  const inlineFields = fields.filter(f => f.inline);
+  const blockFields = fields.filter(f => !f.inline);
+
+  return (
+    <div className="rounded-md overflow-hidden bg-[#2b2d31] border border-[#1e1f22]" data-testid={`discord-embed-${msg.type}`}>
+      <div className="flex">
+        <div className="w-1 shrink-0" style={{ backgroundColor: borderColor }} />
+        <div className="p-3 flex-1 min-w-0 space-y-2">
+          {embed.description && (
+            <p className="text-[13px] text-[#dbdee1] font-medium leading-snug">
+              {embed.description.split(/\*\*(.*?)\*\*/).map((part, i) =>
+                i % 2 === 1 ? <strong key={i}>{part}</strong> : part
+              )}
+            </p>
+          )}
+
+          {inlineFields.length > 0 && (
+            <div className="grid grid-cols-3 gap-2">
+              {inlineFields.map((field, i) => (
+                <div key={i} className="min-w-0">
+                  <p className="text-[11px] font-semibold text-[#b5bac1] uppercase tracking-wide">{field.name}</p>
+                  <p className="text-[12px] text-[#dbdee1] whitespace-pre-wrap break-words">{field.value || "\u200b"}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {blockFields.map((field, i) => (
+            <div key={i}>
+              <p className="text-[11px] font-semibold text-[#b5bac1] uppercase tracking-wide">{field.name}</p>
+              <p className="text-[12px] text-[#dbdee1] whitespace-pre-wrap break-words leading-relaxed">{field.value || "\u200b"}</p>
+            </div>
+          ))}
+
+          {embed.footer && (
+            <p className="text-[10px] text-[#949ba4] pt-1 border-t border-[#3f4147]">{embed.footer.text}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DiscordPreviewSection({ signalId, open }: { signalId: string; open: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const [activePreview, setActivePreview] = useState(0);
+
+  const previewQuery = useQuery<DiscordPreviewMsg[]>({
+    queryKey: ["/api/signals", signalId, "discord-preview"],
+    queryFn: async () => {
+      const res = await fetch(`/api/signals/${encodeURIComponent(signalId)}/discord-preview`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!signalId && open,
+    staleTime: 60_000,
+  });
+
+  const previews = previewQuery.data ?? [];
+
+  if (previewQuery.isLoading) {
+    return (
+      <Card data-testid="card-discord-preview">
+        <CardContent className="p-3">
+          <div className="flex items-center gap-2 mb-2">
+            <MessageSquare className="h-4 w-4 text-[#5865F2]" />
+            <span className="text-sm font-medium">Discord Messages</span>
+          </div>
+          <div className="space-y-2 py-2">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (previews.length === 0) return null;
+
+  const TYPE_COLORS: Record<string, string> = {
+    signal_alert: "text-blue-400 bg-blue-400/10 border-blue-400/30",
+    trade_executed: "text-blue-500 bg-blue-500/10 border-blue-500/30",
+    target_hit: "text-emerald-500 bg-emerald-500/10 border-emerald-500/30",
+    stop_loss_hit: "text-red-500 bg-red-500/10 border-red-500/30",
+    trade_closed_manually: "text-zinc-400 bg-zinc-400/10 border-zinc-400/30",
+  };
+
+  const active = previews[activePreview] || previews[0];
+
+  return (
+    <Card data-testid="card-discord-preview">
+      <CardContent className="p-3">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="w-full flex items-center gap-2 mb-0 text-left"
+          data-testid="button-toggle-discord-preview"
+        >
+          <MessageSquare className="h-4 w-4 text-[#5865F2]" />
+          <span className="text-sm font-medium flex-1">Discord Messages</span>
+          <Badge variant="secondary" className="text-[10px]" data-testid="badge-discord-count">{previews.length}</Badge>
+          <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${expanded ? "rotate-90" : ""}`} />
+        </button>
+
+        {expanded && (
+          <div className="mt-3 space-y-3">
+            <div className="flex flex-wrap gap-1">
+              {previews.map((p, i) => (
+                <button
+                  key={i}
+                  onClick={() => setActivePreview(i)}
+                  className={`px-2 py-1 rounded-md text-[10px] font-medium border transition-colors ${
+                    i === activePreview
+                      ? TYPE_COLORS[p.type] || "text-foreground bg-muted border-border"
+                      : "text-muted-foreground bg-transparent border-transparent hover:bg-muted/50"
+                  }`}
+                  data-testid={`button-preview-${p.type}-${i}`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="rounded-lg bg-[#313338] p-3 space-y-2">
+              {active.content && (
+                <p className="text-[13px] text-[#dbdee1]">{active.content}</p>
+              )}
+              <DiscordEmbed msg={active} />
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function SignalDetailDialog({ signal, open, onOpenChange }: {
   signal: Signal | null;
   open: boolean;
@@ -744,6 +912,8 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                 )}
               </CardContent>
             </Card>
+
+            <DiscordPreviewSection signalId={signal.id} open={open} />
           </div>
 
           <div className="space-y-4">

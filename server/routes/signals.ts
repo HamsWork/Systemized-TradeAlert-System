@@ -7,6 +7,7 @@ import { processSignal } from "../services/signal-processor";
 import { executeIbkrClose } from "../services/trade-executor";
 import { sendTradeClosedManuallyDiscord } from "../services/discord";
 import type { ConnectedApp } from "@shared/schema";
+import { generateDiscordPreviews } from "../services/discord-preview";
 
 declare global {
   namespace Express {
@@ -67,6 +68,16 @@ export function registerSignalRoutes(app: Express) {
       const signal = await storage.getSignal(getParam(req, "id"));
       if (!signal) return res.status(404).json({ message: "Signal not found" });
       res.json(signal);
+    }),
+  );
+
+  app.get(
+    "/api/signals/:id/discord-preview",
+    asyncHandler(async (req, res) => {
+      const signal = await storage.getSignal(getParam(req, "id"));
+      if (!signal) return res.status(404).json({ message: "Signal not found" });
+      const previews = generateDiscordPreviews(signal);
+      res.json(previews);
     }),
   );
 
