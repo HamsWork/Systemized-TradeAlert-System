@@ -243,10 +243,21 @@ function EndpointInteractive({ endpoint, baseUrl, defaultApiKey }: { endpoint: E
         body = JSON.stringify(obj);
       }
 
-      const res = await fetch(resolvedPath + qs, { method: endpoint.method, headers, body });
-      const data = await res.json();
+      const res = await fetch(queryUrl, { method: endpoint.method, headers, body });
+      const contentType = res.headers.get("content-type") || "";
       setQueryStatus(res.status);
-      setQueryResponse(JSON.stringify(data, null, 2));
+      if (!contentType.includes("application/json")) {
+        const text = await res.text();
+        setQueryResponse(JSON.stringify({
+          error: "Server returned non-JSON (likely HTML). Check that the request URL is correct and the API is running.",
+          status: res.status,
+          contentType,
+          bodyPreview: text.slice(0, 200) + (text.length > 200 ? "…" : ""),
+        }, null, 2));
+      } else {
+        const data = await res.json();
+        setQueryResponse(JSON.stringify(data, null, 2));
+      }
       setResponseTab("query");
     } catch (error: any) {
       setQueryStatus(0);
@@ -563,20 +574,19 @@ const sections: SectionDef[] = [
       {
         method: "POST",
         path: "/api/ingest/signals",
-        description: "Push a trading signal into TradeSync. Optionally include a Bearer token to link the signal to a connected app. Without an API key, the signal is processed as Manual.",
+        description: "Push a trading signal into TradeSync. Optionally include a Bearer token to link the signal to a connected app. Without an API key, the signal is processed as Manual. Trade plan prices (entry_price, targets, stop_loss) must be in the correct price space: Options use option contract price; LETF use LETF price (e.g. TQQQ), not the underlying index (e.g. QQQ); Shares use stock price.",
         auth: "Bearer Token (Optional)",
         params: [
-          { name: "ticker", type: "string", required: true, description: "Ticker symbol (e.g., 'AAPL', 'TSLA', 'SPY')." },
+          { name: "ticker", type: "string", required: true, description: "Ticker symbol (e.g., 'AAPL', 'TSLA', 'TQQQ'). For Options this is the underlying (e.g. AAPL)." },
           { name: "instrumentType", type: "string", required: true, description: "Instrument type.", enumValues: ["Options", "Shares", "LETF"] },
           { name: "direction", type: "string", required: true, description: "Trade direction. Use Call/Put for Options, Long/Short for Shares and LETF.", enumValues: ["Call", "Put", "Long", "Short"] },
           { name: "expiration", type: "string", required: false, description: "Expiration date (e.g., '2026-03-01'). Required for Options." },
           { name: "strike", type: "string", required: false, description: "Option strike price (e.g., '190'). Required for Options." },
-          { name: "entryPrice", type: "string", required: false, description: "Entry price for the trade (e.g., '189.50')." },
-          { name: "stop_loss", type: "number", required: false, description: "Stop loss price (e.g., 80)." },
-          { name: "trade_plan_type", type: "string", required: false, description: "Whether targets and stop loss are based on the stock price or the option premium price. Defaults to 'stock_price_based'.", enumValues: ["stock_price_based", "option_price_based"] },
+          { name: "entryPrice", type: "string", required: false, description: "Entry price. Must match instrument: option contract price for Options, LETF price for LETF, stock price for Shares." },
+          { name: "stop_loss", type: "number", required: false, description: "Stop loss price in the same space as entry_price (option / LETF / stock)." },
           { name: "auto_track", type: "boolean", required: false, description: "Enable automatic tracking of target hits and stop loss against live price. Defaults to true." },
           { name: "time_stop", type: "string", required: false, description: "Time-based stop — exit the trade by this date (e.g., '2026-03-01')." },
-          { name: "targets", type: "json", required: false, description: "Take-profit targets with take-off percentage and optional raise-stop-loss levels per target.", explanation: `The targets object defines your profit-taking strategy. Each key (tp1, tp2, etc.) maps to a target with a price, a take_off_percent indicating how much of the position to close, and an optional raise_stop_loss that adjusts your stop loss when the target is hit.
+          { name: "targets", type: "json", required: false, description: "Take-profit targets. Target prices must be in the same space as entry_price (option / LETF / stock).", explanation: `The targets object defines your profit-taking strategy. Each key (tp1, tp2, etc.) maps to a target with a price (option contract price for Options, LETF price for LETF, stock price for Shares), a take_off_percent indicating how much of the position to close, and an optional raise_stop_loss that adjusts your stop loss when the target is hit.
 
 Structure:
   tp1, tp2, ...      Target labels (you can use any key names)
@@ -611,15 +621,15 @@ Example:
       "ticker": "AAPL",
       "instrument_type": "Options",
       "direction": "Call",
-      "entry_price": "189.50",
+      "entry_price": 31,
       "expiration": "2026-03-20",
       "strike": "190",
       "targets": {
-        "tp1": { "price": 195, "take_off_percent": 50, "raise_stop_loss": { "price": 189.50 } },
-        "tp2": { "price": 200, "take_off_percent": 50, "raise_stop_loss": { "price": 195 } }
+        "tp1": { "price": 40, "take_off_percent": 50, "raise_stop_loss": { "price": 31 } },
+        "tp2": { "price": 50, "take_off_percent": 50, "raise_stop_loss": { "price": 40 } }
       },
-      "stop_loss": 182,
-      "trade_plan_type": "stock_price_based",
+      "stop_loss": 25,
+      "trade_plan_type": "option_price_based",
       "time_stop": "2026-03-01"
     },
     "status": "active",
@@ -627,16 +637,31 @@ Example:
     "createdAt": "2026-02-26T12:00:00.000Z"
   },
   "processing": {
-    "discord": {
-      "sent": true,
-      "errors": []
-    },
-    "ibkr": {
-      "executed": false,
-      "tradeResult": null,
-      "errors": []
-    }
+    "discord": { "sent": true, "errors": [] },
+    "ibkr": { "executed": false, "tradeResult": null, "errors": [] }
   }
+}`,
+      },
+      {
+        method: "POST",
+        path: "/api/signals/:id/close",
+        description: "Close an active trade (signal). Sets the signal status to \"closed\" and stops target/stop-loss monitoring. Only signals with status \"active\" can be closed. Returns the updated signal.",
+        params: [
+          { name: "id", type: "string", required: true, description: "The unique signal ID (UUID) of the active trade to close." },
+        ],
+        responseExample: `{
+  "id": "abc-123",
+  "data": {
+    "ticker": "AAPL",
+    "instrument_type": "Shares",
+    "direction": "Long",
+    "entry_price": 189.5,
+    "targets": { "tp1": { "price": 195, "take_off_percent": 50 }, "tp2": { "price": 200, "take_off_percent": 50 } },
+    "stop_loss": 182
+  },
+  "status": "closed",
+  "sourceAppName": "Situ Trader",
+  "createdAt": "2026-02-26T12:00:00.000Z"
 }`,
       },
       {
@@ -651,15 +676,15 @@ Example:
       "ticker": "AAPL",
       "instrument_type": "Options",
       "direction": "Call",
-      "entry_price": "189.50",
+      "entry_price": 31,
       "expiration": "2026-03-20",
       "strike": "190",
       "targets": {
-        "tp1": { "price": 195, "take_off_percent": 50, "raise_stop_loss": { "price": 189.50 } },
-        "tp2": { "price": 200, "take_off_percent": 50, "raise_stop_loss": { "price": 195 } }
+        "tp1": { "price": 40, "take_off_percent": 50, "raise_stop_loss": { "price": 31 } },
+        "tp2": { "price": 50, "take_off_percent": 50, "raise_stop_loss": { "price": 40 } }
       },
-      "stop_loss": 182,
-      "trade_plan_type": "stock_price_based",
+      "stop_loss": 25,
+      "trade_plan_type": "option_price_based",
       "time_stop": "2026-03-01"
     },
     "status": "active",
@@ -902,6 +927,14 @@ export default function ApiGuidePage() {
                 <code className="text-lg font-mono font-semibold">{currentEndpoint.path}</code>
               </div>
               <p className="text-sm text-muted-foreground mt-2">{currentEndpoint.description}</p>
+              {currentEndpoint.path === "/api/ingest/signals" && (
+                <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/5 dark:bg-amber-500/10 px-3 py-2.5">
+                  <p className="text-xs font-medium text-amber-700 dark:text-amber-400/90 mb-1">Trade plan prices</p>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    <strong>entry_price</strong>, <strong>targets</strong>, and <strong>stop_loss</strong> must be in the correct price space: <strong>Options</strong> = option contract price; <strong>LETF</strong> = LETF price (e.g. TQQQ), not the underlying index (e.g. QQQ); <strong>Shares</strong> = stock price.
+                  </p>
+                </div>
+              )}
             </div>
             <EndpointInteractive
               key={`${currentEndpoint.method}-${currentEndpoint.path}`}

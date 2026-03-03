@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { storage } from "../storage";
 import { insertAlertSchema } from "@shared/schema";
 import { asyncHandler } from "../lib/async-handler";
+import { getParam } from "../lib/params";
 
 const partialAlertSchema = insertAlertSchema.partial();
 
@@ -12,7 +13,8 @@ export function registerAlertRoutes(app: Express) {
   }));
 
   app.get("/api/alerts/:id", asyncHandler(async (req, res) => {
-    const alert = await storage.getAlert(req.params.id);
+    const id = getParam(req, "id");
+    const alert = await storage.getAlert(id);
     if (!alert) return res.status(404).json({ message: "Alert not found" });
     res.json(alert);
   }));
@@ -32,13 +34,13 @@ export function registerAlertRoutes(app: Express) {
 
   app.patch("/api/alerts/:id", asyncHandler(async (req, res) => {
     const parsed = partialAlertSchema.parse(req.body);
-    const updated = await storage.updateAlert(req.params.id, parsed);
+    const updated = await storage.updateAlert(getParam(req, "id"), parsed);
     if (!updated) return res.status(404).json({ message: "Alert not found" });
     res.json(updated);
   }));
 
   app.delete("/api/alerts/:id", asyncHandler(async (req, res) => {
-    const deleted = await storage.deleteAlert(req.params.id);
+    const deleted = await storage.deleteAlert(getParam(req, "id"));
     if (!deleted) return res.status(404).json({ message: "Alert not found" });
     res.json({ success: true });
   }));

@@ -345,15 +345,16 @@ function getSignalStatusInfo(signal: Signal) {
   const hitCount = hitKeys.length;
   const isStoppedOut = signal.status === "stopped_out";
   const isCompleted = signal.status === "completed";
+  const isClosed = signal.status === "closed";
   const hasTargets = totalTargets > 0 || stopLoss != null;
 
-  return { hitTargets, targets, stopLoss, targetKeys, hitKeys, hitCount, totalTargets, isStoppedOut, isCompleted, hasTargets };
+  return { hitTargets, targets, stopLoss, targetKeys, hitKeys, hitCount, totalTargets, isStoppedOut, isCompleted, isClosed, hasTargets };
 }
 
 function SignalStatusBar({ signal }: { signal: Signal }) {
-  const { hitTargets, targets, stopLoss, targetKeys, hitCount, totalTargets, isStoppedOut, isCompleted, hasTargets } = getSignalStatusInfo(signal);
+  const { hitTargets, targets, stopLoss, targetKeys, hitCount, totalTargets, isStoppedOut, isCompleted, isClosed, hasTargets } = getSignalStatusInfo(signal);
 
-  if (!hasTargets && !isStoppedOut && !isCompleted) return null;
+  if (!hasTargets && !isStoppedOut && !isCompleted && !isClosed) return null;
 
   return (
     <div className="flex items-center gap-1.5 flex-wrap" data-testid={`signal-status-bar-${signal.id}`}>
@@ -367,6 +368,11 @@ function SignalStatusBar({ signal }: { signal: Signal }) {
         <Badge variant="outline" className="text-[10px] gap-1 text-red-500 border-red-500/30 bg-red-500/10" data-testid="badge-stopped-out">
           <XCircle className="h-3 w-3" />
           Stopped Out
+        </Badge>
+      )}
+      {isClosed && (
+        <Badge variant="outline" className="text-[10px] gap-1 text-amber-500 border-amber-500/30 bg-amber-500/10" data-testid="badge-closed">
+          Closed
         </Badge>
       )}
       {targetKeys.map(key => {
@@ -547,7 +553,7 @@ function SignalCard({ signal, onDelete, onOpen }: { signal: Signal; onDelete: (i
                   }`}
                   data-testid="badge-status"
                 >
-                  {signal.status === "stopped_out" ? "Stopped Out" : signal.status === "completed" ? "Completed" : signal.status}
+                  {signal.status === "stopped_out" ? "Stopped Out" : signal.status === "completed" ? "Completed" : signal.status === "closed" ? "Closed" : signal.status}
                 </Badge>
                 {signal.sourceAppName && (
                   <Badge variant="outline" className="text-[10px] font-normal text-blue-500 border-blue-500/30" data-testid={`badge-source-${signal.id}`}>

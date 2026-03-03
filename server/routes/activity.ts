@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { storage } from "../storage";
 import { asyncHandler } from "../lib/async-handler";
+import { getParam } from "../lib/params";
 
 export function registerActivityRoutes(app: Express) {
   app.get("/api/activity", asyncHandler(async (_req, res) => {
@@ -9,12 +10,13 @@ export function registerActivityRoutes(app: Express) {
   }));
 
   app.get("/api/activity/by-symbol/:symbol", asyncHandler(async (req, res) => {
-    const entries = await storage.getActivityBySymbol(req.params.symbol.toUpperCase());
+    const symbol = getParam(req, "symbol").toUpperCase();
+    const entries = await storage.getActivityBySymbol(symbol);
     res.json(entries);
   }));
 
   app.get("/api/activity/by-signal/:signalId", asyncHandler(async (req, res) => {
-    const entries = await storage.getActivityBySignal(req.params.signalId);
+    const entries = await storage.getActivityBySignal(getParam(req, "signalId"));
     res.json(entries);
   }));
 
@@ -24,7 +26,7 @@ export function registerActivityRoutes(app: Express) {
   }));
 
   app.get("/api/discord-messages/by-signal/:signalId", asyncHandler(async (req, res) => {
-    const messages = await storage.getDiscordMessagesBySignal(req.params.signalId);
+    const messages = await storage.getDiscordMessagesBySignal(getParam(req, "signalId"));
     res.json(messages);
   }));
 }

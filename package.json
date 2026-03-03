@@ -8,7 +8,10 @@
     "build": "tsx script/build.ts",
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "test:signals": "tsx test/test-signals.ts",
+    "test:discord-ibkr": "tsx test/test-discord-and-ibkr.ts",
+    "test:discord-messages": "tsx test/test-discord-messages.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

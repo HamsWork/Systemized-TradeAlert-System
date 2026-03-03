@@ -3,7 +3,7 @@ import {
 } from "@shared/schema";
 import { createCrudMethods } from "./crud-helpers";
 
-const signalCrud = createCrudMethods<typeof signals, Signal, InsertSignal>(signals, signals.createdAt);
+const signalCrud = createCrudMethods<Signal, InsertSignal>(signals, signals.createdAt);
 
 export const signalMethods = {
   getSignals: signalCrud.getAll,

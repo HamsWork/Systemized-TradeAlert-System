@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { storage } from "../storage";
 import { insertIbkrOrderSchema, insertIbkrPositionSchema } from "@shared/schema";
 import { asyncHandler } from "../lib/async-handler";
+import { getParam } from "../lib/params";
 import { ibkrSyncManager } from "../services/ibkr-sync";
 import { fetchPolygonBars } from "../services/polygon";
 
@@ -15,17 +16,18 @@ export function registerIbkrRoutes(app: Express) {
   }));
 
   app.get("/api/ibkr/orders/by-symbol/:symbol", asyncHandler(async (req, res) => {
-    const orders = await storage.getIbkrOrdersBySymbol(req.params.symbol.toUpperCase());
+    const symbol = getParam(req, "symbol").toUpperCase();
+    const orders = await storage.getIbkrOrdersBySymbol(symbol);
     res.json(orders);
   }));
 
   app.get("/api/ibkr/orders/by-signal/:signalId", asyncHandler(async (req, res) => {
-    const orders = await storage.getIbkrOrdersBySignal(req.params.signalId);
+    const orders = await storage.getIbkrOrdersBySignal(getParam(req, "signalId"));
     res.json(orders);
   }));
 
   app.get("/api/ibkr/orders/:integrationId", asyncHandler(async (req, res) => {
-    const orders = await storage.getIbkrOrdersByIntegration(req.params.integrationId);
+    const orders = await storage.getIbkrOrdersByIntegration(getParam(req, "integrationId"));
     res.json(orders);
   }));
 
@@ -44,7 +46,7 @@ export function registerIbkrRoutes(app: Express) {
 
   app.patch("/api/ibkr/orders/:id", asyncHandler(async (req, res) => {
     const parsed = partialIbkrOrderSchema.parse(req.body);
-    const updated = await storage.updateIbkrOrder(req.params.id, parsed);
+    const updated = await storage.updateIbkrOrder(getParam(req, "id"), parsed);
     if (!updated) return res.status(404).json({ message: "Order not found" });
     res.json(updated);
   }));
@@ -55,7 +57,7 @@ export function registerIbkrRoutes(app: Express) {
   }));
 
   app.get("/api/ibkr/positions/:integrationId", asyncHandler(async (req, res) => {
-    const positions = await storage.getIbkrPositionsByIntegration(req.params.integrationId);
+    const positions = await storage.getIbkrPositionsByIntegration(getParam(req, "integrationId"));
     res.json(positions);
   }));
 
@@ -67,13 +69,14 @@ export function registerIbkrRoutes(app: Express) {
 
   app.patch("/api/ibkr/positions/:id", asyncHandler(async (req, res) => {
     const parsed = partialIbkrPositionSchema.parse(req.body);
-    const updated = await storage.updateIbkrPosition(req.params.id, parsed);
+    const updated = await storage.updateIbkrPosition(getParam(req, "id"), parsed);
     if (!updated) return res.status(404).json({ message: "Position not found" });
     res.json(updated);
   }));
 
   app.post("/api/ibkr/connect/:integrationId", asyncHandler(async (req, res) => {
-    const integration = await storage.getIntegration(req.params.integrationId);
+    const integrationId = getParam(req, "integrationId");
+    const integration = await storage.getIntegration(integrationId);
     if (!integration) return res.status(404).json({ message: "Integration not found" });
     if (integration.type !== "ibkr") return res.status(400).json({ message: "Not an IBKR integration" });
 
@@ -85,7 +88,7 @@ export function registerIbkrRoutes(app: Express) {
   }));
 
   app.post("/api/ibkr/disconnect/:integrationId", asyncHandler(async (req, res) => {
-    await ibkrSyncManager.disconnectOne(req.params.integrationId);
+    await ibkrSyncManager.disconnectOne(getParam(req, "integrationId"));
     res.json({ success: true, status: "disconnected" });
   }));
 
@@ -120,7 +123,7 @@ export function registerIbkrRoutes(app: Express) {
   app.get("/api/ibkr/status", asyncHandler(async (_req, res) => {
     const status = ibkrSyncManager.getConnectionStatus();
     const result: Record<string, boolean> = {};
-    for (const [id, connected] of status) {
+    for (const [id, connected] of Array.from(status)) {
       result[id] = connected;
     }
     res.json(result);

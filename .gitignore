@@ -24,3 +24,8 @@ vite.config.ts
 
 # Attached assets (user uploads)
 attached_assets/
+
+.env
+
+# Local testing
+test/

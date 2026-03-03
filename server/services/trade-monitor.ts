@@ -1,73 +1,11 @@
 import type { Signal, ConnectedApp } from "@shared/schema";
 import { storage } from "../storage";
-
-interface DiscordField {
-  name: string;
-  value: string;
-  inline?: boolean;
-}
-
-interface DiscordEmbed {
-  title?: string;
-  description?: string;
-  color: number;
-  fields?: DiscordField[];
-  footer?: { text: string };
-  timestamp?: string;
-}
-
-const GREEN = 0x22c55e;
-const RED = 0xef4444;
-const ORANGE = 0xf59e0b;
-const SPACER: DiscordField = { name: "\u200b", value: "", inline: false };
-const DISCLAIMER = "Disclaimer: Not financial advice. Trade at your own risk.";
+import { sendTargetHitDiscordAlert, sendStopLossRaisedDiscord, sendStopLossHitDiscord } from "./discord";
+import { fetchStockPrice, fetchOptionContractPrice } from "./polygon";
 
 function fmtPrice(p: number | null | undefined): string {
   if (p == null) return "\u2014";
   return `$${Number(p).toFixed(2)}`;
-}
-
-async function sendWebhook(
-  url: string,
-  content: string,
-  embeds: DiscordEmbed[],
-  isRetry = false,
-): Promise<boolean> {
-  if (!url) return false;
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: content || undefined, embeds }),
-    });
-
-    if (res.status === 429 && !isRetry) {
-      const body = await res.json() as { retry_after?: number };
-      const retryAfter = body.retry_after ?? 1;
-      await new Promise((r) => setTimeout(r, retryAfter * 1000));
-      return sendWebhook(url, content, embeds, true);
-    }
-
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
-
-function getWebhookForInstrument(
-  app: ConnectedApp,
-  instrumentType: string,
-): string | null {
-  switch (instrumentType) {
-    case "Options":
-      return app.discordWebhookOptions || null;
-    case "Shares":
-      return app.discordWebhookShares || null;
-    case "LETF":
-      return app.discordWebhookLetf || null;
-    default:
-      return app.discordWebhookShares || null;
-  }
 }
 
 interface TargetInfo {
@@ -105,7 +43,6 @@ function isBullishTrade(data: Record<string, any>): boolean {
 
 const MONITOR_INTERVAL = 10000;
 let monitorInterval: ReturnType<typeof setInterval> | null = null;
-const hitTargets = new Map<string, Set<string>>();
 
 async function checkActiveTrades(): Promise<void> {
   try {
@@ -132,20 +69,39 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
   if (!ticker) return;
 
   const orders = await storage.getIbkrOrdersBySignal(signal.id);
-  const filledEntry = orders.find(
-    (o) => o.status === "filled" && o.orderType === "market",
-  );
+  const fromOrder =
+    orders.find((o) => o.status === "filled" && o.orderType === "market")?.lastPrice ??
+    orders.find((o) => o.lastPrice != null && o.lastPrice > 0)?.lastPrice ??
+    null;
+  const fromData =
+    data.current_price != null ? Number(data.current_price) :
+    data.last_price != null ? Number(data.last_price) : null;
+  let currentPrice =
+    fromOrder ??
+    (fromData != null && fromData > 0 ? fromData : null);
 
-  if (!filledEntry) return;
-
-  const currentPrice = filledEntry.lastPrice;
+  if (!currentPrice || currentPrice <= 0) {
+    const instrumentType = data.instrument_type || "Shares";
+    if (instrumentType === "Options" && data.strike != null && data.expiration && data.direction) {
+      const right = data.direction === "Put" ? "P" : "C";
+      const strikeNum = Number(data.strike);
+      const result = await fetchOptionContractPrice(ticker, data.expiration, strikeNum, right);
+      currentPrice = result.price ?? null;
+    } else {
+      currentPrice = await fetchStockPrice(ticker);
+    }
+  }
   if (!currentPrice || currentPrice <= 0) return;
 
   const bullish = isBullishTrade(data);
   const targets = parseTargets(data);
   const stopLoss = data.stop_loss ? Number(data.stop_loss) : null;
-  const signalHits = hitTargets.get(signal.id) || new Set<string>();
-  hitTargets.set(signal.id, signalHits);
+  // Target hit status and stop-loss state from signal data (DB is source of truth)
+  const hitTargetsData = (data.hit_targets && typeof data.hit_targets === "object")
+    ? (data.hit_targets as Record<string, unknown>)
+    : {};
+  const signalHits = new Set<string>(Object.keys(hitTargetsData));
+  const stopLossAlreadyHit = data.stop_loss_hit === true;
 
   let app: ConnectedApp | null = null;
   if (signal.sourceAppId) {
@@ -160,7 +116,7 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
       : currentPrice <= target.price;
 
     if (targetHit) {
-      signalHits.add(target.key);
+      signalHits.add(target.key); // so allTargetsHit check below includes this run
       console.log(
         `[TradeMonitor] TARGET HIT: ${target.key} for ${ticker} @ ${fmtPrice(currentPrice)} (target: ${fmtPrice(target.price)})`,
       );
@@ -172,6 +128,30 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
         console.log(
           `[TradeMonitor] Stop loss raised to ${fmtPrice(target.raiseStopLoss)} for ${ticker}`,
         );
+        await sendStopLossRaisedDiscord(
+          signal,
+          app,
+          target.raiseStopLoss,
+          target.key,
+          currentPrice,
+          ticker,
+          data,
+        );
+        storage
+          .createActivity({
+            type: "stop_loss_raised",
+            title: `Stop loss raised to ${fmtPrice(target.raiseStopLoss)} for ${ticker}`,
+            description: `Stop loss raised to ${fmtPrice(target.raiseStopLoss)} after ${target.key.toUpperCase()} hit (current price: ${fmtPrice(currentPrice)})`,
+            symbol: ticker,
+            signalId: signal.id,
+            metadata: {
+              newStopLoss: target.raiseStopLoss,
+              targetKey: target.key,
+              currentPrice,
+              sourceApp: app?.name || null,
+            },
+          })
+          .catch(() => {});
       }
 
       const updatedData = { ...(signal.data as Record<string, any>) };
@@ -182,7 +162,7 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
       };
       await storage.updateSignal(signal.id, { data: updatedData });
 
-      await sendTargetHitDiscord(signal, app, target, currentPrice, ticker, data);
+      await sendTargetHitDiscordAlert(signal, app, target, currentPrice, ticker, data);
 
       storage
         .createActivity({
@@ -208,14 +188,16 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
       ? currentPrice <= stopLoss
       : currentPrice >= stopLoss;
 
-    if (slHit && !signalHits.has("stop_loss")) {
-      signalHits.add("stop_loss");
+    if (slHit && !stopLossAlreadyHit) {
       console.log(
         `[TradeMonitor] STOP LOSS HIT: ${ticker} @ ${fmtPrice(currentPrice)} (SL: ${fmtPrice(stopLoss)})`,
       );
 
-      await storage.updateSignal(signal.id, { status: "stopped_out" });
-      hitTargets.delete(signal.id);
+      const updatedData = { ...(signal.data as Record<string, any>) };
+      updatedData.stop_loss_hit = true;
+      updatedData.stop_loss_hit_at = new Date().toISOString();
+      updatedData.stop_loss_hit_price = currentPrice;
+      await storage.updateSignal(signal.id, { data: updatedData, status: "stopped_out" });
 
       await sendStopLossHitDiscord(signal, app, stopLoss, currentPrice, ticker, data);
 
@@ -239,7 +221,6 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
   const allTargetsHit = targets.length > 0 && targets.every((t) => signalHits.has(t.key));
   if (allTargetsHit) {
     await storage.updateSignal(signal.id, { status: "completed" });
-    hitTargets.delete(signal.id);
     console.log(`[TradeMonitor] All targets hit for ${ticker} — signal completed`);
 
     storage
@@ -252,113 +233,6 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
       })
       .catch(() => {});
   }
-}
-
-async function sendTargetHitDiscord(
-  signal: Signal,
-  app: ConnectedApp | null,
-  target: TargetInfo,
-  currentPrice: number,
-  ticker: string,
-  data: Record<string, any>,
-): Promise<void> {
-  if (!app || !app.sendDiscordMessages) return;
-
-  const instrumentType = data.instrument_type || "Shares";
-  const webhookUrl = getWebhookForInstrument(app, instrumentType);
-  if (!webhookUrl) return;
-
-  const entryPrice = data.entry_price ? Number(data.entry_price) : null;
-  const pnlText = entryPrice
-    ? `${(((currentPrice - entryPrice) / entryPrice) * 100).toFixed(1)}%`
-    : "\u2014";
-
-  const fields: DiscordField[] = [
-    { name: "📊 Ticker", value: ticker, inline: true },
-    { name: "🎯 Target", value: target.key.toUpperCase(), inline: true },
-    { name: "💰 Take Off", value: `${target.takeOffPercent}%`, inline: true },
-    { ...SPACER },
-    { name: "📈 Current Price", value: fmtPrice(currentPrice), inline: true },
-    { name: "🎯 Target Price", value: fmtPrice(target.price), inline: true },
-    { name: "📊 P&L", value: pnlText, inline: true },
-  ];
-
-  if (target.raiseStopLoss) {
-    fields.push({ ...SPACER });
-    fields.push({
-      name: "🛡️ Stop Loss Raised",
-      value: fmtPrice(target.raiseStopLoss),
-      inline: true,
-    });
-  }
-
-  const embed: DiscordEmbed = {
-    description: `**🎯 Target Hit: ${ticker} — ${target.key.toUpperCase()}**`,
-    color: GREEN,
-    fields,
-    footer: { text: DISCLAIMER },
-    timestamp: new Date().toISOString(),
-  };
-
-  const sent = await sendWebhook(webhookUrl, "", [embed]);
-
-  await storage.createDiscordMessage({
-    signalId: signal.id,
-    webhookUrl,
-    channelType: "signal",
-    instrumentType,
-    status: sent ? "sent" : "error",
-    messageType: "target_hit",
-    embedData: { embeds: [embed] },
-  }).catch(() => {});
-}
-
-async function sendStopLossHitDiscord(
-  signal: Signal,
-  app: ConnectedApp | null,
-  stopLoss: number,
-  currentPrice: number,
-  ticker: string,
-  data: Record<string, any>,
-): Promise<void> {
-  if (!app || !app.sendDiscordMessages) return;
-
-  const instrumentType = data.instrument_type || "Shares";
-  const webhookUrl = getWebhookForInstrument(app, instrumentType);
-  if (!webhookUrl) return;
-
-  const entryPrice = data.entry_price ? Number(data.entry_price) : null;
-  const pnlText = entryPrice
-    ? `${(((currentPrice - entryPrice) / entryPrice) * 100).toFixed(1)}%`
-    : "\u2014";
-
-  const fields: DiscordField[] = [
-    { name: "📊 Ticker", value: ticker, inline: true },
-    { name: "🛑 Stop Loss", value: fmtPrice(stopLoss), inline: true },
-    { name: "💰 Current Price", value: fmtPrice(currentPrice), inline: true },
-    { ...SPACER },
-    { name: "📉 P&L", value: pnlText, inline: true },
-  ];
-
-  const embed: DiscordEmbed = {
-    description: `**🛑 Stop Loss Hit: ${ticker}**`,
-    color: RED,
-    fields,
-    footer: { text: DISCLAIMER },
-    timestamp: new Date().toISOString(),
-  };
-
-  const sent = await sendWebhook(webhookUrl, "@everyone", [embed]);
-
-  await storage.createDiscordMessage({
-    signalId: signal.id,
-    webhookUrl,
-    channelType: "signal",
-    instrumentType,
-    status: sent ? "sent" : "error",
-    messageType: "stop_loss_hit",
-    embedData: { embeds: [embed] },
-  }).catch(() => {});
 }
 
 export function startTradeMonitor(): void {

@@ -144,7 +144,7 @@ async function refreshAllTracked(): Promise<void> {
   if (trackedSymbols.size === 0) return;
   console.log(`[Polygon] Refreshing ${trackedSymbols.size} cached symbols...`);
 
-  for (const [key, params] of trackedSymbols) {
+  for (const [key, params] of Array.from(trackedSymbols)) {
     try {
       const bars = await fetchFromPolygon(params);
       if (bars.length > 0) {

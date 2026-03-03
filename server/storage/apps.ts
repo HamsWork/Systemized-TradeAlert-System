@@ -3,7 +3,7 @@ import { createCrudMethods } from "./crud-helpers";
 import { db } from "../db";
 import { eq } from "drizzle-orm";
 
-const crud = createCrudMethods<typeof connectedApps, ConnectedApp, InsertConnectedApp>(connectedApps, connectedApps.createdAt);
+const crud = createCrudMethods<ConnectedApp, InsertConnectedApp>(connectedApps, connectedApps.createdAt);
 
 export const appMethods = {
   getConnectedApps: crud.getAll,

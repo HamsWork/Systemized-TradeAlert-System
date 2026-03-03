@@ -2,7 +2,10 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { storage } from "../storage";
 import { insertSignalSchema } from "@shared/schema";
 import { asyncHandler } from "../lib/async-handler";
+import { getParam } from "../lib/params";
 import { processSignal } from "../services/signal-processor";
+import { executeIbkrClose } from "../services/trade-executor";
+import { sendTradeClosedManuallyDiscord } from "../services/discord";
 import type { ConnectedApp } from "@shared/schema";
 
 declare global {
@@ -61,7 +64,7 @@ export function registerSignalRoutes(app: Express) {
   app.get(
     "/api/signals/:id",
     asyncHandler(async (req, res) => {
-      const signal = await storage.getSignal(req.params.id);
+      const signal = await storage.getSignal(getParam(req, "id"));
       if (!signal) return res.status(404).json({ message: "Signal not found" });
       res.json(signal);
     }),
@@ -91,9 +94,62 @@ export function registerSignalRoutes(app: Express) {
     "/api/signals/:id",
     asyncHandler(async (req, res) => {
       const parsed = partialSignalSchema.parse(req.body);
-      const updated = await storage.updateSignal(req.params.id, parsed);
+      const updated = await storage.updateSignal(getParam(req, "id"), parsed);
       if (!updated)
         return res.status(404).json({ message: "Signal not found" });
+      res.json(updated);
+    }),
+  );
+
+  app.post(
+    "/api/signals/:id/close",
+    asyncHandler(async (req, res) => {
+      const signal = await storage.getSignal(getParam(req, "id"));
+      if (!signal)
+        return res.status(404).json({ message: "Signal not found" });
+      if (signal.status !== "active")
+        return res.status(400).json({
+          message: `Signal is not active (current status: ${signal.status}). Only active signals can be closed.`,
+        });
+
+      const data = (signal.data || {}) as Record<string, unknown>;
+      const ticker = (data.ticker as string) || (data.symbol as string) || "Unknown";
+      const app = signal.sourceAppId
+        ? await storage.getConnectedApp(signal.sourceAppId)
+        : null;
+
+      const closeResult = await executeIbkrClose(signal, app ?? null);
+      if (closeResult.error && closeResult.executed === false && closeResult.error !== "No filled position to close for this signal") {
+        console.warn(`[Close API] IBKR close skipped or failed for ${ticker}: ${closeResult.error}`);
+      }
+
+      const updated = await storage.updateSignal(signal.id, { status: "closed" });
+      if (!updated) return res.status(500).json({ message: "Failed to update signal" });
+
+      await storage.createActivity({
+        type: "trade_closed",
+        title: `Trade closed: ${ticker}`,
+        description: closeResult.executed
+          ? `Signal closed manually. IBKR close order placed (orderId: ${closeResult.orderId}, qty: ${closeResult.quantity}).`
+          : `Signal manually closed (was active).${closeResult.error ? ` IBKR: ${closeResult.error}` : ""}`,
+        symbol: ticker,
+        signalId: signal.id,
+        metadata: {
+          reason: "api_close",
+          closedManually: true,
+          sourceApp: signal.sourceAppName || null,
+          ibkrCloseOrderId: closeResult.orderId ?? null,
+          ibkrCloseExecuted: closeResult.executed,
+        },
+      }).catch(() => {});
+
+      await sendTradeClosedManuallyDiscord(
+        updated,
+        app ?? null,
+        ticker,
+        (updated.data || {}) as Record<string, any>,
+      );
+
       res.json(updated);
     }),
   );
@@ -101,7 +157,7 @@ export function registerSignalRoutes(app: Express) {
   app.delete(
     "/api/signals/:id",
     asyncHandler(async (req, res) => {
-      const deleted = await storage.deleteSignal(req.params.id);
+      const deleted = await storage.deleteSignal(getParam(req, "id"));
       if (!deleted)
         return res.status(404).json({ message: "Signal not found" });
       res.json({ success: true });

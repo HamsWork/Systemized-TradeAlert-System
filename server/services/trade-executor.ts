@@ -264,10 +264,10 @@ async function getNextOrderId(
     initialNextValidId = 0;
   }
 
-  const minId = lastUsedOrderId + 1;
-  const startId = Math.max(ibkrId, minId);
-  lastUsedOrderId = startId + childCount + 1;
-  console.log(`[TradeExecutor] Next order ID: ${startId} (IBKR said ${ibkrId}, local min ${minId})`);
+  // Use IBKR's assigned order ID when available; they require using their sequence.
+  const startId = ibkrId > 0 ? ibkrId : lastUsedOrderId + 1;
+  lastUsedOrderId = Math.max(lastUsedOrderId, startId + childCount);
+  console.log(`[TradeExecutor] Next order ID: ${startId} (from IBKR: ${ibkrId > 0 ? ibkrId : "reqIds"})`);
   return startId;
 }
 
@@ -548,7 +548,6 @@ export async function executeIbkrTrade(
           side: side.toLowerCase(),
           orderType: "market",
           quantity,
-          entryPrice: null,
           stopPrice: null,
           filledQuantity: 0,
           avgFillPrice: null,
@@ -605,7 +604,6 @@ export async function executeIbkrTrade(
       side: side.toLowerCase(),
       orderType: "market",
       quantity,
-      entryPrice: null,
       stopPrice: null,
       filledQuantity: parentStatus.filled || 0,
       avgFillPrice: parentStatus.avgFillPrice || null,
@@ -636,7 +634,7 @@ export async function executeIbkrTrade(
         title: isPending
           ? `IBKR bracket queued: ${side} ${ticker} (market closed)`
           : `IBKR bracket trade: ${side} ${ticker}`,
-        description: `Entry #${result.orderId} ${statusLabel} - ${side} ${result.quantity} ${ticker}${orderSummary ? ` | ${orderSummary}` : ""}`,
+        description: `Entry #${result.orderId} ${statusLabel} - ${side} ${result.quantity} ${ticker}`,
         symbol: ticker,
         signalId: signal.id,
         metadata: {
@@ -663,6 +661,159 @@ export async function executeIbkrTrade(
       .catch(() => {});
 
     return { executed: false, trade: null, error: err.message };
+  } finally {
+    if (ib) {
+      try {
+        ib.disconnect();
+      } catch {}
+    }
+  }
+}
+
+export interface IbkrCloseResult {
+  executed: boolean;
+  orderId?: number;
+  quantity?: number;
+  error: string | null;
+}
+
+/**
+ * Place a market order to close the position for a signal (opposite side of entry).
+ * Uses filled entry order quantity for the signal. No-op if no filled position.
+ */
+export async function executeIbkrClose(
+  signal: Signal,
+  app: ConnectedApp | null,
+): Promise<IbkrCloseResult> {
+  if (!app) {
+    return { executed: false, error: "No connected app provided" };
+  }
+  if (!app.executeIbkrTrades) {
+    return { executed: false, error: `IBKR execution disabled for ${app.name}` };
+  }
+
+  const data = signal.data as Record<string, any>;
+  const ticker = data.ticker;
+  if (!ticker) return { executed: false, error: "Signal has no ticker" };
+
+  const orders = await storage.getIbkrOrdersBySignal(signal.id);
+  const filledEntries = orders.filter(
+    (o) => o.status === "filled" && o.orderType === "market",
+  );
+  const totalQuantity = filledEntries.reduce(
+    (sum, o) => sum + (o.filledQuantity ?? o.quantity ?? 0),
+    0,
+  );
+  if (totalQuantity <= 0) {
+    return { executed: false, error: "No filled position to close for this signal" };
+  }
+
+  const { exitSide } = determineSide(data);
+  const integrations = await storage.getIntegrations();
+  const ibkrIntegration = integrations.find(
+    (i) => i.type === "ibkr" && i.enabled,
+  );
+  if (!ibkrIntegration) {
+    return { executed: false, error: "No enabled IBKR integration found" };
+  }
+
+  const cfg = ibkrIntegration.config as Record<string, any>;
+  const host = app.ibkrHost || cfg?.host || "127.0.0.1";
+  const port =
+    (app.ibkrPort ? parseInt(app.ibkrPort) : null) || Number(cfg?.port) || 4003;
+  const clientId =
+    (app.ibkrClientId ? parseInt(app.ibkrClientId) : null) ||
+    Number(cfg?.clientId) ||
+    0;
+
+  let ib: IBApi | null = null;
+  const secType = data.instrument_type === "Options" ? "OPT" : "STK";
+  const rightVal =
+    data.instrument_type === "Options"
+      ? data.direction === "Put"
+        ? "P"
+        : "C"
+      : null;
+
+  try {
+    ib = await connectIbkr(host, port, clientId);
+    const contract = buildContract(data);
+    const closeOrderId = await getNextOrderId(ib, 0);
+
+    const closeOrder: any = {
+      action: exitSide,
+      orderType: OrderType.MKT,
+      totalQuantity,
+      tif: TimeInForce.DAY,
+      transmit: true,
+    };
+
+    console.log(
+      `[TradeExecutor] Placing close order: ${exitSide} ${totalQuantity} ${ticker} @ MKT (orderId=${closeOrderId})`,
+    );
+    ib.placeOrder(closeOrderId, contract, closeOrder);
+
+    const statusResult = await waitForOrderStatus(
+      ib,
+      closeOrderId,
+      [closeOrderId],
+    );
+
+    await storage.upsertIbkrOrder(String(closeOrderId), ibkrIntegration.id, {
+      integrationId: ibkrIntegration.id,
+      signalId: signal.id,
+      orderId: String(closeOrderId),
+      symbol: ticker,
+      secType,
+      expiration: data.expiration || null,
+      strike: data.strike ? Number(data.strike) : null,
+      right: rightVal,
+      conId: null,
+      side: exitSide === OrderAction.SELL ? "sell" : "buy",
+      orderType: "market",
+      quantity: totalQuantity,
+      stopPrice: null,
+      filledQuantity: statusResult.filled || 0,
+      avgFillPrice: statusResult.avgFillPrice || null,
+      lastPrice: null,
+      status:
+        statusResult.status === "FILLED"
+          ? "filled"
+          : statusResult.status === "PENDING_OPEN"
+            ? "pending"
+            : "submitted",
+      timeInForce: "DAY",
+      commission: null,
+      submittedAt: new Date(),
+      filledAt: statusResult.status === "FILLED" ? new Date() : null,
+      sourceAppId: app.id,
+      sourceAppName: app.name,
+    });
+
+    if (statusResult.rejected) {
+      console.error(
+        `[TradeExecutor] Close order rejected for ${ticker}: ${statusResult.rejectReason}`,
+      );
+      return {
+        executed: false,
+        orderId: closeOrderId,
+        quantity: totalQuantity,
+        error: statusResult.rejectReason || "Order rejected",
+      };
+    }
+
+    console.log(
+      `[TradeExecutor] Close order placed: ${closeOrderId} ${statusResult.status} for ${ticker}`,
+    );
+    return {
+      executed: true,
+      orderId: closeOrderId,
+      quantity: totalQuantity,
+      error: null,
+    };
+  } catch (err: any) {
+    console.error(`[TradeExecutor] Close order error: ${err.message}`);
+    return { executed: false, error: err.message };
   } finally {
     if (ib) {
       try {

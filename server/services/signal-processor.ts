@@ -30,6 +30,15 @@ const VALID_DIRECTIONS_OPTIONS = ["Call", "Put"];
 const VALID_DIRECTIONS_DEFAULT = ["Long", "Short"];
 const VALID_TRADE_PLAN_TYPES = ["stock_price_based", "option_price_based"];
 
+/** LETF ticker -> underlying index (for fetching underlying price only; trade plan uses LETF price) */
+const LETF_UNDERLYING: Record<string, string> = {
+  TQQQ: "QQQ", SQQQ: "QQQ", UPRO: "SPY", SPXU: "SPY", SPXL: "SPY", SPXS: "SPY",
+  UDOW: "DIA", SDOW: "DIA", TNA: "IWM", TZA: "IWM", LABU: "XBI", LABD: "XBI",
+  HIBL: "XHB", HIBS: "XHB", SOXL: "SOX", SOXS: "SOX", TECL: "XLK", TECS: "XLK",
+  FAS: "XLF", FAZ: "XLF", YINN: "FXI", YANG: "FXI", NUGT: "GDX", DUST: "GDX",
+  JNUG: "GDXJ", JDST: "GDXJ",
+};
+
 const TDI_INSTRUMENT_MAP: Record<string, string> = {
   "SHARES": "Shares",
   "SHARE": "Shares",
@@ -278,10 +287,27 @@ async function buildSignalData(body: Record<string, any>): Promise<{ data: Recor
   }
 
   try {
-    const stockPrice = await fetchStockPrice(ticker);
-    if (stockPrice !== null) {
-      signalDataObj.entry_underlying_price = stockPrice;
-      console.log(`[Signal] Fetched underlying price from Polygon: $${stockPrice} for ${ticker}`);
+    if (instrumentType === "Options") {
+      const stockPrice = await fetchStockPrice(ticker);
+      if (stockPrice !== null) {
+        signalDataObj.entry_underlying_price = stockPrice;
+        console.log(`[Signal] Fetched underlying stock price from Polygon: $${stockPrice} for ${ticker}`);
+      }
+    } else if (instrumentType === "LETF") {
+      const underlyingSymbol = LETF_UNDERLYING[(ticker || "").toUpperCase().trim()];
+      if (underlyingSymbol) {
+        const underlyingPrice = await fetchStockPrice(underlyingSymbol);
+        if (underlyingPrice !== null) {
+          signalDataObj.entry_underlying_price = underlyingPrice;
+          console.log(`[Signal] Fetched underlying index price from Polygon: $${underlyingPrice} for ${ticker} (${underlyingSymbol})`);
+        }
+      }
+    } else {
+      const stockPrice = await fetchStockPrice(ticker);
+      if (stockPrice !== null) {
+        signalDataObj.entry_underlying_price = stockPrice;
+        console.log(`[Signal] Fetched stock price from Polygon: $${stockPrice} for ${ticker}`);
+      }
     }
   } catch (err: any) {
     console.warn(`[Signal] Failed to fetch underlying price: ${err.message}`);
@@ -299,7 +325,9 @@ async function buildSignalData(body: Record<string, any>): Promise<{ data: Recor
     signalDataObj.time_stop = time_stop;
   }
 
-  signalDataObj.trade_plan_type = trade_plan_type || "stock_price_based";
+  signalDataObj.trade_plan_type =
+    trade_plan_type ??
+    (instrumentType === "Options" ? "option_price_based" : "stock_price_based");
   signalDataObj.auto_track = auto_track !== undefined ? auto_track : true;
 
   if (body.tdi_metadata) {

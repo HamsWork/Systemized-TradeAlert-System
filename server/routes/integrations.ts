@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { storage } from "../storage";
 import { insertIntegrationSchema } from "@shared/schema";
 import { asyncHandler } from "../lib/async-handler";
+import { getParam } from "../lib/params";
 
 const partialIntegrationSchema = insertIntegrationSchema.partial();
 
@@ -26,13 +27,13 @@ export function registerIntegrationRoutes(app: Express) {
 
   app.patch("/api/integrations/:id", asyncHandler(async (req, res) => {
     const parsed = partialIntegrationSchema.parse(req.body);
-    const updated = await storage.updateIntegration(req.params.id, parsed);
+    const updated = await storage.updateIntegration(getParam(req, "id"), parsed);
     if (!updated) return res.status(404).json({ message: "Integration not found" });
     res.json(updated);
   }));
 
   app.delete("/api/integrations/:id", asyncHandler(async (req, res) => {
-    const deleted = await storage.deleteIntegration(req.params.id);
+    const deleted = await storage.deleteIntegration(getParam(req, "id"));
     if (!deleted) return res.status(404).json({ message: "Integration not found" });
     res.json({ success: true });
   }));

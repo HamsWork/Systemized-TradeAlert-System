@@ -8,6 +8,7 @@ import { registerAppRoutes } from "./apps";
 import { registerSettingsRoutes } from "./settings";
 import { registerIntegrationRoutes } from "./integrations";
 import { registerIbkrRoutes } from "./ibkr";
+import { registerTestRoutes } from "./test";
 
 function errorHandler(err: any, _req: Request, res: Response, _next: NextFunction) {
   const status = err.status || (err.issues ? 400 : 500);
@@ -27,6 +28,7 @@ export async function registerRoutes(
   registerSettingsRoutes(app);
   registerIntegrationRoutes(app);
   registerIbkrRoutes(app);
+  registerTestRoutes(app);
 
   app.use(errorHandler);
 

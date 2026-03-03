@@ -86,7 +86,7 @@ export class IbkrClient {
         this.connected = true;
         this.ib.reqMarketDataType(MarketDataType.DELAYED_FROZEN);
 
-        this.ib.on(EventName.orderStatus, (
+        (this.ib.on as (ev: string, cb: (...args: any[]) => void) => void)(EventName.orderStatus, (
           orderId: number,
           status: string,
           filled: number,
@@ -185,33 +185,16 @@ export class IbkrClient {
       };
 
       const cleanup = () => {
-        this.ib.off(EventName.position, onPosition);
+        (this.ib.off as (ev: string, cb: (...args: any[]) => void) => void)(EventName.position, onPosition);
         this.ib.off(EventName.positionEnd, onPositionEnd);
         this.ib.off(EventName.error, onError);
       };
 
-      this.ib.on(EventName.position, onPosition);
+      (this.ib.on as (ev: string, cb: (...args: any[]) => void) => void)(EventName.position, onPosition);
       this.ib.once(EventName.positionEnd, onPositionEnd);
       this.ib.on(EventName.error, onError);
 
       this.ib.reqPositions();
-    });
-  }
-
-  onOrderStatus(callback: (status: IbkrOrderStatus) => void): void {
-    this.ib.on(EventName.orderStatus, (
-      orderId: number,
-      status: string,
-      filled: number,
-      remaining: number,
-      avgFillPrice: number,
-      _permId: number,
-      _parentId: number,
-      lastFillPrice: number,
-      _clientId: number,
-      whyHeld: string,
-    ) => {
-      callback({ orderId, status, filled, remaining, avgFillPrice, lastFillPrice, whyHeld });
     });
   }
 
@@ -243,10 +226,10 @@ export class IbkrClient {
       };
 
       const cleanup = () => {
-        this.ib.off(EventName.pnlSingle, onPnlSingle);
+        (this.ib.off as (ev: string, cb: (...args: any[]) => void) => void)(EventName.pnlSingle, onPnlSingle);
       };
 
-      this.ib.on(EventName.pnlSingle, onPnlSingle);
+      (this.ib.on as (ev: string, cb: (...args: any[]) => void) => void)(EventName.pnlSingle, onPnlSingle);
       this.ib.reqPnLSingle(reqId, account, "", conId);
     });
   }
