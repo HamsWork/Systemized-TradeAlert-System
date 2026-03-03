@@ -18,12 +18,11 @@ import {
   Eye,
   Zap,
 } from "lucide-react";
-import type { ActivityLogEntry, Signal } from "@shared/schema";
+import type { ActivityLogEntry } from "@shared/schema";
 import { formatRelativeTime } from "@/lib/formatters";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
-import { SignalDetailDialog } from "./signal-detail";
 
 function getActivityIcon(type: string) {
   switch (type) {
@@ -63,23 +62,9 @@ export default function ActivityPage() {
   const activityQuery = useQuery<ActivityLogEntry[]>({ queryKey: ["/api/activity"] });
   const [selectedEntry, setSelectedEntry] = useState<ActivityLogEntry | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [selectedSignalId, setSelectedSignalId] = useState<string | null>(null);
-
-  const signalQuery = useQuery<Signal>({
-    queryKey: ["/api/signals", selectedSignalId],
-    queryFn: async () => {
-      const res = await fetch(`/api/signals/${encodeURIComponent(selectedSignalId!)}`);
-      if (!res.ok) {
-        throw new Error("Failed to load signal details");
-      }
-      return res.json();
-    },
-    enabled: !!selectedSignalId && detailOpen,
-  });
 
   const handleCardClick = (entry: ActivityLogEntry) => {
     setSelectedEntry(entry);
-    setSelectedSignalId(entry.signalId ?? null);
     setDetailOpen(true);
   };
 
@@ -87,7 +72,6 @@ export default function ActivityPage() {
     setDetailOpen(open);
     if (!open) {
       setSelectedEntry(null);
-      setSelectedSignalId(null);
     }
   };
 
@@ -167,98 +151,90 @@ export default function ActivityPage() {
         </div>
       )}
 
-      {selectedSignalId ? (
-        <SignalDetailDialog
-          signal={signalQuery.data ?? null}
-          open={detailOpen}
-          onOpenChange={closeDialog}
-        />
-      ) : (
-        <Dialog open={detailOpen} onOpenChange={closeDialog}>
-          <DialogContent className="max-w-2xl" data-testid="dialog-activity-detail">
-            {selectedEntry && (
-              <>
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-mono px-2 py-0.5 rounded bg-muted text-muted-foreground">
-                      {selectedEntry.type}
-                    </span>
-                    <span className="text-base font-semibold truncate">{selectedEntry.title}</span>
-                    {selectedEntry.symbol && (
-                      <Badge variant="outline" className="text-xs font-mono">
-                        {selectedEntry.symbol}
-                      </Badge>
-                    )}
-                  </DialogTitle>
-                  <DialogDescription className="text-xs text-muted-foreground">
-                    {selectedEntry.createdAt
-                      ? `Occurred ${formatRelativeTime(selectedEntry.createdAt)} — ${format(new Date(selectedEntry.createdAt), "MMM d, yyyy h:mm a")}`
-                      : "Activity event details"}
-                  </DialogDescription>
-                </DialogHeader>
+      <Dialog open={detailOpen} onOpenChange={closeDialog}>
+        <DialogContent className="max-w-2xl" data-testid="dialog-activity-detail">
+          {selectedEntry && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-mono px-2 py-0.5 rounded bg-muted text-muted-foreground">
+                    {selectedEntry.type}
+                  </span>
+                  <span className="text-base font-semibold truncate">{selectedEntry.title}</span>
+                  {selectedEntry.symbol && (
+                    <Badge variant="outline" className="text-xs font-mono">
+                      {selectedEntry.symbol}
+                    </Badge>
+                  )}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground">
+                  {selectedEntry.createdAt
+                    ? `Occurred ${formatRelativeTime(selectedEntry.createdAt)} — ${format(new Date(selectedEntry.createdAt), "MMM d, yyyy h:mm a")}`
+                    : "Activity event details"}
+                </DialogDescription>
+              </DialogHeader>
 
-                <div className="space-y-4 mt-2">
-                  <div>
-                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                      Summary
-                    </h3>
-                    <p className="text-sm text-foreground whitespace-pre-wrap">
-                      {String(selectedEntry.description ?? "")}
-                    </p>
-                  </div>
-
-                  {selectedEntry.metadata != null ? (
-                    <div>
-                      <Separator className="my-3" />
-                      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                        Details
-                      </h3>
-                      <div className="space-y-2 text-xs text-muted-foreground">
-                        {"sourceApp" in (selectedEntry.metadata as any) && (
-                          <div className="flex items-center justify-between">
-                            <span>Source App</span>
-                            <Badge variant="outline" className="text-[10px]">
-                              {(selectedEntry.metadata as any).sourceApp}
-                            </Badge>
-                          </div>
-                        )}
-
-                        {"errors" in (selectedEntry.metadata as any) && Array.isArray((selectedEntry.metadata as any).errors) && (
-                          <div>
-                            <p className="mb-1 text-xs text-red-400 font-medium">
-                              Validation Errors
-                            </p>
-                            <ul className="list-disc list-inside space-y-0.5">
-                              {(selectedEntry.metadata as any).errors.map((err: string, idx: number) => (
-                                <li key={idx}>{err}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-
-                        {"rawSignal" in (selectedEntry.metadata as any) && (selectedEntry.metadata as any).rawSignal && (
-                          <div className="mt-2">
-                            <p className="mb-1 text-xs text-muted-foreground font-medium">
-                              Raw Signal Payload
-                            </p>
-                            <div className="rounded-md bg-zinc-950 border border-border/60 max-h-64 overflow-auto text-[11px]">
-                              <pre className="p-3 whitespace-pre-wrap break-all">
-                                <code>
-                                  {JSON.stringify((selectedEntry.metadata as any).rawSignal, null, 2)}
-                                </code>
-                              </pre>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ) : null}
+              <div className="space-y-4 mt-2">
+                <div>
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                    Summary
+                  </h3>
+                  <p className="text-sm text-foreground whitespace-pre-wrap">
+                    {String(selectedEntry.description ?? "")}
+                  </p>
                 </div>
-              </>
-            )}
-          </DialogContent>
-        </Dialog>
-      )}
+
+                {selectedEntry.metadata != null ? (
+                  <div>
+                    <Separator className="my-3" />
+                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                      Details
+                    </h3>
+                    <div className="space-y-2 text-xs text-muted-foreground">
+                      {"sourceApp" in (selectedEntry.metadata as any) && (
+                        <div className="flex items-center justify-between">
+                          <span>Source App</span>
+                          <Badge variant="outline" className="text-[10px]">
+                            {(selectedEntry.metadata as any).sourceApp}
+                          </Badge>
+                        </div>
+                      )}
+
+                      {"errors" in (selectedEntry.metadata as any) && Array.isArray((selectedEntry.metadata as any).errors) && (
+                        <div>
+                          <p className="mb-1 text-xs text-red-400 font-medium">
+                            Validation Errors
+                          </p>
+                          <ul className="list-disc list-inside space-y-0.5">
+                            {(selectedEntry.metadata as any).errors.map((err: string, idx: number) => (
+                              <li key={idx}>{err}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {"rawSignal" in (selectedEntry.metadata as any) && (selectedEntry.metadata as any).rawSignal && (
+                        <div className="mt-2">
+                          <p className="mb-1 text-xs text-muted-foreground font-medium">
+                            Raw Signal Payload
+                          </p>
+                          <div className="rounded-md bg-zinc-950 border border-border/60 max-h-64 overflow-auto text-[11px]">
+                            <pre className="p-3 whitespace-pre-wrap break-all">
+                              <code>
+                                {JSON.stringify((selectedEntry.metadata as any).rawSignal, null, 2)}
+                              </code>
+                            </pre>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

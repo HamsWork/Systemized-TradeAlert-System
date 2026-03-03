@@ -160,6 +160,9 @@ function TradeChart({ symbol, instrumentType, strike, expiration, optionType, en
   direction?: string;
 }) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
+  const chartInstanceRef = useRef<ReturnType<typeof createChart> | null>(null);
+  const candleSeriesRef = useRef<{ setData: (d: any) => void; createPriceLine: (opts: any) => any; removePriceLine: (line: any) => void } | null>(null);
+  const priceLineRefsRef = useRef<any[]>([]);
 
   const chartUrl = useMemo(
     () => buildChartQueryUrl({ symbol, instrumentType, strike, expiration, optionType }),
@@ -174,7 +177,8 @@ function TradeChart({ symbol, instrumentType, strike, expiration, optionType, en
       return res.json();
     },
     enabled: !!symbol,
-    staleTime: 60_000,
+    staleTime: 20_000,
+    refetchInterval: 30_000,
     retry: false,
   });
 
@@ -194,10 +198,38 @@ function TradeChart({ symbol, instrumentType, strike, expiration, optionType, en
     return lines;
   }, [entryPrice, tpLevels, slLevels]);
 
+  const candleData = useMemo(
+    () =>
+      liveBars.map(bar => {
+        let t = bar.time;
+        if (/^\d{8}$/.test(t)) t = `${t.slice(0, 4)}-${t.slice(4, 6)}-${t.slice(6, 8)}`;
+        return { time: t, open: bar.open, high: bar.high, low: bar.low, close: bar.close };
+      }),
+    [liveBars],
+  );
+
   useEffect(() => {
     if (!chartContainerRef.current || barsQuery.isLoading || !hasLiveData) return;
 
     const isDark = document.documentElement.classList.contains("dark");
+
+    if (chartInstanceRef.current && candleSeriesRef.current) {
+      candleSeriesRef.current.setData(candleData as any);
+      priceLineRefsRef.current.forEach(line => candleSeriesRef.current!.removePriceLine(line));
+      priceLineRefsRef.current = [];
+      priceLines.forEach(pl => {
+        const line = candleSeriesRef.current!.createPriceLine({
+          price: pl.price,
+          color: pl.color,
+          lineWidth: 1,
+          lineStyle: pl.lineStyle,
+          axisLabelVisible: true,
+          title: pl.title,
+        });
+        priceLineRefsRef.current.push(line);
+      });
+      return;
+    }
 
     const chart = createChart(chartContainerRef.current, {
       layout: {
@@ -227,15 +259,10 @@ function TradeChart({ symbol, instrumentType, strike, expiration, optionType, en
       wickDownColor: "#ef444480",
     });
 
-    const candleData = liveBars.map(bar => {
-      let t = bar.time;
-      if (/^\d{8}$/.test(t)) t = `${t.slice(0, 4)}-${t.slice(4, 6)}-${t.slice(6, 8)}`;
-      return { time: t, open: bar.open, high: bar.high, low: bar.low, close: bar.close };
-    });
     candleSeries.setData(candleData as any);
 
     priceLines.forEach(pl => {
-      candleSeries.createPriceLine({
+      const line = candleSeries.createPriceLine({
         price: pl.price,
         color: pl.color,
         lineWidth: 1,
@@ -243,16 +270,32 @@ function TradeChart({ symbol, instrumentType, strike, expiration, optionType, en
         axisLabelVisible: true,
         title: pl.title,
       });
+      priceLineRefsRef.current.push(line);
     });
 
     chart.timeScale().fitContent();
 
+    chartInstanceRef.current = chart;
+    candleSeriesRef.current = candleSeries;
+
     const handleResize = () => {
-      if (chartContainerRef.current) chart.applyOptions({ width: chartContainerRef.current.clientWidth });
+      if (chartContainerRef.current && chartInstanceRef.current)
+        chartInstanceRef.current.applyOptions({ width: chartContainerRef.current.clientWidth });
     };
     window.addEventListener("resize", handleResize);
-    return () => { window.removeEventListener("resize", handleResize); chart.remove(); };
-  }, [liveBars, hasLiveData, priceLines, barsQuery.isLoading]);
+    return () => { window.removeEventListener("resize", handleResize); };
+  }, [candleData, hasLiveData, priceLines, barsQuery.isLoading]);
+
+  useEffect(() => {
+    return () => {
+      if (chartInstanceRef.current) {
+        chartInstanceRef.current.remove();
+        chartInstanceRef.current = null;
+        candleSeriesRef.current = null;
+        priceLineRefsRef.current = [];
+      }
+    };
+  }, []);
 
   if (barsQuery.isLoading) {
     return (
@@ -287,9 +330,14 @@ function TradeChart({ symbol, instrumentType, strike, expiration, optionType, en
           </span>
           <span className="text-xs text-muted-foreground font-mono" data-testid="text-chart-symbol">— {chartLabel}</span>
           {hasLiveData ? (
-            <Badge variant="outline" className="text-[10px] text-emerald-500 border-emerald-500/30" data-testid="badge-live-data">
-              IBKR LIVE
-            </Badge>
+            <>
+              <Badge variant="outline" className="text-[10px] text-emerald-500 border-emerald-500/30" data-testid="badge-live-data">
+                IBKR LIVE
+              </Badge>
+              <span className="text-[10px] text-muted-foreground" title="Chart refreshes every 30 seconds">
+                · updates every 30s
+              </span>
+            </>
           ) : (
             <Badge variant="outline" className="text-[10px] text-blue-500 border-blue-500/30" data-testid="badge-tradingview">
               TradingView

@@ -6,6 +6,7 @@ import { getParam } from "../lib/params";
 import { processSignal } from "../services/signal-processor";
 import { executeIbkrClose } from "../services/trade-executor";
 import { sendTradeClosedManuallyDiscord } from "../services/discord";
+import { recordManualTargetHit, recordManualStopLossHit } from "../services/trade-monitor";
 import type { ConnectedApp } from "@shared/schema";
 
 declare global {
@@ -24,6 +25,14 @@ async function authenticateApiKey(
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    await storage.createActivity({
+      type: "ingest_failed",
+      title: "Signal ingest failed: no API key",
+      description: "POST /api/ingest/signals called without Authorization header. Requests must include Bearer token.",
+      symbol: null,
+      signalId: null,
+      metadata: { reason: "no_api_key", path: "/api/ingest/signals" },
+    }).catch(() => {});
     return res.status(401).json({ message: "Authorization header with Bearer token is required" });
   }
 
@@ -31,16 +40,40 @@ async function authenticateApiKey(
   const connectedApp = await storage.getConnectedAppByApiKey(apiKey);
 
   if (!connectedApp) {
+    await storage.createActivity({
+      type: "ingest_failed",
+      title: "Signal ingest failed: invalid API key",
+      description: "POST /api/ingest/signals called with an invalid or unknown API key.",
+      symbol: null,
+      signalId: null,
+      metadata: { reason: "invalid_api_key", path: "/api/ingest/signals" },
+    }).catch(() => {});
     return res.status(401).json({ message: "Invalid API key" });
   }
 
   if (connectedApp.status !== "active") {
+    await storage.createActivity({
+      type: "ingest_failed",
+      title: "Signal ingest rejected: app inactive",
+      description: `App "${connectedApp.name}" is inactive. Enable it in TradeSync to send signals.`,
+      symbol: null,
+      signalId: null,
+      metadata: { reason: "app_inactive", path: "/api/ingest/signals", appId: connectedApp.id, appName: connectedApp.name },
+    }).catch(() => {});
     return res.status(403).json({
       message: "App is inactive. Enable it in TradeSync to send signals.",
     });
   }
 
   if (!connectedApp.syncSignals) {
+    await storage.createActivity({
+      type: "ingest_failed",
+      title: "Signal ingest rejected: sync disabled",
+      description: `Signal sync is disabled for app "${connectedApp.name}".`,
+      symbol: null,
+      signalId: null,
+      metadata: { reason: "sync_signals_disabled", path: "/api/ingest/signals", appId: connectedApp.id, appName: connectedApp.name },
+    }).catch(() => {});
     return res
       .status(403)
       .json({ message: "Signal sync is disabled for this app." });
@@ -98,6 +131,76 @@ export function registerSignalRoutes(app: Express) {
       if (!updated)
         return res.status(404).json({ message: "Signal not found" });
       res.json(updated);
+    }),
+  );
+
+  app.post(
+    "/api/signals/:id/target-hit",
+    asyncHandler(async (req, res) => {
+      const signal = await storage.getSignal(getParam(req, "id"));
+      if (!signal) return res.status(404).json({ message: "Signal not found" });
+      const body = (req.body || {}) as Record<string, unknown>;
+      const targetKey = typeof body.targetKey === "string" ? body.targetKey.trim() : typeof body.target_key === "string" ? body.target_key.trim() : null;
+      if (!targetKey) {
+        return res.status(400).json({ message: "targetKey (or target_key) is required and must be a non-empty string (e.g. tp1, tp2)" });
+      }
+      const currentPrice = typeof body.currentPrice === "number" && body.currentPrice > 0
+        ? body.currentPrice
+        : typeof body.current_price === "number" && body.current_price > 0
+          ? body.current_price
+          : null;
+      const result = await recordManualTargetHit(signal, targetKey, currentPrice);
+      if (result.error) return res.status(400).json({ message: result.error });
+      return res.json(result.signal);
+    }),
+  );
+
+  app.post(
+    "/api/signals/:id/stop-loss-hit",
+    asyncHandler(async (req, res) => {
+      const signal = await storage.getSignal(getParam(req, "id"));
+      if (!signal) return res.status(404).json({ message: "Signal not found" });
+      const body = (req.body || {}) as Record<string, unknown>;
+      const currentPrice = typeof body.currentPrice === "number" && body.currentPrice > 0
+        ? body.currentPrice
+        : typeof body.current_price === "number" && body.current_price > 0
+          ? body.current_price
+          : null;
+      const result = await recordManualStopLossHit(signal, currentPrice);
+      if (result.error) return res.status(400).json({ message: result.error });
+      return res.json(result.signal);
+    }),
+  );
+
+  app.post(
+    "/api/signals/:id/stop-auto-track",
+    asyncHandler(async (req, res) => {
+      const signal = await storage.getSignal(getParam(req, "id"));
+      if (!signal) return res.status(404).json({ message: "Signal not found" });
+      if (signal.status !== "active") {
+        return res.status(400).json({
+          message: `Signal is not active (current status: ${signal.status}). Only active signals can change auto tracking.`,
+        });
+      }
+      const data = (signal.data || {}) as Record<string, any>;
+      if (data.auto_track === false) {
+        return res.json(signal);
+      }
+      const updatedData = { ...data, auto_track: false };
+      const updated = await storage.updateSignal(signal.id, { data: updatedData });
+      if (!updated) return res.status(500).json({ message: "Failed to update signal" });
+
+      const ticker = (data.ticker as string) || (data.symbol as string) || "Unknown";
+      await storage.createActivity({
+        type: "auto_track_disabled",
+        title: `Auto tracking disabled for ${ticker}`,
+        description: "Automatic target and stop-loss tracking disabled; manual control only.",
+        symbol: ticker,
+        signalId: signal.id,
+        metadata: { auto_track: false },
+      }).catch(() => {});
+
+      return res.json(updated);
     }),
   );
 

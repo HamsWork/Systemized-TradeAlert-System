@@ -147,6 +147,7 @@ function buildOptionsFields(
 ): DiscordField[] {
   const right = direction === "Put" ? "PUT" : "CALL";
   const fields: DiscordField[] = [
+    { ...SPACER },
     { name: "🟢 Ticker", value: ticker, inline: true },
     {
       name: "📊 Stock Price",
@@ -315,6 +316,7 @@ function buildLetfFields(
 
   const dir = data.direction || "Long";
   const fields: DiscordField[] = [
+    { ... SPACER },
     { name: "🟢 Ticker", value: underlying, inline: true },
     {
       name: "📊 Stock Price",
@@ -365,6 +367,7 @@ function buildSharesFields(
 ): DiscordField[] {
   const dir = data.direction || direction || "Long";
   const fields: DiscordField[] = [
+    { ... SPACER },
     { name: "🟢 Ticker", value: ticker, inline: true },
     {
       name: "📊 Stock Price",
@@ -826,18 +829,22 @@ export async function sendTradeClosedManuallyDiscord(
 export async function sendSignalDiscordAlert(
   signal: Signal,
   app: ConnectedApp | null,
+  overrideWebhookUrl?: string | null,
 ): Promise<DiscordSendResult> {
   if (!app) {
     return { sent: false, error: "No connected app provided" };
   }
-  if (!app.sendDiscordMessages) {
+  const useOverride = overrideWebhookUrl && overrideWebhookUrl.trim().length > 0;
+  if (!useOverride && !app.sendDiscordMessages) {
     return { sent: false, error: `Discord messages disabled for ${app.name}` };
   }
 
   const data = signal.data as Record<string, any>;
   const ticker = data.ticker || "UNKNOWN";
   const instrumentType = data.instrument_type || "Options";
-  const webhookUrl = getWebhookForInstrument(app, instrumentType);
+  const webhookUrl = useOverride
+    ? overrideWebhookUrl!.trim()
+    : getWebhookForInstrument(app, instrumentType);
 
   if (!webhookUrl) {
     console.log(
