@@ -12,6 +12,7 @@ import {
   sendTargetHitDiscordAlert,
   sendStopLossHitDiscord,
   sendStopLossRaisedDiscord,
+  sendRawDiscordEmbed,
 } from "../services/discord";
 
 import type { ConnectedApp } from "@shared/schema";
@@ -193,6 +194,12 @@ export function registerSignalRoutes(app: Express) {
           .json({ message: `Discord messages are disabled for ${app.name}` });
 
       const updateSignal = !!req.body.updateSignal;
+      const customPayload = req.body.customPayload;
+
+      if (customPayload && typeof customPayload === "object" && Array.isArray(customPayload.embeds)) {
+        const result = await sendRawDiscordEmbed(signal, app, customPayload, messageType);
+        return res.json(result);
+      }
 
       let result: { sent: boolean; error: string | null } = {
         sent: false,

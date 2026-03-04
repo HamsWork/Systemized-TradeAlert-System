@@ -5,7 +5,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -720,6 +719,41 @@ const UPDATE_SIGNAL_LABELS: Record<string, string> = {
   stop_loss_hit: "Mark signal as stopped out",
 };
 
+function buildPayloadJson(preview: DiscordPreviewMsg): string {
+  return JSON.stringify({
+    content: preview.content || undefined,
+    embeds: [{
+      description: preview.embed.description,
+      color: preview.embed.color,
+      fields: preview.embed.fields,
+      footer: preview.embed.footer,
+      ...(preview.embed.timestamp ? { timestamp: preview.embed.timestamp } : {}),
+    }],
+  }, null, 2);
+}
+
+function parseJsonToPreview(json: string, fallback: DiscordPreviewMsg): DiscordPreviewMsg | null {
+  try {
+    const parsed = JSON.parse(json);
+    const embed = parsed.embeds?.[0];
+    if (!embed) return null;
+    return {
+      type: fallback.type,
+      label: fallback.label,
+      content: parsed.content || "",
+      embed: {
+        description: embed.description || "",
+        color: typeof embed.color === "number" ? embed.color : fallback.embed.color,
+        fields: Array.isArray(embed.fields) ? embed.fields : [],
+        footer: embed.footer || undefined,
+        timestamp: embed.timestamp || undefined,
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
 function DiscordSendModal({ preview, signalId, open, onOpenChange }: {
   preview: DiscordPreviewMsg;
   signalId: string;
@@ -727,17 +761,45 @@ function DiscordSendModal({ preview, signalId, open, onOpenChange }: {
   onOpenChange: (open: boolean) => void;
 }) {
   const { toast } = useToast();
-  const [updateSignalChecked, setUpdateSignalChecked] = useState(false);
+  const [jsonText, setJsonText] = useState(() => buildPayloadJson(preview));
+  const [jsonError, setJsonError] = useState<string | null>(null);
 
-  const canUpdateSignal = preview.type in UPDATE_SIGNAL_LABELS;
+  useEffect(() => {
+    setJsonText(buildPayloadJson(preview));
+    setJsonError(null);
+  }, [preview]);
+
+  const livePreview = useMemo(() => {
+    const parsed = parseJsonToPreview(jsonText, preview);
+    if (!parsed) return null;
+    return parsed;
+  }, [jsonText, preview]);
+
+  const isEdited = jsonText !== buildPayloadJson(preview);
+
+  const handleJsonChange = (value: string) => {
+    setJsonText(value);
+    try {
+      const parsed = JSON.parse(value);
+      if (!parsed.embeds?.[0]) {
+        setJsonError("Missing embeds[0]");
+      } else {
+        setJsonError(null);
+      }
+    } catch {
+      setJsonError("Invalid JSON");
+    }
+  };
 
   const sendMutation = useMutation({
     mutationFn: async () => {
       const body: Record<string, any> = {
         messageType: preview.type,
         targetKey: extractTargetKey(preview),
-        updateSignal: canUpdateSignal && updateSignalChecked,
       };
+      if (isEdited && livePreview) {
+        body.customPayload = JSON.parse(jsonText);
+      }
       const res = await apiRequest("POST", `/api/signals/${encodeURIComponent(signalId)}/send-discord`, body);
       return res.json();
     },
@@ -745,72 +807,64 @@ function DiscordSendModal({ preview, signalId, open, onOpenChange }: {
       toast({ title: "Sent", description: `Discord ${preview.label} message sent` });
       queryClient.invalidateQueries({ queryKey: ["/api/activity/by-signal", signalId] });
       queryClient.invalidateQueries({ queryKey: ["/api/discord-messages/by-signal", signalId] });
-      if (updateSignalChecked && canUpdateSignal) {
-        queryClient.invalidateQueries({ queryKey: ["/api/signals"] });
-      }
       onOpenChange(false);
-      setUpdateSignalChecked(false);
     },
     onError: (err: any) => {
       toast({ title: "Failed", description: err.message || "Failed to send Discord message", variant: "destructive" });
     },
   });
 
+  const displayPreview = livePreview || preview;
+
   return (
-    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) setUpdateSignalChecked(false); }}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto" data-testid="modal-discord-send">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4 text-[#5865F2]" />
             Send: {preview.label}
           </DialogTitle>
-          <DialogDescription>Review the embed JSON and preview before sending to Discord</DialogDescription>
+          <DialogDescription>Edit the embed JSON and preview before sending to Discord</DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Embed JSON</p>
-            <pre
-              className="rounded-lg bg-muted/50 border border-border p-3 text-[11px] font-mono leading-relaxed overflow-auto max-h-[60vh] whitespace-pre-wrap break-words"
-              data-testid="text-discord-json"
-            >{JSON.stringify({
-                content: preview.content || undefined,
-                embeds: [{
-                  description: preview.embed.description,
-                  color: preview.embed.color,
-                  fields: preview.embed.fields,
-                  footer: preview.embed.footer,
-                  ...(preview.embed.timestamp ? { timestamp: preview.embed.timestamp } : {}),
-                }],
-              }, null, 2)}</pre>
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Embed JSON</p>
+              {isEdited && (
+                <button
+                  onClick={() => { setJsonText(buildPayloadJson(preview)); setJsonError(null); }}
+                  className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                  data-testid="button-reset-json"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+            <textarea
+              value={jsonText}
+              onChange={e => handleJsonChange(e.target.value)}
+              spellCheck={false}
+              className={`w-full rounded-lg border bg-muted/50 p-3 text-[11px] font-mono leading-relaxed resize-none min-h-[50vh] max-h-[60vh] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                jsonError ? "border-red-500/50" : "border-border"
+              }`}
+              data-testid="textarea-discord-json"
+            />
+            {jsonError && (
+              <p className="text-[11px] text-red-500" data-testid="text-json-error">{jsonError}</p>
+            )}
           </div>
 
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Preview</p>
             <div className="rounded-lg bg-[#313338] p-3 space-y-2">
-              {preview.content && (
-                <p className="text-[13px] text-[#dbdee1]">{preview.content}</p>
+              {displayPreview.content && (
+                <p className="text-[13px] text-[#dbdee1]">{displayPreview.content}</p>
               )}
-              <DiscordEmbed msg={preview} />
+              <DiscordEmbed msg={displayPreview} />
             </div>
           </div>
         </div>
-
-        {/* Update signal checkbox — hidden for now, will refine later
-        {canUpdateSignal && (
-          <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2.5">
-            <Checkbox
-              id="update-signal"
-              checked={updateSignalChecked}
-              onCheckedChange={(v) => setUpdateSignalChecked(v === true)}
-              data-testid="checkbox-update-signal"
-            />
-            <label htmlFor="update-signal" className="text-sm text-foreground cursor-pointer select-none">
-              {UPDATE_SIGNAL_LABELS[preview.type]}
-            </label>
-          </div>
-        )}
-        */}
 
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-discord-send">
@@ -818,7 +872,7 @@ function DiscordSendModal({ preview, signalId, open, onOpenChange }: {
           </Button>
           <Button
             onClick={() => sendMutation.mutate()}
-            disabled={sendMutation.isPending}
+            disabled={sendMutation.isPending || !!jsonError}
             className="bg-[#5865F2] hover:bg-[#4752C4] text-white"
             data-testid="button-confirm-discord-send"
           >
@@ -827,7 +881,7 @@ function DiscordSendModal({ preview, signalId, open, onOpenChange }: {
             ) : (
               <Send className="h-3.5 w-3.5 mr-1.5" />
             )}
-            Send to Discord
+            {isEdited ? "Send Custom" : "Send to Discord"}
           </Button>
         </DialogFooter>
       </DialogContent>

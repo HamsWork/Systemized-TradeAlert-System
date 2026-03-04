@@ -72,6 +72,43 @@ async function sendWebhook(
   }
 }
 
+export async function sendRawDiscordEmbed(
+  signal: Signal,
+  app: ConnectedApp,
+  payload: { content?: string; embeds: any[] },
+  messageType: string,
+): Promise<{ sent: boolean; error: string | null }> {
+  const data = (signal.data || {}) as Record<string, any>;
+  const instrumentType = data.instrument_type || "Shares";
+  const webhookUrl = getWebhookForInstrument(app, instrumentType);
+  if (!webhookUrl) return { sent: false, error: `No webhook for ${instrumentType}` };
+
+  let sent = false;
+  let error: string | null = null;
+  try {
+    sent = await sendWebhook(webhookUrl, payload.content || "", payload.embeds || []);
+    if (!sent) error = "Webhook request failed";
+  } catch (err: any) {
+    error = err.message;
+  }
+
+  const ticker = data.ticker || data.symbol || "UNKNOWN";
+  await storage.createDiscordMessage({
+    signalId: signal.id,
+    webhookUrl,
+    channelType: "signal",
+    instrumentType,
+    status: sent ? "sent" : "error",
+    messageType: `${messageType}_custom`,
+    embedData: { ticker, custom: true },
+    error,
+    sourceAppId: app.id,
+    sourceAppName: app.name,
+  }).catch(() => {});
+
+  return { sent, error };
+}
+
 function getWebhookForInstrument(
   app: ConnectedApp,
   instrumentType: string,
