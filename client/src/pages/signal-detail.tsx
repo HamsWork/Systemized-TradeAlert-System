@@ -748,6 +748,7 @@ function DiscordSendModal({ preview, signalId, open, onOpenChange }: {
           </div>
         </div>
 
+        {/* Update signal checkbox — hidden for now, will refine later
         {canUpdateSignal && (
           <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2.5">
             <Checkbox
@@ -761,6 +762,7 @@ function DiscordSendModal({ preview, signalId, open, onOpenChange }: {
             </label>
           </div>
         )}
+        */}
 
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-discord-send">
