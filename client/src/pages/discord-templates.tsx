@@ -56,7 +56,7 @@ const addChannelSchema = z.object({
 
 type AddChannelValues = z.infer<typeof addChannelSchema>;
 
-function AddDiscordChannelDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+function AddDiscordChannelDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (open: boolean) => void; onCreated?: (channelId: string) => void }) {
   const { toast } = useToast();
 
   const form = useForm<AddChannelValues>({
@@ -82,13 +82,16 @@ function AddDiscordChannelDialog({ open, onOpenChange }: { open: boolean; onOpen
       const res = await apiRequest("POST", "/api/integrations", payload);
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/discord/channels"] });
       queryClient.invalidateQueries({ queryKey: ["/api/activity"] });
       toast({ title: "Discord channel added" });
       form.reset();
       onOpenChange(false);
+      if (onCreated && data?.id) {
+        onCreated(String(data.id));
+      }
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -473,7 +476,11 @@ function SendFromTemplateModal({ template, open, onOpenChange }: {
         </DialogFooter>
       </DialogContent>
     </Dialog>
-    <AddDiscordChannelDialog open={addChannelOpen} onOpenChange={setAddChannelOpen} />
+    <AddDiscordChannelDialog
+      open={addChannelOpen}
+      onOpenChange={setAddChannelOpen}
+      onCreated={(channelId) => setSelectedChannelId(channelId)}
+    />
     </>
   );
 }
