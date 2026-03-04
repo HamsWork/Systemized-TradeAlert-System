@@ -184,31 +184,66 @@ function addTakeProfitPlan(fields: DiscordField[], data: Record<string, any>, re
   }
 }
 
-function buildTradeExecutedEmbed(data: Record<string, any>, ticker: string): DiscordPreviewMessage {
-  const instrumentType = data.instrument_type || "Options";
-  const direction = data.direction || "Long";
-  const side = (direction === "Long" || direction === "Call") ? "BUY" : "SELL";
+function buildStopLossRaisedEmbeds(data: Record<string, any>, ticker: string): DiscordPreviewMessage[] {
+  const targets = data.targets;
+  if (!targets || typeof targets !== "object") return [];
 
-  const fields: DiscordField[] = [
-    { name: "\ud83d\udcca Symbol", value: ticker, inline: true },
-    { name: "\ud83d\udcc8 Side", value: side, inline: true },
-    { name: "\ud83d\udce6 Quantity", value: "1", inline: true },
-    { ...SPACER },
-    { name: "\ud83d\udd11 IBKR Order ID", value: "12345", inline: true },
-    { name: "\ud83d\udccb Status", value: "Submitted", inline: true },
-  ];
+  const instrumentType = data.instrument_type || "Shares";
+  const isLETF = instrumentType === "LETF";
+  const letfInfo = isLETF ? getLetfInfo(ticker) : null;
+  const entryPrice = data.entry_price ? Number(data.entry_price) : null;
 
-  return {
-    type: "trade_executed",
-    label: "Trade Executed",
-    content: "",
-    embed: {
-      description: `**\u2705 Trade Executed: ${ticker}**`,
-      color: BLUE,
-      fields,
-      footer: { text: DISCLAIMER },
-    },
-  };
+  const entries = Object.entries(targets)
+    .filter(([, val]) => (val as any)?.raise_stop_loss?.price)
+    .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }));
+
+  if (entries.length === 0) return [];
+
+  return entries.map(([key, val]) => {
+    const t = val as any;
+    const newStopLoss = Number(t.raise_stop_loss.price);
+    const isBreakEven = entryPrice && Math.abs(newStopLoss - entryPrice) < 0.01;
+
+    const heading = isLETF
+      ? `**\ud83d\udee1\ufe0f ${letfInfo?.underlying || ticker} \u2192 ${ticker} Stop Loss Raised**`
+      : `**\ud83d\udee1\ufe0f ${ticker} Stop Loss Raised**`;
+
+    const allTargets = Object.entries(targets)
+      .filter(([, v]) => (v as any)?.price)
+      .sort(([, a], [, b]) => Number((a as any).price) - Number((b as any).price));
+    const currentIdx = allTargets.findIndex(([k]) => k === key);
+    const nextTarget = currentIdx >= 0 && currentIdx < allTargets.length - 1 ? allTargets[currentIdx + 1] : null;
+
+    const fields: DiscordField[] = [
+      { name: "\u2705 Entry", value: fmtPrice(entryPrice), inline: true },
+      { name: "\ud83d\udee1\ufe0f New Stop", value: `${fmtPrice(newStopLoss)}${isBreakEven ? " (Break Even)" : ""}`, inline: true },
+      { name: "\ud83d\udcb8 Risk", value: isBreakEven ? "0% (Risk-Free)" : entryPrice ? fmtPct(entryPrice, newStopLoss) : "\u2014", inline: true },
+      { ...SPACER },
+      { name: isBreakEven ? "\ud83d\udea8 Status: Stop Loss Raised to Break Even \ud83d\udea8" : "\ud83d\udea8 Status: Stop Loss Raised \ud83d\udea8", value: "\u200b", inline: false },
+    ];
+
+    let mgmtText = `Stop loss raised to ${fmtPrice(newStopLoss)}${isBreakEven ? " (break even)" : ""}.`;
+    if (isBreakEven) mgmtText += "\nTrade is now risk-free on remaining position.";
+    if (nextTarget) mgmtText += `\n\ud83c\udfaf Remaining target: ${(nextTarget[0] as string).toUpperCase()} at ${fmtPrice(Number((nextTarget[1] as any).price))}`;
+
+    fields.push({
+      name: "\ud83d\udee1\ufe0f Risk Management",
+      value: mgmtText,
+      inline: false,
+    });
+
+    return {
+      type: "stop_loss_raised",
+      label: `SL Raised (${key.toUpperCase()})`,
+      content: "",
+      embed: {
+        description: heading,
+        color: ORANGE,
+        fields,
+        footer: { text: DISCLAIMER },
+      },
+    };
+  });
 }
 
 function buildTargetHitEmbeds(data: Record<string, any>, ticker: string): DiscordPreviewMessage[] {
@@ -222,7 +257,7 @@ function buildTargetHitEmbeds(data: Record<string, any>, ticker: string): Discor
 
   const entries = Object.entries(targets)
     .filter(([, val]) => (val as any)?.price)
-    .sort(([, a], [, b]) => Number((a as any).price) - Number((b as any).price));
+    .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }));
 
   return entries.map(([key, val], idx) => {
     const t = val as any;
@@ -352,8 +387,8 @@ export function generateDiscordPreviews(signal: Signal): DiscordPreviewMessage[]
   const previews: DiscordPreviewMessage[] = [];
 
   previews.push(buildEntryEmbed(data, ticker));
-  previews.push(buildTradeExecutedEmbed(data, ticker));
   previews.push(...buildTargetHitEmbeds(data, ticker));
+  previews.push(...buildStopLossRaisedEmbeds(data, ticker));
 
   const stopLoss = buildStopLossHitEmbed(data, ticker);
   if (stopLoss) previews.push(stopLoss);

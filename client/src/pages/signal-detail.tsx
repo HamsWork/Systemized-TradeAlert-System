@@ -5,13 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   TrendingUp,
@@ -35,8 +35,6 @@ import {
   ChevronRight,
   Send,
   Loader2,
-  Radar,
-  Power,
 } from "lucide-react";
 import { type Signal, type IbkrOrder, type ActivityLogEntry } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -655,10 +653,124 @@ function DiscordEmbed({ msg }: { msg: DiscordPreviewMsg }) {
   );
 }
 
-function DiscordPreviewSection({ signalId, open }: { signalId: string; open: boolean }) {
+function extractTargetKey(preview: DiscordPreviewMsg): string | undefined {
+  if (preview.type === "target_hit") {
+    const match = preview.label.match(/Target\s+(TP\d+)/i);
+    return match ? match[1].toLowerCase() : "tp1";
+  }
+  if (preview.type === "stop_loss_raised") {
+    const match = preview.label.match(/\((TP\d+)\)/i);
+    return match ? match[1].toLowerCase() : "tp1";
+  }
+  return undefined;
+}
+
+function DiscordSendModal({ preview, signalId, open, onOpenChange }: {
+  preview: DiscordPreviewMsg;
+  signalId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const { toast } = useToast();
+
+  const sendMutation = useMutation({
+    mutationFn: async () => {
+      const body: Record<string, any> = {
+        messageType: preview.type,
+        targetKey: extractTargetKey(preview),
+      };
+      const res = await apiRequest("POST", `/api/signals/${encodeURIComponent(signalId)}/send-discord`, body);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Sent", description: `Discord ${preview.label} message sent` });
+      queryClient.invalidateQueries({ queryKey: ["/api/activity/by-signal", signalId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/discord-messages/by-signal", signalId] });
+      onOpenChange(false);
+    },
+    onError: (err: any) => {
+      toast({ title: "Failed", description: err.message || "Failed to send Discord message", variant: "destructive" });
+    },
+  });
+
+  const description = preview.embed.description || "";
+  const fields = (preview.embed.fields || []).filter(f => f.name !== "\u200b");
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="modal-discord-send">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <MessageSquare className="h-4 w-4 text-[#5865F2]" />
+            Send: {preview.label}
+          </DialogTitle>
+          <DialogDescription>Review the message before sending to Discord</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="rounded-lg bg-[#313338] p-3 space-y-2">
+            {preview.content && (
+              <p className="text-[13px] text-[#dbdee1]">{preview.content}</p>
+            )}
+            <DiscordEmbed msg={preview} />
+          </div>
+
+          <Separator />
+
+          <div className="space-y-3">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Message Details</p>
+            {preview.content && (
+              <div>
+                <label className="text-xs text-muted-foreground">Content</label>
+                <p className="mt-1 text-sm text-foreground bg-muted/50 px-3 py-2 rounded-md" data-testid="text-discord-content">{preview.content}</p>
+              </div>
+            )}
+            <div>
+              <label className="text-xs text-muted-foreground">Description</label>
+              <p className="mt-1 text-sm text-foreground bg-muted/50 px-3 py-2 rounded-md" data-testid="text-discord-description">
+                {description.replace(/\*\*/g, "")}
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {fields.map((field, i) => (
+                <div key={i} className={field.inline ? "" : "sm:col-span-2"}>
+                  <label className="text-xs text-muted-foreground">{field.name}</label>
+                  <p className="mt-1 text-sm text-foreground bg-muted/50 px-3 py-2 rounded-md whitespace-pre-wrap" data-testid={`text-discord-field-${i}`}>
+                    {field.value || "\u200b"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-discord-send">
+            Cancel
+          </Button>
+          <Button
+            onClick={() => sendMutation.mutate()}
+            disabled={sendMutation.isPending}
+            className="bg-[#5865F2] hover:bg-[#4752C4] text-white"
+            data-testid="button-confirm-discord-send"
+          >
+            {sendMutation.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+            ) : (
+              <Send className="h-3.5 w-3.5 mr-1.5" />
+            )}
+            Send to Discord
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DiscordPreviewSection({ signalId, open }: { signalId: string; open: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const [activePreview, setActivePreview] = useState(0);
+  const [sendModalOpen, setSendModalOpen] = useState(false);
 
   const previewQuery = useQuery<DiscordPreviewMsg[]>({
     queryKey: ["/api/signals", signalId, "discord-preview"],
@@ -669,24 +781,6 @@ function DiscordPreviewSection({ signalId, open }: { signalId: string; open: boo
     },
     enabled: !!signalId && open,
     staleTime: 60_000,
-  });
-
-  const sendMutation = useMutation({
-    mutationFn: async ({ messageType, targetKey }: { messageType: string; targetKey?: string }) => {
-      const res = await apiRequest("POST", `/api/signals/${encodeURIComponent(signalId)}/send-discord`, {
-        messageType,
-        targetKey,
-      });
-      return res.json();
-    },
-    onSuccess: (_data, variables) => {
-      toast({ title: "Sent", description: `Discord ${variables.messageType.replace(/_/g, " ")} message sent` });
-      queryClient.invalidateQueries({ queryKey: ["/api/activity/by-signal", signalId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/discord-messages/by-signal", signalId] });
-    },
-    onError: (err: any) => {
-      toast({ title: "Failed", description: err.message || "Failed to send Discord message", variant: "destructive" });
-    },
   });
 
   const previews = previewQuery.data ?? [];
@@ -712,84 +806,81 @@ function DiscordPreviewSection({ signalId, open }: { signalId: string; open: boo
 
   const TYPE_COLORS: Record<string, string> = {
     signal_alert: "text-blue-400 bg-blue-400/10 border-blue-400/30",
-    trade_executed: "text-blue-500 bg-blue-500/10 border-blue-500/30",
     target_hit: "text-emerald-500 bg-emerald-500/10 border-emerald-500/30",
+    stop_loss_raised: "text-amber-500 bg-amber-500/10 border-amber-500/30",
     stop_loss_hit: "text-red-500 bg-red-500/10 border-red-500/30",
     trade_closed_manually: "text-zinc-400 bg-zinc-400/10 border-zinc-400/30",
   };
 
   const active = previews[activePreview] || previews[0];
 
-  const handleSend = () => {
-    const body: { messageType: string; targetKey?: string } = { messageType: active.type };
-    if (active.type === "target_hit") {
-      const match = active.label.match(/Target\s+(TP\d+)/i);
-      body.targetKey = match ? match[1].toLowerCase() : "tp1";
-    }
-    sendMutation.mutate(body);
-  };
-
   return (
-    <Card data-testid="card-discord-preview">
-      <CardContent className="p-3">
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="w-full flex items-center gap-2 mb-0 text-left"
-          data-testid="button-toggle-discord-preview"
-        >
-          <MessageSquare className="h-4 w-4 text-[#5865F2]" />
-          <span className="text-sm font-medium flex-1">Discord Messages</span>
-          <Badge variant="secondary" className="text-[10px]" data-testid="badge-discord-count">{previews.length}</Badge>
-          <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${expanded ? "rotate-90" : ""}`} />
-        </button>
+    <>
+      <Card data-testid="card-discord-preview">
+        <CardContent className="p-3">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="w-full flex items-center gap-2 mb-0 text-left"
+            data-testid="button-toggle-discord-preview"
+          >
+            <MessageSquare className="h-4 w-4 text-[#5865F2]" />
+            <span className="text-sm font-medium flex-1">Discord Messages</span>
+            <Badge variant="secondary" className="text-[10px]" data-testid="badge-discord-count">{previews.length}</Badge>
+            <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${expanded ? "rotate-90" : ""}`} />
+          </button>
 
-        {expanded && (
-          <div className="mt-3 space-y-3">
-            <div className="flex flex-wrap gap-1">
-              {previews.map((p, i) => (
-                <button
-                  key={i}
-                  onClick={() => setActivePreview(i)}
-                  className={`px-2 py-1 rounded-md text-[10px] font-medium border transition-colors ${
-                    i === activePreview
-                      ? TYPE_COLORS[p.type] || "text-foreground bg-muted border-border"
-                      : "text-muted-foreground bg-transparent border-transparent hover:bg-muted/50"
-                  }`}
-                  data-testid={`button-preview-${p.type}-${i}`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
+          {expanded && (
+            <div className="mt-3 space-y-3">
+              <div className="flex flex-wrap gap-1">
+                {previews.map((p, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setActivePreview(i)}
+                    className={`px-2 py-1 rounded-md text-[10px] font-medium border transition-colors ${
+                      i === activePreview
+                        ? TYPE_COLORS[p.type] || "text-foreground bg-muted border-border"
+                        : "text-muted-foreground bg-transparent border-transparent hover:bg-muted/50"
+                    }`}
+                    data-testid={`button-preview-${p.type}-${i}`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
 
-            <div className="rounded-lg bg-[#313338] p-3 space-y-2">
-              {active.content && (
-                <p className="text-[13px] text-[#dbdee1]">{active.content}</p>
-              )}
-              <DiscordEmbed msg={active} />
-            </div>
-
-            <div className="flex items-center justify-end">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleSend}
-                disabled={sendMutation.isPending}
-                className="text-[#5865F2] border-[#5865F2]/30 hover:bg-[#5865F2]/10"
-                data-testid="button-send-discord"
-              >
-                {sendMutation.isPending ? (
-                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                ) : (
-                  <Send className="h-3.5 w-3.5 mr-1.5" />
+              <div className="rounded-lg bg-[#313338] p-3 space-y-2">
+                {active.content && (
+                  <p className="text-[13px] text-[#dbdee1]">{active.content}</p>
                 )}
-                Send to Discord
-              </Button>
+                <DiscordEmbed msg={active} />
+              </div>
+
+              <div className="flex items-center justify-end">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setSendModalOpen(true)}
+                  className="text-[#5865F2] border-[#5865F2]/30 hover:bg-[#5865F2]/10"
+                  data-testid="button-send-discord"
+                >
+                  <Send className="h-3.5 w-3.5 mr-1.5" />
+                  Send to Discord
+                </Button>
+              </div>
             </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          )}
+        </CardContent>
+      </Card>
+
+      {active && (
+        <DiscordSendModal
+          preview={active}
+          signalId={signalId}
+          open={sendModalOpen}
+          onOpenChange={setSendModalOpen}
+        />
+      )}
+    </>
   );
 }
 

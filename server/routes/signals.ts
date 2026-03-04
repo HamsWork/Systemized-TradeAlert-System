@@ -5,7 +5,7 @@ import { asyncHandler } from "../lib/async-handler";
 import { getParam } from "../lib/params";
 import { processSignal } from "../services/signal-processor";
 import { executeIbkrClose } from "../services/trade-executor";
-import { sendTradeClosedManuallyDiscord, sendSignalDiscordAlert, sendTradeExecutedDiscordAlert, sendTargetHitDiscordAlert, sendStopLossHitDiscord } from "../services/discord";
+import { sendTradeClosedManuallyDiscord, sendSignalDiscordAlert, sendTargetHitDiscordAlert, sendStopLossHitDiscord, sendStopLossRaisedDiscord } from "../services/discord";
 import type { ConnectedApp } from "@shared/schema";
 import { generateDiscordPreviews } from "../services/discord-preview";
 
@@ -124,11 +124,6 @@ export function registerSignalRoutes(app: Express) {
         case "signal_alert":
           result = await sendSignalDiscordAlert(signal, app);
           break;
-        case "trade_executed":
-          result = await sendTradeExecutedDiscordAlert(signal, app, {
-            orderId: 0, status: "manual_send", symbol: ticker, side: data.direction === "Short" || data.direction === "Put" ? "sell" : "buy", quantity: 1,
-          });
-          break;
         case "target_hit": {
           const targetKey = req.body.targetKey || "tp1";
           const targets = data.targets || {};
@@ -137,6 +132,17 @@ export function registerSignalRoutes(app: Express) {
           await sendTargetHitDiscordAlert(signal, app, {
             key: targetKey, price: Number(t.price), takeOffPercent: Number(t.take_off_percent) || 50, raiseStopLoss: t.raise_stop_loss?.price ? Number(t.raise_stop_loss.price) : undefined,
           }, Number(t.price), ticker, data);
+          result = { sent: true, error: null };
+          break;
+        }
+        case "stop_loss_raised": {
+          const targetKey = req.body.targetKey || "tp1";
+          const targets = data.targets || {};
+          const t = targets[targetKey];
+          if (!t?.raise_stop_loss?.price) return res.status(400).json({ message: `No raise_stop_loss on ${targetKey}` });
+          const newSL = Number(t.raise_stop_loss.price);
+          const currentPrice = data.entry_price ? Number(data.entry_price) : newSL;
+          await sendStopLossRaisedDiscord(signal, app, newSL, targetKey, currentPrice, ticker, data);
           result = { sent: true, error: null };
           break;
         }
