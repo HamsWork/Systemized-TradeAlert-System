@@ -206,14 +206,27 @@ function TradeChart({ symbol, instrumentType, strike, expiration, optionType, en
     return lines;
   }, [entryPrice, tpLevels, slLevels]);
 
+  const hasIntraday = liveBars.some(b => b.time.includes("T"));
+
   const candleData = useMemo(
     () =>
       liveBars.map(bar => {
-        let t = bar.time;
-        if (/^\d{8}$/.test(t)) t = `${t.slice(0, 4)}-${t.slice(4, 6)}-${t.slice(6, 8)}`;
+        let t: string | number = bar.time;
+        if (hasIntraday) {
+          if (t.includes("T")) {
+            t = Math.floor(new Date(t + "Z").getTime() / 1000) as number;
+          } else {
+            const normalized = /^\d{8}$/.test(t)
+              ? `${t.slice(0, 4)}-${t.slice(4, 6)}-${t.slice(6, 8)}`
+              : t;
+            t = Math.floor(new Date(normalized + "T00:00:00Z").getTime() / 1000) as number;
+          }
+        } else {
+          if (/^\d{8}$/.test(t)) t = `${t.slice(0, 4)}-${t.slice(4, 6)}-${t.slice(6, 8)}`;
+        }
         return { time: t, open: bar.open, high: bar.high, low: bar.low, close: bar.close };
       }),
-    [liveBars],
+    [liveBars, hasIntraday],
   );
 
   useEffect(() => {
@@ -251,7 +264,7 @@ function TradeChart({ symbol, instrumentType, strike, expiration, optionType, en
       width: chartContainerRef.current.clientWidth,
       height: 350,
       rightPriceScale: { borderColor: isDark ? "#3f3f46" : "#e4e4e7" },
-      timeScale: { borderColor: isDark ? "#3f3f46" : "#e4e4e7" },
+      timeScale: { borderColor: isDark ? "#3f3f46" : "#e4e4e7", timeVisible: hasIntraday, secondsVisible: false },
       crosshair: {
         horzLine: { color: isDark ? "#52525b" : "#d4d4d8" },
         vertLine: { color: isDark ? "#52525b" : "#d4d4d8" },

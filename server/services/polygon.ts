@@ -57,10 +57,17 @@ interface CacheEntry {
 }
 
 const chartCache = new Map<string, CacheEntry>();
-const CACHE_TTL_MS = 5 * 60 * 1000;
-const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+const CACHE_TTL_MS = 60 * 1000;
+const REFRESH_INTERVAL_MS = 60 * 1000;
 let refreshTimer: ReturnType<typeof setInterval> | null = null;
 const trackedSymbols = new Map<string, ChartParams>();
+
+function resolveTicker(params: ChartParams): string {
+  if (params.secType === "OPT" && params.strike && params.expiration && params.right) {
+    return buildOptionsTicker(params.symbol, params.expiration, params.right, params.strike);
+  }
+  return params.symbol.toUpperCase();
+}
 
 async function fetchFromPolygon(params: ChartParams): Promise<ChartBar[]> {
   const apiKey = process.env.POLYGON_API_KEY;
@@ -69,21 +76,16 @@ async function fetchFromPolygon(params: ChartParams): Promise<ChartBar[]> {
     return [];
   }
 
-  let ticker: string;
-  if (params.secType === "OPT" && params.strike && params.expiration && params.right) {
-    ticker = buildOptionsTicker(params.symbol, params.expiration, params.right, params.strike);
-  } else {
-    ticker = params.symbol.toUpperCase();
-  }
+  const ticker = resolveTicker(params);
 
   const to = new Date();
   const from = new Date();
   from.setDate(from.getDate() - 90);
 
-  const url = `${POLYGON_BASE}/v2/aggs/ticker/${encodeURIComponent(ticker)}/range/1/day/${formatDate(from)}/${formatDate(to)}?adjusted=true&sort=asc&limit=5000&apiKey=${apiKey}`;
+  const dailyUrl = `${POLYGON_BASE}/v2/aggs/ticker/${encodeURIComponent(ticker)}/range/1/day/${formatDate(from)}/${formatDate(to)}?adjusted=true&sort=asc&limit=5000&apiKey=${apiKey}`;
 
   try {
-    const res = await fetch(url);
+    const res = await fetch(dailyUrl);
     if (!res.ok) {
       const text = await res.text();
       console.warn(`[Polygon] API error ${res.status} for ${ticker}: ${text}`);
@@ -96,7 +98,7 @@ async function fetchFromPolygon(params: ChartParams): Promise<ChartBar[]> {
       return [];
     }
 
-    return data.results.map((bar) => {
+    const dailyBars = data.results.map((bar) => {
       const d = new Date(bar.t);
       return {
         time: formatDate(d),
@@ -107,8 +109,46 @@ async function fetchFromPolygon(params: ChartParams): Promise<ChartBar[]> {
         volume: bar.v || 0,
       };
     });
+
+    const intradayBars = await fetchIntradayBars(ticker, apiKey);
+    if (intradayBars.length > 0) {
+      const todayStr = formatDate(new Date());
+      const filtered = dailyBars.filter(b => b.time !== todayStr);
+      return [...filtered, ...intradayBars];
+    }
+
+    return dailyBars;
   } catch (err: any) {
     console.warn(`[Polygon] Fetch error for ${ticker}: ${err.message}`);
+    return [];
+  }
+}
+
+async function fetchIntradayBars(ticker: string, apiKey: string): Promise<ChartBar[]> {
+  const today = new Date();
+  const todayStr = formatDate(today);
+  const url = `${POLYGON_BASE}/v2/aggs/ticker/${encodeURIComponent(ticker)}/range/5/minute/${todayStr}/${todayStr}?adjusted=true&sort=asc&limit=5000&apiKey=${apiKey}`;
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const data: PolygonAggResponse = await res.json();
+    if (!data.results || data.results.length === 0) return [];
+
+    return data.results.map((bar) => {
+      const d = new Date(bar.t);
+      const hh = String(d.getUTCHours()).padStart(2, "0");
+      const mm = String(d.getUTCMinutes()).padStart(2, "0");
+      return {
+        time: `${todayStr}T${hh}:${mm}`,
+        open: bar.o,
+        high: bar.h,
+        low: bar.l,
+        close: bar.c,
+        volume: bar.v || 0,
+      };
+    });
+  } catch {
     return [];
   }
 }
@@ -191,7 +231,56 @@ export async function prefetchSignalCharts(signals: Array<{ data: any }>): Promi
   await refreshAllTracked();
 }
 
+interface SnapshotResponse {
+  status?: string;
+  ticker?: {
+    lastTrade?: { p: number };
+    lastQuote?: { P: number; p: number };
+    min?: { c: number };
+    prevDay?: { c: number };
+    day?: { c: number };
+  };
+}
+
 export async function fetchLastPrice(ticker: string): Promise<number | null> {
+  const apiKey = process.env.POLYGON_API_KEY;
+  if (!apiKey) return null;
+
+  const isOption = ticker.startsWith("O:");
+  if (isOption) {
+    const url = `${POLYGON_BASE}/v3/snapshot/options/${encodeURIComponent(ticker)}?apiKey=${apiKey}`;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) {
+        return fetchLastPriceFallback(ticker);
+      }
+      const data = await res.json();
+      const result = data.results;
+      if (!result) return fetchLastPriceFallback(ticker);
+      const price = result.last_trade?.price ?? result.day?.close ?? result.prev_day?.close ?? null;
+      return price;
+    } catch {
+      return fetchLastPriceFallback(ticker);
+    }
+  }
+
+  const url = `${POLYGON_BASE}/v2/snapshot/locale/us/markets/stocks/tickers/${encodeURIComponent(ticker.toUpperCase())}?apiKey=${apiKey}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      return fetchLastPriceFallback(ticker);
+    }
+    const data: SnapshotResponse = await res.json();
+    const snap = data.ticker;
+    if (!snap) return fetchLastPriceFallback(ticker);
+    const price = snap.lastTrade?.p ?? snap.min?.c ?? snap.day?.c ?? snap.prevDay?.c ?? null;
+    return price;
+  } catch {
+    return fetchLastPriceFallback(ticker);
+  }
+}
+
+async function fetchLastPriceFallback(ticker: string): Promise<number | null> {
   const apiKey = process.env.POLYGON_API_KEY;
   if (!apiKey) return null;
 
