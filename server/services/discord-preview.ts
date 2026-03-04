@@ -393,7 +393,5 @@ export function generateDiscordPreviews(signal: Signal): DiscordPreviewMessage[]
   const stopLoss = buildStopLossHitEmbed(data, ticker);
   if (stopLoss) previews.push(stopLoss);
 
-  previews.push(buildTradeClosedEmbed(data, ticker));
-
   return previews;
 }

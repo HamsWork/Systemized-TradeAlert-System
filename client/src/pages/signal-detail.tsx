@@ -809,7 +809,6 @@ function DiscordPreviewSection({ signalId, open }: { signalId: string; open: boo
     target_hit: "text-emerald-500 bg-emerald-500/10 border-emerald-500/30",
     stop_loss_raised: "text-amber-500 bg-amber-500/10 border-amber-500/30",
     stop_loss_hit: "text-red-500 bg-red-500/10 border-red-500/30",
-    trade_closed_manually: "text-zinc-400 bg-zinc-400/10 border-zinc-400/30",
   };
 
   const active = previews[activePreview] || previews[0];
