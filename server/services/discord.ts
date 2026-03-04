@@ -151,6 +151,19 @@ function getWebhookForInstrument(
   }
 }
 
+function resolveWebhookUrl(
+  signal: Signal,
+  app: ConnectedApp | null,
+  instrumentType: string,
+): string | null {
+  const data = (signal.data || {}) as Record<string, any>;
+  if (data.discord_webhook_url && typeof data.discord_webhook_url === "string") {
+    return data.discord_webhook_url;
+  }
+  if (!app) return null;
+  return getWebhookForInstrument(app, instrumentType);
+}
+
 function fmtPct(base: number | null, target: number): string {
   if (!base || base === 0) return "?";
   return `${(((target - base) / base) * 100).toFixed(1)}%`;
@@ -817,10 +830,11 @@ export async function sendTargetHitDiscordAlert(
   ticker: string,
   data: Record<string, any>,
 ): Promise<void> {
-  if (!app || !app.sendDiscordMessages) return;
-
+  const signalData = (signal.data || {}) as Record<string, any>;
+  const hasSignalWebhook = !!signalData.discord_webhook_url;
+  if (!hasSignalWebhook && (!app || !app.sendDiscordMessages)) return;
   const instrumentType = data.instrument_type || "Shares";
-  const webhookUrl = getWebhookForInstrument(app, instrumentType);
+  const webhookUrl = resolveWebhookUrl(signal, app, instrumentType);
   if (!webhookUrl) return;
 
   const entryPrice = data.entry_price ? Number(data.entry_price) : null;
@@ -848,8 +862,8 @@ export async function sendTargetHitDiscordAlert(
     status: sent ? "sent" : "error",
     messageType: "target_hit",
     embedData: { ticker, targetKey: target.key, currentPrice },
-    sourceAppId: app.id,
-    sourceAppName: app.name,
+    sourceAppId: app?.id ?? null,
+    sourceAppName: app?.name ?? null,
   }).catch(() => {});
 }
 
@@ -911,10 +925,11 @@ export async function sendStopLossRaisedDiscord(
   ticker: string,
   data: Record<string, any>,
 ): Promise<void> {
-  if (!app || !app.sendDiscordMessages) return;
-
+  const signalData = (signal.data || {}) as Record<string, any>;
+  const hasSignalWebhook = !!signalData.discord_webhook_url;
+  if (!hasSignalWebhook && (!app || !app.sendDiscordMessages)) return;
   const instrumentType = data.instrument_type || "Shares";
-  const webhookUrl = getWebhookForInstrument(app, instrumentType);
+  const webhookUrl = resolveWebhookUrl(signal, app, instrumentType);
   if (!webhookUrl) return;
 
   const embed = buildStopLossRaisedEmbed(data, ticker, targetKey, newStopLoss);
@@ -928,8 +943,8 @@ export async function sendStopLossRaisedDiscord(
     status: sent ? "sent" : "error",
     messageType: "stop_loss_raised",
     embedData: { ticker, targetKey, newStopLoss, currentPrice },
-    sourceAppId: app.id,
-    sourceAppName: app.name,
+    sourceAppId: app?.id ?? null,
+    sourceAppName: app?.name ?? null,
   }).catch(() => {});
 }
 
@@ -944,10 +959,11 @@ export async function sendStopLossHitDiscord(
   ticker: string,
   data: Record<string, any>,
 ): Promise<void> {
-  if (!app || !app.sendDiscordMessages) return;
-
+  const signalData = (signal.data || {}) as Record<string, any>;
+  const hasSignalWebhook = !!signalData.discord_webhook_url;
+  if (!hasSignalWebhook && (!app || !app.sendDiscordMessages)) return;
   const instrumentType = data.instrument_type || "Shares";
-  const webhookUrl = getWebhookForInstrument(app, instrumentType);
+  const webhookUrl = resolveWebhookUrl(signal, app, instrumentType);
   if (!webhookUrl) return;
 
   const embed = buildStopLossHitEmbed(data, ticker, stopLoss);
@@ -975,10 +991,11 @@ export async function sendTradeClosedManuallyDiscord(
   ticker: string,
   data: Record<string, any>,
 ): Promise<void> {
-  if (!app || !app.sendDiscordMessages) return;
-
+  const signalData = (signal.data || {}) as Record<string, any>;
+  const hasSignalWebhook = !!signalData.discord_webhook_url;
+  if (!hasSignalWebhook && (!app || !app.sendDiscordMessages)) return;
   const instrumentType = data.instrument_type || "Shares";
-  const webhookUrl = getWebhookForInstrument(app, instrumentType);
+  const webhookUrl = resolveWebhookUrl(signal, app, instrumentType);
   if (!webhookUrl) return;
 
   const embed = buildTradeClosedEmbed(data, ticker);
@@ -992,8 +1009,8 @@ export async function sendTradeClosedManuallyDiscord(
     status: sent ? "sent" : "error",
     messageType: "trade_closed_manually",
     embedData: { ticker },
-    sourceAppId: app.id,
-    sourceAppName: app.name,
+    sourceAppId: app?.id ?? null,
+    sourceAppName: app?.name ?? null,
   }).catch(() => {});
 }
 
@@ -1014,9 +1031,15 @@ export async function sendSignalDiscordAlert(
   const ticker = data.ticker || "UNKNOWN";
   const direction = data.direction || "Long";
   const instrumentType = data.instrument_type || "Options";
-  const webhookUrl = useOverride
-    ? overrideWebhookUrl!.trim()
-    : getWebhookForInstrument(app, instrumentType);
+
+  let webhookUrl: string | null = null;
+  if (useOverride) {
+    webhookUrl = overrideWebhookUrl!.trim();
+  } else if (data.discord_webhook_url) {
+    webhookUrl = data.discord_webhook_url;
+  } else {
+    webhookUrl = getWebhookForInstrument(app, instrumentType);
+  }
 
   if (!webhookUrl) {
     console.log(
@@ -1026,6 +1049,11 @@ export async function sendSignalDiscordAlert(
       sent: false,
       error: `No webhook configured for ${instrumentType} on app ${app.name}`,
     };
+  }
+
+  if (!data.discord_webhook_url) {
+    const updatedData = { ...data, discord_webhook_url: webhookUrl };
+    await storage.updateSignal(signal.id, { data: updatedData }).catch(() => {});
   }
 
   const embed = buildSignalAlertEmbed(data, ticker);
