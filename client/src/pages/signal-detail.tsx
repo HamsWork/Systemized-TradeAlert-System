@@ -801,7 +801,11 @@ function DiscordSendModal({ preview, signalId, open, onOpenChange }: {
         body.customPayload = JSON.parse(jsonText);
       }
       const res = await apiRequest("POST", `/api/signals/${encodeURIComponent(signalId)}/send-discord`, body);
-      return res.json();
+      const result = await res.json();
+      if (result.sent === false) {
+        throw new Error(result.error || "Discord webhook delivery failed");
+      }
+      return result;
     },
     onSuccess: () => {
       toast({ title: "Sent", description: `Discord ${preview.label} message sent` });

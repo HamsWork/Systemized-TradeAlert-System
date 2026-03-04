@@ -16,7 +16,7 @@ import {
 } from "../services/discord";
 
 import type { ConnectedApp } from "@shared/schema";
-import { generateDiscordPreviews } from "../services/discord-preview";
+import { generateDiscordPreviews, generateAllTemplates } from "../services/discord-preview";
 
 declare global {
   namespace Express {
@@ -141,6 +141,13 @@ export function registerSignalRoutes(app: Express) {
       if (!signal) return res.status(404).json({ message: "Signal not found" });
       const previews = generateDiscordPreviews(signal);
       res.json(previews);
+    }),
+  );
+
+  app.get(
+    "/api/discord-templates",
+    asyncHandler(async (_req, res) => {
+      res.json(generateAllTemplates());
     }),
   );
 

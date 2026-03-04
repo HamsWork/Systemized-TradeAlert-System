@@ -381,6 +381,80 @@ function buildTradeClosedEmbed(data: Record<string, any>, ticker: string): Disco
   };
 }
 
+const SAMPLE_OPTIONS_DATA: Record<string, any> = {
+  ticker: "AAPL",
+  instrument_type: "Options",
+  direction: "Call",
+  entry_price: 5.20,
+  entry_underlying_price: 195.50,
+  expiration: "2026-04-18",
+  strike: 200,
+  stop_loss: 3.50,
+  time_stop: "2 days",
+  targets: {
+    tp1: { price: 7.80, take_off_percent: 50, raise_stop_loss: { price: 5.20 } },
+    tp2: { price: 10.40, take_off_percent: 100 },
+  },
+};
+
+const SAMPLE_SHARES_DATA: Record<string, any> = {
+  ticker: "MSFT",
+  instrument_type: "Shares",
+  direction: "Long",
+  entry_price: 420.00,
+  stop_loss: 410.00,
+  time_stop: "5 days",
+  targets: {
+    tp1: { price: 435.00, take_off_percent: 50, raise_stop_loss: { price: 420.00 } },
+    tp2: { price: 450.00, take_off_percent: 100 },
+  },
+};
+
+const SAMPLE_LETF_DATA: Record<string, any> = {
+  ticker: "TQQQ",
+  instrument_type: "LETF",
+  direction: "Long",
+  entry_price: 72.50,
+  entry_underlying_price: 490.00,
+  stop_loss: 68.00,
+  targets: {
+    tp1: { price: 78.00, take_off_percent: 50, raise_stop_loss: { price: 72.50 } },
+    tp2: { price: 84.00, take_off_percent: 100 },
+  },
+};
+
+interface TemplateGroup {
+  instrumentType: string;
+  ticker: string;
+  templates: DiscordPreviewMessage[];
+}
+
+export function generateAllTemplates(): TemplateGroup[] {
+  const groups: TemplateGroup[] = [];
+
+  for (const [label, sampleData] of [
+    ["Options", SAMPLE_OPTIONS_DATA],
+    ["Shares", SAMPLE_SHARES_DATA],
+    ["LETF", SAMPLE_LETF_DATA],
+  ] as const) {
+    const ticker = sampleData.ticker;
+    const templates: DiscordPreviewMessage[] = [];
+
+    templates.push(buildEntryEmbed(sampleData, ticker));
+    templates.push(...buildTargetHitEmbeds(sampleData, ticker));
+    templates.push(...buildStopLossRaisedEmbeds(sampleData, ticker));
+
+    const slHit = buildStopLossHitEmbed(sampleData, ticker);
+    if (slHit) templates.push(slHit);
+
+    templates.push(buildTradeClosedEmbed(sampleData, ticker));
+
+    groups.push({ instrumentType: label, ticker, templates });
+  }
+
+  return groups;
+}
+
 export function generateDiscordPreviews(signal: Signal): DiscordPreviewMessage[] {
   const data = (signal.data || {}) as Record<string, any>;
   const ticker = data.ticker || data.symbol || "UNKNOWN";

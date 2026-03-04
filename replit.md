@@ -53,6 +53,7 @@ Connected apps push signals to TradeSync via `POST /api/ingest/signals` using th
 7. **IBKR** (`/ibkr`) - Dedicated IBKR page with order status, open positions, and order history per connected app
 8. **Settings** (`/settings`) - System controls organized by category (signals, trading, system) with toggle switches and value inputs
 9. **System Audit** (`/audit`) - Live self-documenting system overview: scans the actual codebase to generate real-time reports of architecture, feature maps, services, endpoints, DB tables, and file statistics. Three views: System Architecture, Feature File Map, JSON Export
+10. **Discord Templates** (`/discord-templates`) - All possible Discord message templates organized by instrument type (Options/Shares/LETF). Shows 6 templates per type: Entry Signal, Target TP1/TP2 Hit, SL Raised, Stop Loss Hit, Trade Closed. Each template has expandable Discord-themed preview and "Send Manual" button that opens an editable JSON modal with signal selector for sending custom messages via webhook.
 
 ## API Routes
 
@@ -71,6 +72,7 @@ All routes prefixed with `/api`:
 - `POST /ibkr/disconnect/:integrationId` - Disconnect from IBKR for an integration
 - `GET /ibkr/chart-data?symbol=X&secType=OPT&strike=N&expiration=DATE&right=C` - Historical chart data (Polygon.io primary, IBKR fallback; supports stocks and option contracts)
 - `GET /ibkr/status` - Get connection status of all IBKR integrations
+- `GET /discord-templates` - All Discord message templates grouped by instrument type with sample data
 - `GET /dashboard/stats`
 - `GET/POST /alerts`, `GET/PATCH/DELETE /alerts/:id` (backend only, not exposed in frontend)
 - `GET /system-audit` - Live codebase scan: architecture, endpoints, DB tables, services, feature map, file stats
