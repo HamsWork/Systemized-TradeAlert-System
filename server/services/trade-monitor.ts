@@ -15,7 +15,7 @@ interface TargetInfo {
   raiseStopLoss?: number;
 }
 
-function parseTargets(data: Record<string, any>): TargetInfo[] {
+function parseTargets(data: Record<string, any>, bullish?: boolean): TargetInfo[] {
   if (!data.targets || typeof data.targets !== "object") return [];
   return Object.entries(data.targets)
     .filter(([, val]) => (val as any)?.price)
@@ -30,7 +30,7 @@ function parseTargets(data: Record<string, any>): TargetInfo[] {
           : undefined,
       };
     })
-    .sort((a, b) => a.price - b.price);
+    .sort((a, b) => bullish === false ? b.price - a.price : a.price - b.price);
 }
 
 function isBullishTrade(data: Record<string, any>): boolean {
@@ -107,7 +107,7 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
   if (!currentPrice || currentPrice <= 0) return;
 
   const bullish = isBullishTrade(data);
-  const targets = parseTargets(data);
+  const targets = parseTargets(data, bullish);
   const stopLoss = data.stop_loss ? Number(data.stop_loss) : null;
   // Target hit status and stop-loss state from signal data (DB is source of truth)
   const hitTargetsData = (data.hit_targets && typeof data.hit_targets === "object")
