@@ -832,41 +832,44 @@ export async function sendTargetHitDiscordAlert(
 
 const ORANGE = 0xf59e0b;
 
-function pushInstrumentFields(fields: DiscordField[], instrumentType: string, signal: Record<string, any>): void {
-  const entryPriceVal = signal.entry_price ?? signal.entryPrice;
-  if (instrumentType === "LETF") {
-    const letfDisplayLabel = (signal.leverage && signal.letfDirection)
-      ? `${signal.letfTicker} (${signal.leverage}x ${signal.letfDirection})`
-      : signal.letfTicker ?? "";
+function pushInstrumentFields(fields: DiscordField[], instrumentType: string, data: Record<string, any>): void {
+  const entryPrice = data.entry_price != null ? Number(data.entry_price) : null;
+  const stockPrice = data.entry_underlying_price != null ? Number(data.entry_underlying_price) : null;
+  const ticker = data.ticker || "";
+  const direction = data.direction || "Long";
 
+  if (instrumentType === "LETF") {
+    const { underlying, leverage } = getLetfUnderlyingAndLeverage(ticker);
+    const dir = direction === "Short" ? "BEAR" : "BULL";
     fields.push(
       {
         name: "\u{1F4B9} LETF",
-        value: letfDisplayLabel,
+        value: `${ticker} (${leverage}x ${dir})`,
         inline: true,
       },
       {
         name: "\u{1F4B5} LETF Entry",
-        value: entryPriceVal != null ? `$ ${Number(entryPriceVal).toFixed(2)}` : "Pending",
+        value: entryPrice != null ? fmtPrice(entryPrice) : "Pending",
         inline: true,
       },
       {
         name: "\u{1F4CA} Stock Price",
-        value: `$ ${Number(signal.underlyingStockPrice ?? 0).toFixed(2)}`,
+        value: stockPrice != null ? fmtPrice(stockPrice) : "\u2014",
         inline: true,
       },
     );
-  } else if (instrumentType === "Option") {
+  } else if (instrumentType === "Options") {
+    const right = direction === "Put" ? "PUT" : "CALL";
     fields.push(
-      { name: "\u274C Expiration", value: `${signal.expiration ?? ""}`, inline: true },
+      { name: "\u274C Expiration", value: `${data.expiration ?? "\u2014"}`, inline: true },
       {
         name: "\u270D\uFE0F Strike",
-        value: `${signal.strike ?? ""} ${signal.right ?? ""}`,
+        value: `${data.strike ?? "\u2014"} ${right}`,
         inline: true,
       },
       {
         name: "\u{1F4B5} Option Price",
-        value: `$ ${(signal.currentPrice ?? 0).toFixed(2)}`,
+        value: entryPrice != null ? fmtPrice(entryPrice) : "\u2014",
         inline: true,
       },
     );
