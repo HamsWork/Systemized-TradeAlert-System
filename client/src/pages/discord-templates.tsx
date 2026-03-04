@@ -1,10 +1,11 @@
 import { useState, useMemo, useEffect } from "react";
-import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { type InsertIntegration } from "@shared/schema";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -14,6 +15,14 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import {
   Select,
   SelectContent,
@@ -35,6 +44,119 @@ import {
   Plus,
 } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+
+const addChannelSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  channelName: z.string().min(1, "Channel name is required"),
+  webhookUrl: z.string().min(1, "Webhook URL is required"),
+});
+
+type AddChannelValues = z.infer<typeof addChannelSchema>;
+
+function AddDiscordChannelDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const { toast } = useToast();
+
+  const form = useForm<AddChannelValues>({
+    resolver: zodResolver(addChannelSchema),
+    defaultValues: { name: "", channelName: "", webhookUrl: "" },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: AddChannelValues) => {
+      const payload: InsertIntegration = {
+        type: "discord",
+        name: data.name,
+        status: "active",
+        config: { channelName: data.channelName, webhookUrl: data.webhookUrl },
+        enabled: true,
+        notifyAlerts: false,
+        notifySignals: false,
+        notifyTrades: false,
+        notifySystem: false,
+        autoTrade: false,
+        paperTrade: false,
+      };
+      const res = await apiRequest("POST", "/api/integrations", payload);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/discord/channels"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/activity"] });
+      toast({ title: "Discord channel added" });
+      form.reset();
+      onOpenChange(false);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <SiDiscord className="h-5 w-5 text-indigo-500" />
+            Add Discord Channel
+          </DialogTitle>
+          <DialogDescription>
+            Connect a Discord channel to receive notifications from TradeSync.
+          </DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit((data) => createMutation.mutate(data))} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Display Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g., Trading Alerts Channel" {...field} data-testid="input-add-discord-name" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="channelName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Channel Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="#trading-alerts" {...field} data-testid="input-add-discord-channel" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="webhookUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Webhook URL</FormLabel>
+                  <FormControl>
+                    <Input placeholder="https://discord.com/api/webhooks/..." {...field} data-testid="input-add-discord-webhook" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-create-discord-channel">
+              {createMutation.isPending ? "Adding..." : "Add Discord Channel"}
+            </Button>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 interface DiscordPreviewEmbed {
   description?: string;
@@ -181,8 +303,8 @@ function SendFromTemplateModal({ template, open, onOpenChange }: {
   onOpenChange: (open: boolean) => void;
 }) {
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
   const [selectedChannelId, setSelectedChannelId] = useState<string>("");
+  const [addChannelOpen, setAddChannelOpen] = useState(false);
   const [jsonText, setJsonText] = useState(() => buildPayloadJson(template));
   const [jsonError, setJsonError] = useState<string | null>(null);
 
@@ -217,8 +339,7 @@ function SendFromTemplateModal({ template, open, onOpenChange }: {
 
   const handleChannelChange = (value: string) => {
     if (value === "__add_new__") {
-      onOpenChange(false);
-      setLocation("/integrations");
+      setAddChannelOpen(true);
       return;
     }
     setSelectedChannelId(value);
@@ -252,6 +373,7 @@ function SendFromTemplateModal({ template, open, onOpenChange }: {
   const displayPreview = livePreview || template;
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto" data-testid="modal-send-template">
         <DialogHeader>
@@ -287,7 +409,7 @@ function SendFromTemplateModal({ template, open, onOpenChange }: {
               </SelectContent>
             </Select>
             {channels.length === 0 && !channelsQuery.isLoading && (
-              <p className="text-[11px] text-muted-foreground">No Discord channels configured. Add one via Integrations.</p>
+              <p className="text-[11px] text-muted-foreground">No Discord channels configured. Select "Add new Discord channel" above to create one.</p>
             )}
           </div>
 
@@ -351,6 +473,8 @@ function SendFromTemplateModal({ template, open, onOpenChange }: {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <AddDiscordChannelDialog open={addChannelOpen} onOpenChange={setAddChannelOpen} />
+    </>
   );
 }
 
