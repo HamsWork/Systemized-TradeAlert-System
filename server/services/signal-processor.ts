@@ -205,7 +205,7 @@ function validateIngestBody(body: Record<string, any>): string[] {
         }
         if (t.take_off_percent == null) {
           errors.push(`targets.${key}.take_off_percent is required`);
-        } else if (isNaN(Number(t.take_off_percent)) || Number(t.take_off_percent) <= 0 || Number(t.take_off_percent) > 100) {
+        } else if (isNaN(Number(t.take_off_percent)) || Number(t.take_off_percent) < 0 || Number(t.take_off_percent) > 100) {
           errors.push(`targets.${key}.take_off_percent must be a number between 0 and 100`);
         }
         if (t.raise_stop_loss != null) {
