@@ -1,13 +1,13 @@
 import type { Signal, ConnectedApp } from "@shared/schema";
 import { storage } from "../storage";
 
-interface DiscordField {
+export interface DiscordField {
   name: string;
   value: string;
   inline?: boolean;
 }
 
-interface DiscordEmbed {
+export interface DiscordEmbed {
   title?: string;
   description?: string;
   color: number;
@@ -526,6 +526,235 @@ function buildEmbedFields(
   return buildSharesFields(data, ticker, direction, entryPrice || stockPrice);
 }
 
+/** Builds the signal alert (entry) embed. Used by preview and send. */
+export function buildSignalAlertEmbed(
+  data: Record<string, any>,
+  ticker: string,
+): DiscordEmbed {
+  const direction = data.direction || "Long";
+  const entryPrice = data.entry_price != null ? Number(data.entry_price) : null;
+  const stockPrice =
+    data.entry_underlying_price != null ? Number(data.entry_underlying_price) : null;
+  const isBullish = direction === "Call" || direction === "Long";
+  const instrumentType = data.instrument_type || "Shares";
+  const { underlying: letfUnderlying } =
+    instrumentType === "LETF" ? getLetfUnderlyingAndLeverage(ticker) : { underlying: ticker };
+  const heading =
+    instrumentType === "LETF"
+      ? `**\u{1F6A8} ${letfUnderlying} \u2192 ${ticker} Swing Alert**`
+      : `**\u{1F6A8} ${ticker} Trade Alert**`;
+  const fields = buildEmbedFields(
+    instrumentType,
+    data,
+    ticker,
+    direction,
+    entryPrice,
+    stockPrice,
+  );
+  return {
+    description: heading,
+    color: isBullish ? GREEN : RED,
+    fields,
+    footer: { text: DISCLAIMER },
+  };
+}
+
+/** Builds the target hit embed. Used by preview and send. */
+export function buildTargetHitEmbed(
+  data: Record<string, any>,
+  ticker: string,
+  target: { key: string; price: number },
+): DiscordEmbed {
+  const instrumentType = data.instrument_type || "Shares";
+  const entryPrice = data.entry_price != null ? Number(data.entry_price) : null;
+  const pctProfit =
+    entryPrice && entryPrice > 0
+      ? (((target.price - entryPrice) / entryPrice) * 100).toFixed(1)
+      : null;
+  const isLETF = instrumentType === "LETF";
+  const { underlying } = getLetfUnderlyingAndLeverage(ticker);
+  const fields: DiscordField[] = [];
+  pushInstrumentFields(fields, instrumentType, data);
+  const description = isLETF
+    ? `**\u{1F3AF} ${underlying} \u2192 ${ticker} Take Profit ${target.key.toUpperCase()} HIT**`
+    : `**\u{1F3AF} ${ticker} Take Profit ${target.key.toUpperCase()} HIT**`;
+  fields.push(
+    { name: "\u2705 Entry", value: `${fmtPrice(entryPrice)}`, inline: true },
+    { name: "\u{1F3AF} TP Hit", value: `${fmtPrice(target.price)}`, inline: true },
+    { name: "\u{1F4B8} Profit", value: `${pctProfit ?? "\u2014"}`, inline: true },
+    { ...SPACER },
+    {
+      name: `\u{1F6A8} Status: TP ${target.key.toUpperCase()} Reached \u{1F6A8}`,
+      value: "\u200b",
+      inline: false,
+    },
+  );
+  const targetsArr =
+    data.targets && typeof data.targets === "object"
+      ? (Object.entries(data.targets) as [string, { price?: number }][])
+          .filter(([, v]) => v?.price)
+          .sort(([, a], [, b]) => Number(a.price) - Number(b.price))
+      : [];
+  const tp2 = targetsArr[1];
+  fields.push({
+    name: "\u{1F50D} Position Management",
+    value: `\u2705 Reduce position by 50% (lock in profit)${
+      tp2 ? `\n\u{1F3AF} Let remaining 50% ride to TP2 (${fmtPrice(Number(tp2[1].price))})` : ""
+    }`,
+    inline: false,
+  });
+  fields.push({ ...SPACER });
+  fields.push({
+    name: "\u{1F6E1}\uFE0F Risk Management",
+    value: `Raising stop loss to ${fmtPrice(entryPrice)} (break even) on remaining position to secure gains while allowing room to run.`,
+    inline: false,
+  });
+  return { description, color: GREEN, fields, footer: { text: DISCLAIMER } };
+}
+
+/** Builds the stop loss raised embed. Used by preview and send. */
+export function buildStopLossRaisedEmbed(
+  data: Record<string, any>,
+  ticker: string,
+  targetKey: string,
+  newStopLoss: number,
+): DiscordEmbed {
+  const isLETF = data.instrument_type === "LETF";
+  const { underlying } = getLetfUnderlyingAndLeverage(ticker);
+  const description = isLETF
+    ? `**\u{1F6E1}\uFE0F ${underlying} \u2192 ${ticker} Stop Loss Raised**`
+    : `**\u{1F6E1}\uFE0F ${ticker} Stop Loss Raised**`;
+  const fields: DiscordField[] = [];
+  const entryPrice = data.entry_price != null ? Number(data.entry_price) : null;
+  pushInstrumentFields(fields, data.instrument_type || "Shares", data);
+  fields.push(
+    { name: "\u2705 Entry", value: `${fmtPrice(entryPrice)}`, inline: true },
+    {
+      name: "\u{1F6E1}\uFE0F New Stop",
+      value: `${fmtPrice(newStopLoss)} (Break Even)`,
+      inline: true,
+    },
+    { name: "\u{1F4B8} Risk", value: "0% (Risk-Free)", inline: true },
+    { ...SPACER },
+    {
+      name: "\u{1F6A8} Status: Stop Loss Raised to Break Even \u{1F6A8}",
+      value: "",
+      inline: false,
+    },
+  );
+  const targetsArr =
+    data.targets && typeof data.targets === "object"
+      ? (Object.entries(data.targets) as [string, { price?: number }][])
+          .filter(([, v]) => v?.price)
+          .sort(([, a], [, b]) => Number(a.price) - Number(b.price))
+      : [];
+  const tp2 = targetsArr[1];
+  fields.push({
+    name: "\u{1F6E1}\uFE0F Risk Management",
+    value: `Stop loss raised to ${fmtPrice(newStopLoss)} (break even).\nTrade is now risk-free on remaining position.${
+      tp2 ? `\n\u{1F3AF} Remaining target: TP2 at ${fmtPrice(Number(tp2[1].price))}` : ""
+    }`,
+    inline: false,
+  });
+  return { description, color: ORANGE, fields, footer: { text: DISCLAIMER } };
+}
+
+/** Builds the stop loss hit embed. Used by preview and send. */
+export function buildStopLossHitEmbed(
+  data: Record<string, any>,
+  ticker: string,
+  stopLoss: number,
+): DiscordEmbed {
+  const instrumentType = data.instrument_type || "Shares";
+  const isLETF = instrumentType === "LETF";
+  const { underlying } = getLetfUnderlyingAndLeverage(ticker);
+  const description = isLETF
+    ? `**\u{1F6D1} ${underlying} \u2192 ${ticker} Stop Loss Hit**`
+    : `**\u{1F6D1} ${ticker} Stop Loss Hit**`;
+  const entryPrice = data.entry_price != null ? Number(data.entry_price) : null;
+  const stopLossHitPrice =
+    data.stop_loss_hit_price != null ? Number(data.stop_loss_hit_price) : stopLoss;
+  const stopLossHitPct =
+    data.stop_loss_hit_pct != null
+      ? String(data.stop_loss_hit_pct)
+      : entryPrice && entryPrice > 0
+        ? (((stopLossHitPrice - entryPrice) / entryPrice) * 100).toFixed(1)
+        : null;
+  const fields: DiscordField[] = [];
+  pushInstrumentFields(fields, instrumentType, data);
+  fields.push(
+    { name: "\u2705 Entry", value: `${fmtPrice(entryPrice)}`, inline: true },
+    {
+      name: "\u{1F6D1} Stop Hit",
+      value: stopLossHitPrice != null ? fmtPrice(stopLossHitPrice) : "\u2014",
+      inline: true,
+    },
+    {
+      name: "\u{1F4B8} Result",
+      value: stopLossHitPct ? `${stopLossHitPct}%` : "\u2014",
+      inline: true,
+    },
+    { ...SPACER },
+    {
+      name: "\u{1F6A8} Status: Stop Loss Hit \u{1F6A8}",
+      value: "\u200b",
+      inline: false,
+    },
+    {
+      name: "\u{1F6E1}\uFE0F Discipline Matters",
+      value: "Following the plan keeps you in the game for winning trades",
+      inline: false,
+    },
+  );
+  return {
+    description,
+    color: RED,
+    fields,
+    footer: { text: DISCLAIMER },
+    timestamp: new Date().toISOString(),
+  };
+}
+
+/** Builds the trade closed manually embed. Used by preview and send. */
+export function buildTradeClosedEmbed(
+  data: Record<string, any>,
+  ticker: string,
+): DiscordEmbed {
+  const instrumentType = data.instrument_type || "Shares";
+  const pnl = data.pnl != null ? Number(data.pnl) : null;
+  const emoji = pnl != null && pnl > 0 ? "\u{1F4B0}" : "\u{1F4C9}";
+  const isLETF = instrumentType === "LETF";
+  const { underlying } = getLetfUnderlyingAndLeverage(ticker);
+  const description = isLETF
+    ? `**${emoji} ${underlying} \u2192 ${ticker} Closed Manually**`
+    : `**${emoji} ${ticker} Closed Manually**`;
+  const entryPrice = data.entry_price != null ? Number(data.entry_price) : null;
+  const exitPrice = data.exit_price != null ? Number(data.exit_price) : null;
+  const pnlPct = data.pnl_pct != null ? String(data.pnl_pct) : null;
+  const rMultiple = data.r_multiple != null ? Number(data.r_multiple) : null;
+  const fields: DiscordField[] = [];
+  pushInstrumentFields(fields, instrumentType, data);
+  fields.push(
+    { name: "\u2705 Entry", value: `${fmtPrice(entryPrice)}`, inline: true },
+    { name: "\u{1F3C1} Exit", value: `${fmtPrice(exitPrice)}`, inline: true },
+    { name: "\u{1F4B8} Profit", value: `${pnlPct ?? "\u2014"}`, inline: true },
+    { ...SPACER },
+    {
+      name: "\u{1F6A8} Status: Position Closed \u{1F6A8}",
+      value: "\u200b",
+      inline: false,
+    },
+  );
+  if (pnl != null) {
+    fields.push({
+      name: "Total P&L",
+      value: `${fmtPnl(pnl)} | R-Multiple: ${rMultiple != null ? rMultiple.toFixed(2) : "\u2014"}`,
+      inline: false,
+    });
+  }
+  return { description, color: GRAY, fields, footer: { text: DISCLAIMER } };
+}
+
 export interface DiscordSendResult {
   sent: boolean;
   error: string | null;
@@ -585,45 +814,7 @@ export async function sendTargetHitDiscordAlert(
   const { underlying } = getLetfUnderlyingAndLeverage(ticker);
   const letfLabel = (data.letf_label as string) || `${ticker} (LETF)`;
 
-  const fields: DiscordField[] = [];
-  let description: string;
-  const color = GREEN;
-
-  pushInstrumentFields(fields, instrumentType, data);
-
-  description =  isLETF 
-    ? `**🎯 ${underlying} → ${ticker} Take Profit ${target.key.toUpperCase()} HIT**` 
-    : `**🎯 ${ticker} Take Profit ${target.key.toUpperCase()} HIT**`;
-
-  fields.push(
-    { name: "\u2705 Entry", value: `${fmtPrice(entryPrice)}`, inline: true },
-    { name: "\u{1F3AF} TP Hit", value: `${fmtPrice(target.price)}`, inline: true },
-    { name: "\u{1F4B8} Profit", value: `${pctProfit ?? "\u2014"}`, inline: true },
-    { ...SPACER },
-    { name: `\u{1F6A8} Status: TP ${target.key.toUpperCase()} Reached \u{1F6A8}`, value: "\u200b", inline: false },
-  );
-
-  const targetsArr = data.targets as Array<{ key: string; price: number }> | undefined;
-  fields.push({
-    name: "\u{1F50D} Position Management",
-    value: `\u2705 Reduce position by 50% (lock in profit)${targetsArr?.[1] ? `\n\u{1F3AF} Let remaining 50% ride to TP2 (${fmtPrice(targetsArr[1].price)})` : ""}`,
-    inline: false,
-  });
-
-  fields.push({ ...SPACER });
-  fields.push({
-    name: "\u{1F6E1}\uFE0F Risk Management",
-    value: `Raising stop loss to ${fmtPrice(entryPrice)} (break even) on remaining position to secure gains while allowing room to run.`,
-    inline: false,
-  });
-
-  const embed: DiscordEmbed = {
-    description,
-    color,
-    fields,
-    footer: { text: DISCLAIMER },
-  };
-
+  const embed = buildTargetHitEmbed(data, ticker, target);
   const sent = await sendWebhook(webhookUrl, "", [embed]);
 
   await storage.createDiscordMessage({
@@ -700,39 +891,7 @@ export async function sendStopLossRaisedDiscord(
   const webhookUrl = getWebhookForInstrument(app, instrumentType);
   if (!webhookUrl) return;
 
-  const isLETF = instrumentType === "LETF";
-  const { underlying } = getLetfUnderlyingAndLeverage(ticker);
-
-  const description = isLETF
-    ? `**🛡️ ${underlying} → ${ticker} Stop Loss Raised**`
-    : `**🛡️ ${ticker} Stop Loss Raised**`;
-
-  const fields: DiscordField[] = [];
-  const entryPrice = data.entry_price != null ? Number(data.entry_price) : null;
-  pushInstrumentFields(fields, instrumentType, data);
-
-  fields.push(
-    { name: "\u2705 Entry", value: `${fmtPrice(entryPrice)}`, inline: true },
-    { name: "\u{1F6E1}\uFE0F New Stop", value: `${fmtPrice(newStopLoss)} (Break Even)`, inline: true },
-    { name: "\u{1F4B8} Risk", value: `0% (Risk-Free)`, inline: true },
-    { ...SPACER },
-    { name: "\u{1F6A8} Status: Stop Loss Raised to Break Even \u{1F6A8}", value: "", inline: false },
-  );
-
-  const targetsArr = data.targets as Array<{ key: string; price: number }> | undefined;
-  fields.push({
-    name: "\u{1F6E1}\uFE0F Risk Management",
-    value: `Stop loss raised to ${fmtPrice(newStopLoss)} (break even).\nTrade is now risk-free on remaining position.${targetsArr?.[1] ? `\n\u{1F3AF} Remaining target: TP2 at ${fmtPrice(targetsArr[1].price)}` : ""}`,
-    inline: false,
-  });
-
-  const embed: DiscordEmbed = {
-    description,
-    color: ORANGE,
-    fields,
-    footer: { text: DISCLAIMER },
-  };
-
+  const embed = buildStopLossRaisedEmbed(data, ticker, targetKey, newStopLoss);
   const sent = await sendWebhook(webhookUrl, "", [embed]);
 
   await storage.createDiscordMessage({
@@ -765,35 +924,7 @@ export async function sendStopLossHitDiscord(
   const webhookUrl = getWebhookForInstrument(app, instrumentType);
   if (!webhookUrl) return;
 
-  const isLETF = instrumentType === "LETF";
-  const { underlying } = getLetfUnderlyingAndLeverage(ticker);
-  const description = isLETF
-    ? `**🛑 ${underlying} → ${ticker} Stop Loss Hit**`
-    : `**🛑 ${ticker} Stop Loss Hit**`;
-
-  const entryPrice = data.entry_price != null ? Number(data.entry_price) : null;
-  const stopLossHitPrice = data.stop_loss_hit_price != null ? Number(data.stop_loss_hit_price) : null;
-  const stopLossHitPct = data.stop_loss_hit_pct != null ? String(data.stop_loss_hit_pct) : null;
-
-  const fields: DiscordField[] = [];
-  pushInstrumentFields(fields, instrumentType, data);
-
-  fields.push(
-    { name: "\u2705 Entry", value: `${fmtPrice(entryPrice)}`, inline: true },
-    { name: "\u{1F6D1} Stop Hit", value: `${stopLossHitPrice != null ? fmtPrice(stopLossHitPrice) : "\u2014"}`, inline: true },
-    { name: "\u{1F4B8} Result", value: `${stopLossHitPct ? `${stopLossHitPct}%` : "\u2014"}`, inline: true },
-    { ...SPACER },
-    { name: "\u{1F6A8} Status: Stop Loss Hit \u{1F6A8}", value: "\u200b", inline: false },
-  );
-
-  const embed: DiscordEmbed = {
-    description,
-    color: RED,
-    fields,
-    footer: { text: DISCLAIMER },
-    timestamp: new Date().toISOString(),
-  };
-
+  const embed = buildStopLossHitEmbed(data, ticker, stopLoss);
   const sent = await sendWebhook(webhookUrl, "@everyone", [embed]);
 
   await storage.createDiscordMessage({
@@ -824,45 +955,7 @@ export async function sendTradeClosedManuallyDiscord(
   const webhookUrl = getWebhookForInstrument(app, instrumentType);
   if (!webhookUrl) return;
 
-  const pnl = data.pnl != null ? Number(data.pnl) : null;
-  const emoji = pnl != null && pnl > 0 ? "\u{1F4B0}" : "\u{1F4C9}";
-  const isLETF = instrumentType === "LETF";
-  const { underlying } = getLetfUnderlyingAndLeverage(ticker);
-
-  const description = isLETF
-    ? `**${emoji} ${underlying} → ${ticker} Closed Manually**`
-    : `**${emoji} ${ticker} Closed Manually**`;
-
-  const fields: DiscordField[] = [];
-  const entryPrice = data.entry_price != null ? Number(data.entry_price) : null;
-  const exitPrice = data.exit_price != null ? Number(data.exit_price) : null;
-  const pnlPct = data.pnl_pct != null ? String(data.pnl_pct) : null;
-  const rMultiple = data.r_multiple != null ? Number(data.r_multiple) : null;
-  pushInstrumentFields(fields, instrumentType, data);
-
-  fields.push(
-    { name: "\u2705 Entry", value: `${fmtPrice(entryPrice)}`, inline: true },
-    { name: "\u{1F3C1} Exit", value: `${fmtPrice(exitPrice)}`, inline: true },
-    { name: "\u{1F4B8} Profit", value: `${pnlPct ?? "\u2014"}`, inline: true },
-    { ...SPACER },
-    { name: "\u{1F6A8} Status: Position Closed \u{1F6A8}", value: "\u200b", inline: false },
-  );
-
-  if (pnl != null) {
-    fields.push({
-      name: "Total P&L",
-      value: `${fmtPnl(pnl)} | R-Multiple: ${rMultiple != null ? rMultiple.toFixed(2) : "\u2014"}`,
-      inline: false,
-    });
-  }
-
-  const embed: DiscordEmbed = {
-    description,
-    color: GRAY,
-    fields,
-    footer: { text: DISCLAIMER },
-  };
-
+  const embed = buildTradeClosedEmbed(data, ticker);
   const sent = await sendWebhook(webhookUrl, "", [embed]);
 
   await storage.createDiscordMessage({
@@ -893,6 +986,7 @@ export async function sendSignalDiscordAlert(
 
   const data = signal.data as Record<string, any>;
   const ticker = data.ticker || "UNKNOWN";
+  const direction = data.direction || "Long";
   const instrumentType = data.instrument_type || "Options";
   const webhookUrl = useOverride
     ? overrideWebhookUrl!.trim()
@@ -908,37 +1002,7 @@ export async function sendSignalDiscordAlert(
     };
   }
 
-  const direction = data.direction || "Long";
-  const entryPrice = data.entry_price ? Number(data.entry_price) : null;
-  const stockPrice = data.entry_underlying_price
-    ? Number(data.entry_underlying_price)
-    : null;
-  const isBullish = direction === "Call" || direction === "Long";
-  const color = isBullish ? GREEN : RED;
-
-  const { underlying: letfUnderlying } =
-    instrumentType === "LETF" ? getLetfUnderlyingAndLeverage(ticker) : { underlying: ticker };
-  const heading =
-    instrumentType === "LETF"
-      ? `**🚨 ${letfUnderlying} → ${ticker} Swing Alert**`
-      : `**🚨 ${ticker} Trade Alert**`;
-
-  const fields: DiscordField[] = buildEmbedFields(
-    instrumentType,
-    data,
-    ticker,
-    direction,
-    entryPrice,
-    stockPrice,
-  );
-
-  const embed: DiscordEmbed = {
-    description: heading,
-    color,
-    fields,
-    footer: { text: DISCLAIMER },
-  };
-
+  const embed = buildSignalAlertEmbed(data, ticker);
   let sent = false;
   let error: string | null = null;
   try {
