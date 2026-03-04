@@ -119,6 +119,8 @@ export function registerSignalRoutes(app: Express) {
       if (!app) return res.status(400).json({ message: "No source app found for this signal" });
       if (!app.sendDiscordMessages) return res.status(400).json({ message: `Discord messages are disabled for ${app.name}` });
 
+      const updateSignal = !!req.body.updateSignal;
+
       let result: { sent: boolean; error: string | null } = { sent: false, error: null };
       switch (messageType) {
         case "signal_alert":
@@ -132,6 +134,15 @@ export function registerSignalRoutes(app: Express) {
           await sendTargetHitDiscordAlert(signal, app, {
             key: targetKey, price: Number(t.price), takeOffPercent: Number(t.take_off_percent) || 50, raiseStopLoss: t.raise_stop_loss?.price ? Number(t.raise_stop_loss.price) : undefined,
           }, Number(t.price), ticker, data);
+          if (updateSignal) {
+            const updatedData = { ...data };
+            if (!updatedData.hit_targets) updatedData.hit_targets = {};
+            updatedData.hit_targets[targetKey] = { hitAt: new Date().toISOString(), price: Number(t.price) };
+            if (t.raise_stop_loss?.price) updatedData.stop_loss = Number(t.raise_stop_loss.price);
+            const allKeys = Object.keys(targets);
+            const allHit = allKeys.every(k => updatedData.hit_targets[k]);
+            await storage.updateSignal(signal.id, { data: updatedData, ...(allHit ? { status: "completed" } : {}) });
+          }
           result = { sent: true, error: null };
           break;
         }
@@ -143,6 +154,10 @@ export function registerSignalRoutes(app: Express) {
           const newSL = Number(t.raise_stop_loss.price);
           const currentPrice = data.entry_price ? Number(data.entry_price) : newSL;
           await sendStopLossRaisedDiscord(signal, app, newSL, targetKey, currentPrice, ticker, data);
+          if (updateSignal) {
+            const updatedData = { ...data, stop_loss: newSL };
+            await storage.updateSignal(signal.id, { data: updatedData });
+          }
           result = { sent: true, error: null };
           break;
         }
@@ -150,11 +165,18 @@ export function registerSignalRoutes(app: Express) {
           const stopLoss = data.stop_loss != null ? Number(data.stop_loss) : null;
           if (stopLoss == null) return res.status(400).json({ message: "No stop loss defined" });
           await sendStopLossHitDiscord(signal, app, stopLoss, stopLoss, ticker, data);
+          if (updateSignal) {
+            const updatedData = { ...data, stop_loss_hit: true, stop_loss_hit_at: new Date().toISOString(), stop_loss_hit_price: stopLoss };
+            await storage.updateSignal(signal.id, { data: updatedData, status: "stopped_out" });
+          }
           result = { sent: true, error: null };
           break;
         }
         case "trade_closed_manually":
           await sendTradeClosedManuallyDiscord(signal, app, ticker, data);
+          if (updateSignal) {
+            await storage.updateSignal(signal.id, { status: "closed" });
+          }
           result = { sent: true, error: null };
           break;
         default:

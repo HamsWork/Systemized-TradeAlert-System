@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -665,6 +666,12 @@ function extractTargetKey(preview: DiscordPreviewMsg): string | undefined {
   return undefined;
 }
 
+const UPDATE_SIGNAL_LABELS: Record<string, string> = {
+  target_hit: "Mark target as hit and update stop loss on signal",
+  stop_loss_raised: "Update stop loss level on signal",
+  stop_loss_hit: "Mark signal as stopped out",
+};
+
 function DiscordSendModal({ preview, signalId, open, onOpenChange }: {
   preview: DiscordPreviewMsg;
   signalId: string;
@@ -672,12 +679,16 @@ function DiscordSendModal({ preview, signalId, open, onOpenChange }: {
   onOpenChange: (open: boolean) => void;
 }) {
   const { toast } = useToast();
+  const [updateSignalChecked, setUpdateSignalChecked] = useState(false);
+
+  const canUpdateSignal = preview.type in UPDATE_SIGNAL_LABELS;
 
   const sendMutation = useMutation({
     mutationFn: async () => {
       const body: Record<string, any> = {
         messageType: preview.type,
         targetKey: extractTargetKey(preview),
+        updateSignal: canUpdateSignal && updateSignalChecked,
       };
       const res = await apiRequest("POST", `/api/signals/${encodeURIComponent(signalId)}/send-discord`, body);
       return res.json();
@@ -686,7 +697,11 @@ function DiscordSendModal({ preview, signalId, open, onOpenChange }: {
       toast({ title: "Sent", description: `Discord ${preview.label} message sent` });
       queryClient.invalidateQueries({ queryKey: ["/api/activity/by-signal", signalId] });
       queryClient.invalidateQueries({ queryKey: ["/api/discord-messages/by-signal", signalId] });
+      if (updateSignalChecked && canUpdateSignal) {
+        queryClient.invalidateQueries({ queryKey: ["/api/signals"] });
+      }
       onOpenChange(false);
+      setUpdateSignalChecked(false);
     },
     onError: (err: any) => {
       toast({ title: "Failed", description: err.message || "Failed to send Discord message", variant: "destructive" });
@@ -694,7 +709,7 @@ function DiscordSendModal({ preview, signalId, open, onOpenChange }: {
   });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) setUpdateSignalChecked(false); }}>
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto" data-testid="modal-discord-send">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -732,6 +747,20 @@ function DiscordSendModal({ preview, signalId, open, onOpenChange }: {
             </div>
           </div>
         </div>
+
+        {canUpdateSignal && (
+          <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2.5">
+            <Checkbox
+              id="update-signal"
+              checked={updateSignalChecked}
+              onCheckedChange={(v) => setUpdateSignalChecked(v === true)}
+              data-testid="checkbox-update-signal"
+            />
+            <label htmlFor="update-signal" className="text-sm text-foreground cursor-pointer select-none">
+              {UPDATE_SIGNAL_LABELS[preview.type]}
+            </label>
+          </div>
+        )}
 
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-discord-send">
