@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -31,8 +33,14 @@ import {
   AlertTriangle,
   MessageSquare,
   ChevronRight,
+  Send,
+  Loader2,
+  Radar,
+  Power,
 } from "lucide-react";
 import { type Signal, type IbkrOrder, type ActivityLogEntry } from "@shared/schema";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow, format } from "date-fns";
 import { createChart, ColorType, CandlestickSeries } from "lightweight-charts";
 
@@ -648,6 +656,7 @@ function DiscordEmbed({ msg }: { msg: DiscordPreviewMsg }) {
 }
 
 function DiscordPreviewSection({ signalId, open }: { signalId: string; open: boolean }) {
+  const { toast } = useToast();
   const [expanded, setExpanded] = useState(false);
   const [activePreview, setActivePreview] = useState(0);
 
@@ -660,6 +669,24 @@ function DiscordPreviewSection({ signalId, open }: { signalId: string; open: boo
     },
     enabled: !!signalId && open,
     staleTime: 60_000,
+  });
+
+  const sendMutation = useMutation({
+    mutationFn: async ({ messageType, targetKey }: { messageType: string; targetKey?: string }) => {
+      const res = await apiRequest("POST", `/api/signals/${encodeURIComponent(signalId)}/send-discord`, {
+        messageType,
+        targetKey,
+      });
+      return res.json();
+    },
+    onSuccess: (_data, variables) => {
+      toast({ title: "Sent", description: `Discord ${variables.messageType.replace(/_/g, " ")} message sent` });
+      queryClient.invalidateQueries({ queryKey: ["/api/activity/by-signal", signalId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/discord-messages/by-signal", signalId] });
+    },
+    onError: (err: any) => {
+      toast({ title: "Failed", description: err.message || "Failed to send Discord message", variant: "destructive" });
+    },
   });
 
   const previews = previewQuery.data ?? [];
@@ -692,6 +719,15 @@ function DiscordPreviewSection({ signalId, open }: { signalId: string; open: boo
   };
 
   const active = previews[activePreview] || previews[0];
+
+  const handleSend = () => {
+    const body: { messageType: string; targetKey?: string } = { messageType: active.type };
+    if (active.type === "target_hit") {
+      const match = active.label.match(/Target\s+(TP\d+)/i);
+      body.targetKey = match ? match[1].toLowerCase() : "tp1";
+    }
+    sendMutation.mutate(body);
+  };
 
   return (
     <Card data-testid="card-discord-preview">
@@ -731,6 +767,24 @@ function DiscordPreviewSection({ signalId, open }: { signalId: string; open: boo
                 <p className="text-[13px] text-[#dbdee1]">{active.content}</p>
               )}
               <DiscordEmbed msg={active} />
+            </div>
+
+            <div className="flex items-center justify-end">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleSend}
+                disabled={sendMutation.isPending}
+                className="text-[#5865F2] border-[#5865F2]/30 hover:bg-[#5865F2]/10"
+                data-testid="button-send-discord"
+              >
+                {sendMutation.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                ) : (
+                  <Send className="h-3.5 w-3.5 mr-1.5" />
+                )}
+                Send to Discord
+              </Button>
             </div>
           </div>
         )}

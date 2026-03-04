@@ -5,7 +5,7 @@ import { asyncHandler } from "../lib/async-handler";
 import { getParam } from "../lib/params";
 import { processSignal } from "../services/signal-processor";
 import { executeIbkrClose } from "../services/trade-executor";
-import { sendTradeClosedManuallyDiscord } from "../services/discord";
+import { sendTradeClosedManuallyDiscord, sendSignalDiscordAlert, sendTradeExecutedDiscordAlert, sendTargetHitDiscordAlert, sendStopLossHitDiscord } from "../services/discord";
 import type { ConnectedApp } from "@shared/schema";
 import { generateDiscordPreviews } from "../services/discord-preview";
 
@@ -78,6 +78,84 @@ export function registerSignalRoutes(app: Express) {
       if (!signal) return res.status(404).json({ message: "Signal not found" });
       const previews = generateDiscordPreviews(signal);
       res.json(previews);
+    }),
+  );
+
+  app.patch(
+    "/api/signals/:id/auto-track",
+    asyncHandler(async (req, res) => {
+      const signal = await storage.getSignal(getParam(req, "id"));
+      if (!signal) return res.status(404).json({ message: "Signal not found" });
+      const data = { ...(signal.data as Record<string, any>) };
+      const newValue = req.body.auto_track !== undefined ? !!req.body.auto_track : false;
+      data.auto_track = newValue;
+      const updated = await storage.updateSignal(signal.id, { data });
+      if (!updated) return res.status(500).json({ message: "Failed to update signal" });
+      const ticker = data.ticker || data.symbol || "";
+      await storage.createActivity({
+        type: "auto_track_changed",
+        title: `Auto-track ${newValue ? "enabled" : "disabled"}: ${ticker}`,
+        description: `Auto-track for ${ticker} has been ${newValue ? "enabled" : "disabled"}`,
+        symbol: ticker || null,
+        signalId: signal.id,
+        metadata: { auto_track: newValue },
+      }).catch(() => {});
+      res.json(updated);
+    }),
+  );
+
+  app.post(
+    "/api/signals/:id/send-discord",
+    asyncHandler(async (req, res) => {
+      const signal = await storage.getSignal(getParam(req, "id"));
+      if (!signal) return res.status(404).json({ message: "Signal not found" });
+      const { messageType } = req.body;
+      if (!messageType) return res.status(400).json({ message: "messageType is required" });
+      const data = (signal.data || {}) as Record<string, any>;
+      const ticker = data.ticker || data.symbol || "UNKNOWN";
+      const app = signal.sourceAppId
+        ? await storage.getConnectedApp(signal.sourceAppId)
+        : null;
+      if (!app) return res.status(400).json({ message: "No source app found for this signal" });
+      if (!app.sendDiscordMessages) return res.status(400).json({ message: `Discord messages are disabled for ${app.name}` });
+
+      let result: { sent: boolean; error: string | null } = { sent: false, error: null };
+      switch (messageType) {
+        case "signal_alert":
+          result = await sendSignalDiscordAlert(signal, app);
+          break;
+        case "trade_executed":
+          result = await sendTradeExecutedDiscordAlert(signal, app, {
+            orderId: 0, status: "manual_send", symbol: ticker, side: data.direction === "Short" || data.direction === "Put" ? "sell" : "buy", quantity: 1,
+          });
+          break;
+        case "target_hit": {
+          const targetKey = req.body.targetKey || "tp1";
+          const targets = data.targets || {};
+          const t = targets[targetKey];
+          if (!t?.price) return res.status(400).json({ message: `Target ${targetKey} not found` });
+          await sendTargetHitDiscordAlert(signal, app, {
+            key: targetKey, price: Number(t.price), takeOffPercent: Number(t.take_off_percent) || 50, raiseStopLoss: t.raise_stop_loss?.price ? Number(t.raise_stop_loss.price) : undefined,
+          }, Number(t.price), ticker, data);
+          result = { sent: true, error: null };
+          break;
+        }
+        case "stop_loss_hit": {
+          const stopLoss = data.stop_loss != null ? Number(data.stop_loss) : null;
+          if (stopLoss == null) return res.status(400).json({ message: "No stop loss defined" });
+          await sendStopLossHitDiscord(signal, app, stopLoss, stopLoss, ticker, data);
+          result = { sent: true, error: null };
+          break;
+        }
+        case "trade_closed_manually":
+          await sendTradeClosedManuallyDiscord(signal, app, ticker, data);
+          result = { sent: true, error: null };
+          break;
+        default:
+          return res.status(400).json({ message: `Unknown message type: ${messageType}` });
+      }
+
+      res.json(result);
     }),
   );
 
