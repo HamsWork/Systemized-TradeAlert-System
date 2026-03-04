@@ -61,7 +61,7 @@ function buildContract(data: Record<string, any>): Contract {
   const symbol = data.ticker;
   const instrumentType = data.instrument_type || "Shares";
 
-  if (instrumentType === "Options") {
+  if (instrumentType === "Options" || instrumentType === "LETF Option") {
     const right = data.direction === "Put" ? "P" : "C";
     return makeOptionContract(
       symbol,
@@ -131,7 +131,7 @@ function determineSide(data: Record<string, any>): {
   const instrumentType = data.instrument_type || "Shares";
   const direction = data.direction || "Long";
 
-  if (instrumentType === "Options") {
+  if (instrumentType === "Options" || instrumentType === "LETF Option") {
     return { side: "BUY", exitSide: OrderAction.SELL };
   }
 
@@ -505,7 +505,7 @@ export async function executeIbkrTrade(
     const secType = contract.secType === SecType.OPT ? "OPT" : "STK";
     const instrumentType = data.instrument_type || "Shares";
     const rightVal =
-      instrumentType === "Options"
+      (instrumentType === "Options" || instrumentType === "LETF Option")
         ? data.direction === "Put"
           ? "P"
           : "C"
@@ -727,9 +727,10 @@ export async function executeIbkrClose(
     0;
 
   let ib: IBApi | null = null;
-  const secType = data.instrument_type === "Options" ? "OPT" : "STK";
+  const isOption = data.instrument_type === "Options" || data.instrument_type === "LETF Option";
+  const secType = isOption ? "OPT" : "STK";
   const rightVal =
-    data.instrument_type === "Options"
+    isOption
       ? data.direction === "Put"
         ? "P"
         : "C"

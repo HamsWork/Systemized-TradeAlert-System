@@ -117,6 +117,8 @@ function CreateAppDialog({ open, onOpenChange, ibkrAccounts }: { open: boolean; 
       discordWebhookShares: "",
       discordWebhookOptions: "",
       discordWebhookLetf: "",
+      discordWebhookLetfOption: "",
+      discordWebhookCrypto: "",
       sendDiscordMessages: false,
       executeIbkrTrades: false,
       ibkrClientId: "",
@@ -265,6 +267,32 @@ function CreateAppDialog({ open, onOpenChange, ibkrAccounts }: { open: boolean; 
                   </FormItem>
                 )}
               />
+              <FormField
+                control={form.control}
+                name="discordWebhookLetfOption"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>LETF Option Webhook URL</FormLabel>
+                    <FormControl>
+                      <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-discord-letf-option" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="discordWebhookCrypto"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Crypto Webhook URL</FormLabel>
+                    <FormControl>
+                      <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-discord-crypto" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
             <div className="space-y-3 rounded-lg border p-3">
               <div className="flex items-center justify-between">
@@ -305,6 +333,8 @@ function EditAppDialog({ app, open, onOpenChange, ibkrAccounts }: { app: Connect
       discordWebhookShares: app.discordWebhookShares ?? "",
       discordWebhookOptions: app.discordWebhookOptions ?? "",
       discordWebhookLetf: app.discordWebhookLetf ?? "",
+      discordWebhookLetfOption: app.discordWebhookLetfOption ?? "",
+      discordWebhookCrypto: app.discordWebhookCrypto ?? "",
       sendDiscordMessages: app.sendDiscordMessages,
       executeIbkrTrades: app.executeIbkrTrades,
       ibkrClientId: app.ibkrClientId ?? "",
@@ -434,6 +464,32 @@ function EditAppDialog({ app, open, onOpenChange, ibkrAccounts }: { app: Connect
                   </FormItem>
                 )}
               />
+              <FormField
+                control={form.control}
+                name="discordWebhookLetfOption"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>LETF Option Webhook URL</FormLabel>
+                    <FormControl>
+                      <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-edit-discord-letf-option" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="discordWebhookCrypto"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Crypto Webhook URL</FormLabel>
+                    <FormControl>
+                      <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-edit-discord-crypto" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
             <div className="space-y-3 rounded-lg border p-3">
               <div className="flex items-center justify-between">
@@ -546,6 +602,8 @@ function AppCard({ app, onDelete, onToggleStatus, onEdit }: {
   const hasSharesWebhook = !!app.discordWebhookShares;
   const hasOptionsWebhook = !!app.discordWebhookOptions;
   const hasLetfWebhook = !!app.discordWebhookLetf;
+  const hasLetfOptionWebhook = !!app.discordWebhookLetfOption;
+  const hasCryptoWebhook = !!app.discordWebhookCrypto;
 
   return (
     <Card className="hover-elevate" data-testid={`card-app-${app.id}`}>
@@ -624,7 +682,7 @@ function AppCard({ app, onDelete, onToggleStatus, onEdit }: {
           )}
         </div>
 
-        {(hasSharesWebhook || hasOptionsWebhook || hasLetfWebhook) && (
+        {(hasSharesWebhook || hasOptionsWebhook || hasLetfWebhook || hasLetfOptionWebhook || hasCryptoWebhook) && (
           <div className="mt-3 flex items-center gap-2 flex-wrap">
             <SiDiscord className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
             {hasSharesWebhook && (
@@ -635,6 +693,12 @@ function AppCard({ app, onDelete, onToggleStatus, onEdit }: {
             )}
             {hasLetfWebhook && (
               <Badge variant="secondary" className="text-[10px] font-normal">Leveraged ETF</Badge>
+            )}
+            {hasLetfOptionWebhook && (
+              <Badge variant="secondary" className="text-[10px] font-normal">LETF Option</Badge>
+            )}
+            {hasCryptoWebhook && (
+              <Badge variant="secondary" className="text-[10px] font-normal">Crypto</Badge>
             )}
           </div>
         )}

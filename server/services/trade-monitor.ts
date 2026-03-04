@@ -35,7 +35,7 @@ function parseTargets(data: Record<string, any>): TargetInfo[] {
 
 function isBullishTrade(data: Record<string, any>): boolean {
   const instrumentType = data.instrument_type || "Shares";
-  if (instrumentType === "Options") {
+  if (instrumentType === "Options" || instrumentType === "LETF Option") {
     return data.direction === "Call";
   }
   return data.direction === "Long" || data.direction !== "Short";
@@ -92,11 +92,14 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
 
   if (!currentPrice || currentPrice <= 0) {
     const instrumentType = data.instrument_type || "Shares";
-    if (instrumentType === "Options" && data.strike != null && data.expiration && data.direction) {
+    if ((instrumentType === "Options" || instrumentType === "LETF Option") && data.strike != null && data.expiration && data.direction) {
       const right = data.direction === "Put" ? "P" : "C";
       const strikeNum = Number(data.strike);
       const result = await fetchOptionContractPrice(ticker, data.expiration, strikeNum, right);
       currentPrice = result.price ?? null;
+    } else if (instrumentType === "Crypto") {
+      // Crypto price not available via Polygon — auto-tracking requires external price updates
+      return;
     } else {
       currentPrice = await fetchStockPrice(ticker);
     }

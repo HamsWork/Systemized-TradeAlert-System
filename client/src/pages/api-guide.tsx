@@ -578,7 +578,7 @@ const sections: SectionDef[] = [
         auth: "Bearer Token (Optional)",
         params: [
           { name: "ticker", type: "string", required: true, description: "Ticker symbol (e.g., 'AAPL', 'TSLA', 'TQQQ'). For Options this is the underlying (e.g. AAPL)." },
-          { name: "instrumentType", type: "string", required: true, description: "Instrument type.", enumValues: ["Options", "Shares", "LETF"] },
+          { name: "instrumentType", type: "string", required: true, description: "Instrument type.", enumValues: ["Options", "Shares", "LETF", "LETF Option", "Crypto"] },
           { name: "direction", type: "string", required: true, description: "Trade direction. Use Call/Put for Options, Long/Short for Shares and LETF.", enumValues: ["Call", "Put", "Long", "Short"] },
           { name: "expiration", type: "string", required: false, description: "Expiration date (e.g., '2026-03-01'). Required for Options." },
           { name: "strike", type: "string", required: false, description: "Option strike price (e.g., '190'). Required for Options." },

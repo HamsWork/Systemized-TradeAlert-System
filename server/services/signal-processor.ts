@@ -25,7 +25,7 @@ interface ProcessResult {
   validationErrors: string[];
 }
 
-const VALID_INSTRUMENT_TYPES = ["Options", "Shares", "LETF"];
+const VALID_INSTRUMENT_TYPES = ["Options", "Shares", "LETF", "LETF Option", "Crypto"];
 const VALID_DIRECTIONS_OPTIONS = ["Call", "Put"];
 const VALID_DIRECTIONS_DEFAULT = ["Long", "Short"];
 const VALID_TRADE_PLAN_TYPES = ["stock_price_based", "option_price_based"];
@@ -48,6 +48,11 @@ const TDI_INSTRUMENT_MAP: Record<string, string> = {
   "OPTIONS": "Options",
   "OPT": "Options",
   "LETF": "LETF",
+  "LETF_OPTION": "LETF Option",
+  "LETF_OPT": "LETF Option",
+  "LETFOPTION": "LETF Option",
+  "CRYPTO": "Crypto",
+  "COIN": "Crypto",
 };
 
 const TDI_DIRECTION_MAP: Record<string, string> = {
@@ -73,7 +78,7 @@ function transformTdiSignal(body: Record<string, any>): Record<string, any> {
   const instrumentType = TDI_INSTRUMENT_MAP[rawInstrument] || "Shares";
 
   let direction = TDI_DIRECTION_MAP[body.direction] || body.direction || "Long";
-  if (instrumentType === "Options" && (direction === "Long" || direction === "Short")) {
+  if ((instrumentType === "Options" || instrumentType === "LETF Option") && (direction === "Long" || direction === "Short")) {
     direction = direction === "Long" ? "Call" : "Put";
   }
 
@@ -110,7 +115,7 @@ function transformTdiSignal(body: Record<string, any>): Record<string, any> {
   }
   if (Object.keys(targets).length > 0) result.targets = targets;
 
-  if (instrumentType === "Options") {
+  if (instrumentType === "Options" || instrumentType === "LETF Option") {
     if (body.expiration) result.expiration = body.expiration;
     if (body.strike) result.strike = body.strike;
 
@@ -169,16 +174,16 @@ function validateIngestBody(body: Record<string, any>): string[] {
     );
   }
 
-  const validDirections = instrumentType === "Options" ? VALID_DIRECTIONS_OPTIONS : VALID_DIRECTIONS_DEFAULT;
+  const validDirections = (instrumentType === "Options" || instrumentType === "LETF Option") ? VALID_DIRECTIONS_OPTIONS : VALID_DIRECTIONS_DEFAULT;
   if (!direction || !validDirections.includes(direction)) {
     errors.push(
       `direction is required and must be one of: ${validDirections.join(", ")}`,
     );
   }
 
-  if (instrumentType === "Options") {
-    if (!body.expiration) errors.push("expiration is required for Options");
-    if (!body.strike) errors.push("strike is required for Options");
+  if (instrumentType === "Options" || instrumentType === "LETF Option") {
+    if (!body.expiration) errors.push(`expiration is required for ${instrumentType}`);
+    if (!body.strike) errors.push(`strike is required for ${instrumentType}`);
   }
 
   if (body.entryPrice != null && (isNaN(Number(body.entryPrice)) || Number(body.entryPrice) <= 0)) {
@@ -259,7 +264,7 @@ async function buildSignalData(body: Record<string, any>): Promise<{ data: Recor
     entry_price: entryPrice ? Number(entryPrice) : null,
   };
 
-  if (instrumentType === "Options") {
+  if (instrumentType === "Options" || instrumentType === "LETF Option") {
     signalDataObj.expiration = expiration;
     signalDataObj.strike = strike;
 
@@ -293,6 +298,12 @@ async function buildSignalData(body: Record<string, any>): Promise<{ data: Recor
         signalDataObj.entry_underlying_price = stockPrice;
         console.log(`[Signal] Fetched underlying stock price from Polygon: $${stockPrice} for ${ticker}`);
       }
+    } else if (instrumentType === "LETF Option") {
+      const letfPrice = await fetchStockPrice(ticker);
+      if (letfPrice !== null) {
+        signalDataObj.entry_underlying_price = letfPrice;
+        console.log(`[Signal] Fetched LETF price from Polygon: $${letfPrice} for ${ticker}`);
+      }
     } else if (instrumentType === "LETF") {
       const underlyingSymbol = LETF_UNDERLYING[(ticker || "").toUpperCase().trim()];
       if (underlyingSymbol) {
@@ -302,6 +313,8 @@ async function buildSignalData(body: Record<string, any>): Promise<{ data: Recor
           console.log(`[Signal] Fetched underlying index price from Polygon: $${underlyingPrice} for ${ticker} (${underlyingSymbol})`);
         }
       }
+    } else if (instrumentType === "Crypto") {
+      console.log(`[Signal] Crypto signal — skipping Polygon price fetch for ${ticker}`);
     } else {
       const stockPrice = await fetchStockPrice(ticker);
       if (stockPrice !== null) {
@@ -327,7 +340,7 @@ async function buildSignalData(body: Record<string, any>): Promise<{ data: Recor
 
   signalDataObj.trade_plan_type =
     trade_plan_type ??
-    (instrumentType === "Options" ? "option_price_based" : "stock_price_based");
+    ((instrumentType === "Options" || instrumentType === "LETF Option") ? "option_price_based" : "stock_price_based");
   signalDataObj.auto_track = auto_track !== undefined ? auto_track : true;
 
   if (body.tdi_metadata) {
@@ -421,7 +434,7 @@ export async function processSignal(
     },
   }).catch(() => {});
 
-  if (instrumentType === "Options" && strike && expiration) {
+  if ((instrumentType === "Options" || instrumentType === "LETF Option") && strike && expiration) {
     const right = direction === "Put" ? "P" : "C";
     fetchPolygonBars({ symbol: ticker, secType: "STK" }).catch(() => {});
     fetchPolygonBars({
@@ -431,6 +444,8 @@ export async function processSignal(
       expiration,
       right,
     }).catch(() => {});
+  } else if (instrumentType === "Crypto") {
+    // No Polygon chart prefetch for Crypto
   } else {
     fetchPolygonBars({ symbol: ticker, secType: "STK" }).catch(() => {});
   }

@@ -142,7 +142,7 @@ function RecentSignals({ signals }: { signals: Signal[] }) {
               const data = (signal.data || {}) as Record<string, any>;
               const ticker = data.ticker || data.symbol || "";
               const instrumentType = data.instrument_type;
-              const color = instrumentType === "Options" ? "#3b82f6" : instrumentType === "LETF" ? "#f59e0b" : "#10b981";
+              const color = instrumentType === "Options" ? "#3b82f6" : instrumentType === "LETF" ? "#f59e0b" : instrumentType === "LETF Option" ? "#8b5cf6" : instrumentType === "Crypto" ? "#f97316" : "#10b981";
               return (
                 <div key={signal.id} className="flex items-center justify-between gap-3 py-2 border-b last:border-b-0" data-testid={`recent-signal-${signal.id}`}>
                   <div className="flex items-center gap-2 min-w-0 flex-1">

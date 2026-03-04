@@ -135,11 +135,17 @@ function getWebhookForInstrument(
       return app.discordWebhookShares || null;
     case "LETF":
       return app.discordWebhookLetf || null;
+    case "LETF Option":
+      return app.discordWebhookLetfOption || null;
+    case "Crypto":
+      return app.discordWebhookCrypto || null;
     default:
       return (
         app.discordWebhookOptions ||
         app.discordWebhookShares ||
         app.discordWebhookLetf ||
+        app.discordWebhookLetfOption ||
+        app.discordWebhookCrypto ||
         null
       );
   }
@@ -517,7 +523,7 @@ function buildEmbedFields(
   entryPrice: number | null,
   stockPrice: number | null,
 ): DiscordField[] {
-  if (instrumentType === "Options") {
+  if (instrumentType === "Options" || instrumentType === "LETF Option") {
     return buildOptionsFields(data, ticker, direction, entryPrice, stockPrice);
   }
   if (instrumentType === "LETF") {
@@ -538,11 +544,15 @@ export function buildSignalAlertEmbed(
   const isBullish = direction === "Call" || direction === "Long";
   const instrumentType = data.instrument_type || "Shares";
   const { underlying: letfUnderlying } =
-    instrumentType === "LETF" ? getLetfUnderlyingAndLeverage(ticker) : { underlying: ticker };
+    (instrumentType === "LETF" || instrumentType === "LETF Option") ? getLetfUnderlyingAndLeverage(ticker) : { underlying: ticker };
   const heading =
     instrumentType === "LETF"
       ? `**\u{1F6A8} ${letfUnderlying} \u2192 ${ticker} Swing Alert**`
-      : `**\u{1F6A8} ${ticker} Trade Alert**`;
+      : instrumentType === "LETF Option"
+        ? `**\u{1F6A8} ${letfUnderlying} \u2192 ${ticker} Option Alert**`
+        : instrumentType === "Crypto"
+          ? `**\u{1F6A8} ${ticker} Crypto Alert**`
+          : `**\u{1F6A8} ${ticker} Trade Alert**`;
   const fields = buildEmbedFields(
     instrumentType,
     data,
@@ -571,13 +581,16 @@ export function buildTargetHitEmbed(
     entryPrice && entryPrice > 0
       ? (((target.price - entryPrice) / entryPrice) * 100).toFixed(1)
       : null;
-  const isLETF = instrumentType === "LETF";
+  const isLETF = instrumentType === "LETF" || instrumentType === "LETF Option";
+  const isCrypto = instrumentType === "Crypto";
   const { underlying } = getLetfUnderlyingAndLeverage(ticker);
   const fields: DiscordField[] = [];
   pushInstrumentFields(fields, instrumentType, data);
   const description = isLETF
-    ? `**\u{1F3AF} ${underlying} \u2192 ${ticker} Take Profit ${target.key.toUpperCase()} HIT**`
-    : `**\u{1F3AF} ${ticker} Take Profit ${target.key.toUpperCase()} HIT**`;
+    ? `**\u{1F3AF} ${underlying} \u2192 ${ticker}${instrumentType === "LETF Option" ? " Option" : ""} Take Profit ${target.key.toUpperCase()} HIT**`
+    : isCrypto
+      ? `**\u{1F3AF} ${ticker} Crypto Take Profit ${target.key.toUpperCase()} HIT**`
+      : `**\u{1F3AF} ${ticker} Take Profit ${target.key.toUpperCase()} HIT**`;
   fields.push(
     { name: "\u2705 Entry", value: `${fmtPrice(entryPrice)}`, inline: true },
     { name: "\u{1F3AF} TP Hit", value: `${fmtPrice(target.price)}`, inline: true },
@@ -619,11 +632,15 @@ export function buildStopLossRaisedEmbed(
   targetKey: string,
   newStopLoss: number,
 ): DiscordEmbed {
-  const isLETF = data.instrument_type === "LETF";
+  const instrumentType = data.instrument_type || "Shares";
+  const isLETF = instrumentType === "LETF" || instrumentType === "LETF Option";
+  const isCrypto = instrumentType === "Crypto";
   const { underlying } = getLetfUnderlyingAndLeverage(ticker);
   const description = isLETF
-    ? `**\u{1F6E1}\uFE0F ${underlying} \u2192 ${ticker} Stop Loss Raised**`
-    : `**\u{1F6E1}\uFE0F ${ticker} Stop Loss Raised**`;
+    ? `**\u{1F6E1}\uFE0F ${underlying} \u2192 ${ticker}${instrumentType === "LETF Option" ? " Option" : ""} Stop Loss Raised**`
+    : isCrypto
+      ? `**\u{1F6E1}\uFE0F ${ticker} Crypto Stop Loss Raised**`
+      : `**\u{1F6E1}\uFE0F ${ticker} Stop Loss Raised**`;
   const fields: DiscordField[] = [];
   const entryPrice = data.entry_price != null ? Number(data.entry_price) : null;
   pushInstrumentFields(fields, data.instrument_type || "Shares", data);
@@ -666,11 +683,14 @@ export function buildStopLossHitEmbed(
   stopLoss: number,
 ): DiscordEmbed {
   const instrumentType = data.instrument_type || "Shares";
-  const isLETF = instrumentType === "LETF";
+  const isLETF = instrumentType === "LETF" || instrumentType === "LETF Option";
+  const isCrypto = instrumentType === "Crypto";
   const { underlying } = getLetfUnderlyingAndLeverage(ticker);
   const description = isLETF
-    ? `**\u{1F6D1} ${underlying} \u2192 ${ticker} Stop Loss Hit**`
-    : `**\u{1F6D1} ${ticker} Stop Loss Hit**`;
+    ? `**\u{1F6D1} ${underlying} \u2192 ${ticker}${instrumentType === "LETF Option" ? " Option" : ""} Stop Loss Hit**`
+    : isCrypto
+      ? `**\u{1F6D1} ${ticker} Crypto Stop Loss Hit**`
+      : `**\u{1F6D1} ${ticker} Stop Loss Hit**`;
   const entryPrice = data.entry_price != null ? Number(data.entry_price) : null;
   const stopLossHitPrice =
     data.stop_loss_hit_price != null ? Number(data.stop_loss_hit_price) : stopLoss;
@@ -723,11 +743,14 @@ export function buildTradeClosedEmbed(
   const instrumentType = data.instrument_type || "Shares";
   const pnl = data.pnl != null ? Number(data.pnl) : null;
   const emoji = pnl != null && pnl > 0 ? "\u{1F4B0}" : "\u{1F4C9}";
-  const isLETF = instrumentType === "LETF";
+  const isLETF = instrumentType === "LETF" || instrumentType === "LETF Option";
+  const isCrypto = instrumentType === "Crypto";
   const { underlying } = getLetfUnderlyingAndLeverage(ticker);
   const description = isLETF
-    ? `**${emoji} ${underlying} \u2192 ${ticker} Closed Manually**`
-    : `**${emoji} ${ticker} Closed Manually**`;
+    ? `**${emoji} ${underlying} \u2192 ${ticker}${instrumentType === "LETF Option" ? " Option" : ""} Closed Manually**`
+    : isCrypto
+      ? `**${emoji} ${ticker} Crypto Closed Manually**`
+      : `**${emoji} ${ticker} Closed Manually**`;
   const entryPrice = data.entry_price != null ? Number(data.entry_price) : null;
   const exitPrice = data.exit_price != null ? Number(data.exit_price) : null;
   const pnlPct = data.pnl_pct != null ? String(data.pnl_pct) : null;
@@ -858,7 +881,7 @@ function pushInstrumentFields(fields: DiscordField[], instrumentType: string, da
         inline: true,
       },
     );
-  } else if (instrumentType === "Options") {
+  } else if (instrumentType === "Options" || instrumentType === "LETF Option") {
     const right = direction === "Put" ? "PUT" : "CALL";
     fields.push(
       { name: "\u274C Expiration", value: `${data.expiration ?? "\u2014"}`, inline: true },

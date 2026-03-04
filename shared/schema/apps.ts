@@ -20,6 +20,8 @@ export const connectedApps = pgTable("connected_apps", {
   discordWebhookShares: text("discord_webhook_shares"),
   discordWebhookOptions: text("discord_webhook_options"),
   discordWebhookLetf: text("discord_webhook_letf"),
+  discordWebhookLetfOption: text("discord_webhook_letf_option"),
+  discordWebhookCrypto: text("discord_webhook_crypto"),
   executeIbkrTrades: boolean("execute_ibkr_trades").notNull().default(false),
   ibkrClientId: text("ibkr_client_id"),
   ibkrHost: text("ibkr_host"),

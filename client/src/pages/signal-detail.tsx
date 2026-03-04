@@ -97,7 +97,7 @@ function buildChartQueryUrl(params: {
 }): string {
   const qs = new URLSearchParams();
   qs.set("symbol", params.symbol);
-  if (params.instrumentType === "Options" && params.strike && params.expiration) {
+  if ((params.instrumentType === "Options" || params.instrumentType === "LETF Option") && params.strike && params.expiration) {
     qs.set("secType", "OPT");
     qs.set("strike", params.strike);
     qs.set("expiration", params.expiration);
@@ -193,7 +193,7 @@ function TradeChart({ symbol, instrumentType, strike, expiration, optionType, en
   const liveBars = barsQuery.data ?? [];
   const hasLiveData = liveBars.length > 0;
 
-  const isOption = instrumentType === "Options";
+  const isOption = instrumentType === "Options" || instrumentType === "LETF Option";
   const chartLabel = isOption && strike && expiration
     ? `${symbol} $${strike} ${expiration}`
     : symbol;
@@ -1044,7 +1044,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
   const entryPrice = data.entry_price ? parseFloat(data.entry_price) : undefined;
   const expiration = data.expiration;
   const strike = data.strike;
-  const letfInfo = instrumentType === "LETF" && ticker ? getLetfInfo(ticker) : null;
+  const letfInfo = (instrumentType === "LETF" || instrumentType === "LETF Option") && ticker ? getLetfInfo(ticker) : null;
 
   const hitTargetsData = data.hit_targets as Record<string, { hitAt: string; price: number }> | undefined;
   const isStoppedOut = signal.status === "stopped_out";
@@ -1124,7 +1124,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
           <div className="space-y-4">
             <Card data-testid="card-chart">
               <CardContent className="p-3">
-                {instrumentType === "Options" ? (
+                {(instrumentType === "Options" || instrumentType === "LETF Option") ? (
                   <OptionChartTabs
                     symbol={ticker}
                     strike={strike}
@@ -1204,7 +1204,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                     </div>
                   )}
 
-                  {instrumentType === "Options" && expiration && (
+                  {(instrumentType === "Options" || instrumentType === "LETF Option") && expiration && (
                     <div className="flex items-center justify-between" data-testid="detail-expiration">
                       <span className="text-xs text-muted-foreground flex items-center gap-1.5">
                         <Clock className="h-3 w-3" /> Expiration
@@ -1213,7 +1213,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                     </div>
                   )}
 
-                  {instrumentType === "Options" && strike && (
+                  {(instrumentType === "Options" || instrumentType === "LETF Option") && strike && (
                     <div className="flex items-center justify-between" data-testid="detail-strike">
                       <span className="text-xs text-muted-foreground flex items-center gap-1.5">
                         <Target className="h-3 w-3" /> Strike

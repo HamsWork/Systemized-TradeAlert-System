@@ -71,18 +71,23 @@ function buildEntryEmbed(
     : null;
   const isBullish = direction === "Call" || direction === "Long";
 
-  const isLETF = instrumentType === "LETF";
+  const isLETF = instrumentType === "LETF" || instrumentType === "LETF Option";
+  const isCrypto = instrumentType === "Crypto";
   const letfInfo = isLETF ? getLetfInfo(ticker) : null;
   const displayTicker =
     isLETF && letfInfo ? `${letfInfo.underlying} \u2192 ${ticker}` : ticker;
 
-  const heading = isLETF
+  const heading = instrumentType === "LETF"
     ? `**\ud83d\udea8 ${letfInfo?.underlying || ticker} \u2192 ${ticker} Swing Alert**`
-    : `**\ud83d\udea8 ${ticker} Trade Alert**`;
+    : instrumentType === "LETF Option"
+      ? `**\ud83d\udea8 ${letfInfo?.underlying || ticker} \u2192 ${ticker} Option Alert**`
+      : isCrypto
+        ? `**\ud83d\udea8 ${ticker} Crypto Alert**`
+        : `**\ud83d\udea8 ${ticker} Trade Alert**`;
 
   const fields: DiscordField[] = [];
 
-  if (instrumentType === "Options") {
+  if (instrumentType === "Options" || instrumentType === "LETF Option") {
     const right = direction === "Put" ? "PUT" : "CALL";
     const optionPrice = entryPrice;
     fields.push(
@@ -112,7 +117,7 @@ function buildEntryEmbed(
     );
     addTradePlan(fields, data, optionPrice);
     addTakeProfitPlan(fields, data, optionPrice);
-  } else if (isLETF) {
+  } else if (instrumentType === "LETF") {
     const entryForPct = stockPrice ?? entryPrice ?? 0;
     const dir = direction === "Short" ? "BEAR" : "BULL";
     fields.push(
@@ -267,7 +272,8 @@ function buildStopLossRaisedEmbeds(
   if (!targets || typeof targets !== "object") return [];
 
   const instrumentType = data.instrument_type || "Shares";
-  const isLETF = instrumentType === "LETF";
+  const isLETF = instrumentType === "LETF" || instrumentType === "LETF Option";
+  const isCrypto = instrumentType === "Crypto";
   const letfInfo = isLETF ? getLetfInfo(ticker) : null;
   const entryPrice = data.entry_price ? Number(data.entry_price) : null;
 
@@ -283,8 +289,10 @@ function buildStopLossRaisedEmbeds(
     const isBreakEven = entryPrice && Math.abs(newStopLoss - entryPrice) < 0.01;
 
     const heading = isLETF
-      ? `**\ud83d\udee1\ufe0f ${letfInfo?.underlying || ticker} \u2192 ${ticker} Stop Loss Raised**`
-      : `**\ud83d\udee1\ufe0f ${ticker} Stop Loss Raised**`;
+      ? `**\ud83d\udee1\ufe0f ${letfInfo?.underlying || ticker} \u2192 ${ticker}${instrumentType === "LETF Option" ? " Option" : ""} Stop Loss Raised**`
+      : isCrypto
+        ? `**\ud83d\udee1\ufe0f ${ticker} Crypto Stop Loss Raised**`
+        : `**\ud83d\udee1\ufe0f ${ticker} Stop Loss Raised**`;
 
     const allTargets = Object.entries(targets)
       .filter(([, v]) => (v as any)?.price)
@@ -357,7 +365,8 @@ function buildTargetHitEmbeds(
   if (!targets || typeof targets !== "object") return [];
 
   const instrumentType = data.instrument_type || "Shares";
-  const isLETF = instrumentType === "LETF";
+  const isLETF = instrumentType === "LETF" || instrumentType === "LETF Option";
+  const isCrypto = instrumentType === "Crypto";
   const letfInfo = isLETF ? getLetfInfo(ticker) : null;
   const entryPrice = data.entry_price ? Number(data.entry_price) : null;
 
@@ -374,8 +383,10 @@ function buildTargetHitEmbeds(
         : null;
 
     const heading = isLETF
-      ? `**\ud83c\udfaf ${letfInfo?.underlying || ticker} \u2192 ${ticker} Take Profit ${key.toUpperCase()} HIT**`
-      : `**\ud83c\udfaf ${ticker} Take Profit ${key.toUpperCase()} HIT**`;
+      ? `**\ud83c\udfaf ${letfInfo?.underlying || ticker} \u2192 ${ticker}${instrumentType === "LETF Option" ? " Option" : ""} Take Profit ${key.toUpperCase()} HIT**`
+      : isCrypto
+        ? `**\ud83c\udfaf ${ticker} Crypto Take Profit ${key.toUpperCase()} HIT**`
+        : `**\ud83c\udfaf ${ticker} Take Profit ${key.toUpperCase()} HIT**`;
 
     const fields: DiscordField[] = [
       { name: "\u2705 Entry", value: fmtPrice(entryPrice), inline: true },
@@ -438,7 +449,8 @@ function buildStopLossHitEmbed(
   if (data.stop_loss == null) return null;
 
   const instrumentType = data.instrument_type || "Shares";
-  const isLETF = instrumentType === "LETF";
+  const isLETF = instrumentType === "LETF" || instrumentType === "LETF Option";
+  const isCrypto = instrumentType === "Crypto";
   const letfInfo = isLETF ? getLetfInfo(ticker) : null;
   const entryPrice = data.entry_price ? Number(data.entry_price) : null;
   const stopLoss = Number(data.stop_loss);
@@ -448,8 +460,10 @@ function buildStopLossHitEmbed(
       : null;
 
   const heading = isLETF
-    ? `**\ud83d\uded1 ${letfInfo?.underlying || ticker} \u2192 ${ticker} Stop Loss Hit**`
-    : `**\ud83d\uded1 ${ticker} Stop Loss Hit**`;
+    ? `**\ud83d\uded1 ${letfInfo?.underlying || ticker} \u2192 ${ticker}${instrumentType === "LETF Option" ? " Option" : ""} Stop Loss Hit**`
+    : isCrypto
+      ? `**\ud83d\uded1 ${ticker} Crypto Stop Loss Hit**`
+      : `**\ud83d\uded1 ${ticker} Stop Loss Hit**`;
 
   const fields: DiscordField[] = [
     { name: "\u2705 Entry", value: fmtPrice(entryPrice), inline: true },
@@ -486,13 +500,16 @@ function buildTradeClosedEmbed(
   ticker: string,
 ): DiscordPreviewMessage {
   const instrumentType = data.instrument_type || "Shares";
-  const isLETF = instrumentType === "LETF";
+  const isLETF = instrumentType === "LETF" || instrumentType === "LETF Option";
+  const isCrypto = instrumentType === "Crypto";
   const letfInfo = isLETF ? getLetfInfo(ticker) : null;
   const entryPrice = data.entry_price ? Number(data.entry_price) : null;
 
   const heading = isLETF
-    ? `**\ud83d\udcb0 ${letfInfo?.underlying || ticker} \u2192 ${ticker} Closed Manually**`
-    : `**\ud83d\udcb0 ${ticker} Closed Manually**`;
+    ? `**\ud83d\udcb0 ${letfInfo?.underlying || ticker} \u2192 ${ticker}${instrumentType === "LETF Option" ? " Option" : ""} Closed Manually**`
+    : isCrypto
+      ? `**\ud83d\udcb0 ${ticker} Crypto Closed Manually**`
+      : `**\ud83d\udcb0 ${ticker} Closed Manually**`;
 
   const fields: DiscordField[] = [
     { name: "\u2705 Entry", value: fmtPrice(entryPrice), inline: true },
@@ -569,6 +586,34 @@ const SAMPLE_LETF_DATA: Record<string, any> = {
   },
 };
 
+const SAMPLE_LETF_OPTION_DATA: Record<string, any> = {
+  ticker: "TQQQ",
+  instrument_type: "LETF Option",
+  direction: "Call",
+  entry_price: 6.50,
+  entry_underlying_price: 72.50,
+  expiration: "2026-04-18",
+  strike: 80,
+  stop_loss: 4.00,
+  time_stop: "3 days",
+  targets: {
+    tp1: { price: 9.75, take_off_percent: 50, raise_stop_loss: { price: 6.50 } },
+    tp2: { price: 13.00, take_off_percent: 100 },
+  },
+};
+
+const SAMPLE_CRYPTO_DATA: Record<string, any> = {
+  ticker: "BTC",
+  instrument_type: "Crypto",
+  direction: "Long",
+  entry_price: 95000,
+  stop_loss: 92000,
+  targets: {
+    tp1: { price: 100000, take_off_percent: 50, raise_stop_loss: { price: 95000 } },
+    tp2: { price: 105000, take_off_percent: 100 },
+  },
+};
+
 interface TemplateGroup {
   instrumentType: string;
   ticker: string;
@@ -582,7 +627,9 @@ export function generateAllTemplates(): TemplateGroup[] {
     ["Options", SAMPLE_OPTIONS_DATA],
     ["Shares", SAMPLE_SHARES_DATA],
     ["LETF", SAMPLE_LETF_DATA],
-  ] as const) {
+    ["LETF Option", SAMPLE_LETF_OPTION_DATA],
+    ["Crypto", SAMPLE_CRYPTO_DATA],
+  ] as [string, Record<string, any>][]) {
     const ticker = sampleData.ticker;
     const templates: DiscordPreviewMessage[] = [];
 

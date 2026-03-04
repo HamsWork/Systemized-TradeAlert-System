@@ -45,6 +45,7 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
+  Bitcoin,
 } from "lucide-react";
 import { type Signal, type InsertSignal } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
@@ -107,7 +108,7 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
       entry_price: entryPrice || null,
     };
 
-    if (instrumentType === "Options") {
+    if (instrumentType === "Options" || instrumentType === "LETF Option") {
       data.expiration = expiration || null;
       data.strike = strike || null;
     }
@@ -163,6 +164,8 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                   <SelectItem value="Options">Options</SelectItem>
                   <SelectItem value="Shares">Shares</SelectItem>
                   <SelectItem value="LETF">Leveraged ETF</SelectItem>
+                  <SelectItem value="LETF Option">LETF Option</SelectItem>
+                  <SelectItem value="Crypto">Crypto</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -176,7 +179,7 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                   <SelectValue placeholder="Select..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {instrumentType === "Options" ? (
+                  {instrumentType === "Options" || instrumentType === "LETF Option" ? (
                     <>
                       <SelectItem value="Call">Call</SelectItem>
                       <SelectItem value="Put">Put</SelectItem>
@@ -204,7 +207,7 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
             </div>
           </div>
 
-          {instrumentType === "Options" && (
+          {(instrumentType === "Options" || instrumentType === "LETF Option") && (
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-sm font-medium mb-1.5 block">Expiration <span className="text-red-500">*</span></Label>
@@ -317,6 +320,8 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
 function getSignalIcon(instrumentType: string | undefined) {
   if (instrumentType === "Options") return <Target className="h-4 w-4 text-blue-500" />;
   if (instrumentType === "LETF") return <TrendingUp className="h-4 w-4 text-amber-500" />;
+  if (instrumentType === "LETF Option") return <Target className="h-4 w-4 text-purple-500" />;
+  if (instrumentType === "Crypto") return <Bitcoin className="h-4 w-4 text-orange-500" />;
   return <CircleDot className="h-4 w-4 text-emerald-500" />;
 }
 
@@ -458,14 +463,14 @@ function SignalCard({ signal, onDelete, onOpen }: { signal: Signal; onDelete: (i
                     <span className="font-semibold font-mono">${entryPrice}</span>
                   </div>
                 )}
-                {instrumentType === "Options" && expiration && (
+                {(instrumentType === "Options" || instrumentType === "LETF Option") && expiration && (
                   <div className="flex items-center gap-1.5" data-testid="field-expiration">
                     <Clock className="h-3.5 w-3.5 text-muted-foreground/60" />
                     <span className="text-muted-foreground text-xs">Exp</span>
                     <span className="font-medium text-xs">{expiration}</span>
                   </div>
                 )}
-                {instrumentType === "Options" && strike && (
+                {(instrumentType === "Options" || instrumentType === "LETF Option") && strike && (
                   <div className="flex items-center gap-1.5" data-testid="field-strike">
                     <Target className="h-3.5 w-3.5 text-muted-foreground/60" />
                     <span className="text-muted-foreground text-xs">Strike</span>

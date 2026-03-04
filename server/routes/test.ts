@@ -88,7 +88,7 @@ export function registerTestRoutes(app: Express) {
         const data: Record<string, any> = {
           ticker,
           instrument_type: instrumentType,
-          direction: instrumentType === "Options" ? (body.direction || "Call") : "Long",
+          direction: (instrumentType === "Options" || instrumentType === "LETF Option") ? (body.direction || "Call") : "Long",
           entry_price: entryPrice,
           entry_underlying_price: body.entry_underlying_price ?? (instrumentType === "LETF" ? 5200 : null),
           stop_loss: stopLoss,
@@ -97,7 +97,7 @@ export function registerTestRoutes(app: Express) {
             tp2: { price: Number(body.tp2Price ?? 120), take_off_percent: 50 },
           },
         };
-        if (instrumentType === "Options") {
+        if (instrumentType === "Options" || instrumentType === "LETF Option") {
           data.expiration = body.expiration ?? "2026-04-17";
           data.strike = body.strike ?? 155;
           data.right = (body.direction || "Call").toString().toLowerCase().startsWith("put") ? "PUT" : "CALL";

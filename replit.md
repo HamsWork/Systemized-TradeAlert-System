@@ -25,10 +25,10 @@ Plugged-in apps → Send signals via API → Signal Processor checks connected a
 
 ## Data Model
 
-- **Signals**: Trading signals with flexible JSON `data` field containing: ticker, instrumentType (Options/Shares/LETF), direction (Long/Short), optional entryPrice, targets (object with tp1/tp2/etc each having price + raise_stop_loss), stop_loss (number), expiration. Options also require expiration and strike. Source app tracking via sourceAppId and sourceAppName.
+- **Signals**: Trading signals with flexible JSON `data` field containing: ticker, instrumentType (Options/Shares/LETF/LETF Option/Crypto), direction (Long/Short or Call/Put for Options/LETF Option), optional entryPrice, targets (object with tp1/tp2/etc each having price + raise_stop_loss), stop_loss (number), expiration. Options and LETF Option require expiration and strike. Crypto has no expiration/strike. Source app tracking via sourceAppId and sourceAppName.
 - **Activity Log**: System event feed tracking all actions. Has `signalId` FK to link activities to signals.
 - **Discord Messages**: Record of every Discord webhook sent/attempted, linked to signals via `signalId`. Tracks webhookUrl, channelType, instrumentType, status (sent/failed/error), messageType (signal_alert/trade_executed), embedData.
-- **Connected Apps**: Plugged-in trading applications with auto-generated API keys, Discord settings (Send Discord Messages toggle + Shares/Options/Leveraged ETF webhook URLs), and IBKR settings (Execute IBKR Trades toggle + Client ID, Host IP, Port)
+- **Connected Apps**: Plugged-in trading applications with auto-generated API keys, Discord settings (Send Discord Messages toggle + Shares/Options/LETF/LETF Option/Crypto webhook URLs), and IBKR settings (Execute IBKR Trades toggle + Client ID, Host IP, Port)
 - **System Settings**: Key-value toggle/config store for system controls (signals, trading, system)
 - **Integrations**: Discord channels and IBKR trading accounts with per-integration notification and trading toggles
 - **IBKR Orders/Positions**: Trade execution records and open position tracking
@@ -53,7 +53,7 @@ Connected apps push signals to TradeSync via `POST /api/ingest/signals` using th
 7. **IBKR** (`/ibkr`) - Dedicated IBKR page with order status, open positions, and order history per connected app
 8. **Settings** (`/settings`) - System controls organized by category (signals, trading, system) with toggle switches and value inputs
 9. **System Audit** (`/audit`) - Live self-documenting system overview: scans the actual codebase to generate real-time reports of architecture, feature maps, services, endpoints, DB tables, and file statistics. Three views: System Architecture, Feature File Map, JSON Export
-10. **Discord Templates** (`/discord-templates`) - All possible Discord message templates organized by instrument type (Options/Shares/LETF). Shows 6 templates per type: Entry Signal, Target TP1/TP2 Hit, SL Raised, Stop Loss Hit, Trade Closed. Each template has expandable Discord-themed preview and "Send Manual" button that opens an editable JSON modal with signal selector for sending custom messages via webhook.
+10. **Discord Templates** (`/discord-templates`) - All possible Discord message templates organized by instrument type (Options/Shares/LETF/LETF Option/Crypto). Shows 6 templates per type: Entry Signal, Target TP1/TP2 Hit, SL Raised, Stop Loss Hit, Trade Closed. Each template has expandable Discord-themed preview and "Send Manual" button that opens an editable JSON modal with signal selector for sending custom messages via webhook.
 
 ## API Routes
 
