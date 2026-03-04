@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
@@ -40,9 +39,6 @@ import {
   Landmark,
   Wifi,
   WifiOff,
-  TrendingUp,
-  BarChart3,
-  Cpu,
   Puzzle,
   AlertTriangle,
 } from "lucide-react";
@@ -60,10 +56,6 @@ const discordFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
   channelName: z.string().min(1, "Channel name is required"),
   webhookUrl: z.string().min(1, "Webhook URL is required"),
-  serverId: z.string().optional(),
-  notifySignals: z.boolean(),
-  notifyTrades: z.boolean(),
-  notifySystem: z.boolean(),
 });
 
 const ibkrFormSchema = z.object({
@@ -86,10 +78,6 @@ function CreateDiscordDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       name: "",
       channelName: "",
       webhookUrl: "",
-      serverId: "",
-      notifySignals: true,
-      notifyTrades: false,
-      notifySystem: false,
     },
   });
 
@@ -102,13 +90,12 @@ function CreateDiscordDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         config: {
           channelName: data.channelName,
           webhookUrl: data.webhookUrl,
-          serverId: data.serverId || null,
         },
         enabled: true,
         notifyAlerts: false,
-        notifySignals: data.notifySignals,
-        notifyTrades: data.notifyTrades,
-        notifySystem: data.notifySystem,
+        notifySignals: false,
+        notifyTrades: false,
+        notifySystem: false,
         autoTrade: false,
         paperTrade: false,
       };
@@ -154,34 +141,19 @@ function CreateDiscordDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                 </FormItem>
               )}
             />
-            <div className="grid grid-cols-2 gap-3">
-              <FormField
-                control={form.control}
-                name="channelName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Channel Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="#trading-alerts" {...field} data-testid="input-discord-channel" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="serverId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Server ID</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Optional" {...field} data-testid="input-discord-server" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            <FormField
+              control={form.control}
+              name="channelName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Channel Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="#trading-alerts" {...field} data-testid="input-discord-channel" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="webhookUrl"
@@ -195,50 +167,6 @@ function CreateDiscordDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                 </FormItem>
               )}
             />
-            <div className="space-y-3 rounded-lg border p-3">
-              <p className="text-sm font-medium">Notification Settings</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-sm">
-                    <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span>Signals</span>
-                  </div>
-                  <FormField
-                    control={form.control}
-                    name="notifySignals"
-                    render={({ field }) => (
-                      <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-discord-signals" />
-                    )}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-sm">
-                    <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span>Trades</span>
-                  </div>
-                  <FormField
-                    control={form.control}
-                    name="notifyTrades"
-                    render={({ field }) => (
-                      <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-discord-trades" />
-                    )}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-sm">
-                    <Cpu className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span>System</span>
-                  </div>
-                  <FormField
-                    control={form.control}
-                    name="notifySystem"
-                    render={({ field }) => (
-                      <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-discord-system" />
-                    )}
-                  />
-                </div>
-              </div>
-            </div>
             <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-create-discord">
               {createMutation.isPending ? "Adding..." : "Add Discord Channel"}
             </Button>
@@ -561,40 +489,6 @@ function IntegrationCard({ integration, onDelete, onEdit, connectedApps = [] }: 
           </Button>
         </div>
 
-        {isDiscord && (
-          <div className="space-y-2 rounded-lg bg-muted/50 p-3">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Notification Channels</p>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs">Signals</span>
-                <Switch
-                  checked={integration.notifySignals}
-                  onCheckedChange={(checked) => handleToggle("notifySignals", checked)}
-                  className="scale-75"
-                  data-testid={`switch-integration-signals-${integration.id}`}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs">Trades</span>
-                <Switch
-                  checked={integration.notifyTrades}
-                  onCheckedChange={(checked) => handleToggle("notifyTrades", checked)}
-                  className="scale-75"
-                  data-testid={`switch-integration-trades-${integration.id}`}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs">System</span>
-                <Switch
-                  checked={integration.notifySystem}
-                  onCheckedChange={(checked) => handleToggle("notifySystem", checked)}
-                  className="scale-75"
-                  data-testid={`switch-integration-system-${integration.id}`}
-                />
-              </div>
-            </div>
-          </div>
-        )}
 
         {isIBKR && linkedApps.length > 0 && (
           <div className="space-y-1.5 rounded-lg bg-muted/50 p-3">
@@ -674,10 +568,6 @@ function EditIntegrationDialog({ integration, open, onOpenChange }: { integratio
       name: integration.name,
       channelName: config?.channelName ?? "",
       webhookUrl: config?.webhookUrl ?? "",
-      serverId: config?.serverId ?? "",
-      notifySignals: integration.notifySignals,
-      notifyTrades: integration.notifyTrades,
-      notifySystem: integration.notifySystem,
     },
   });
 
@@ -701,11 +591,7 @@ function EditIntegrationDialog({ integration, open, onOpenChange }: { integratio
           config: {
             channelName: data.channelName,
             webhookUrl: data.webhookUrl,
-            serverId: data.serverId || null,
           },
-          notifySignals: data.notifySignals,
-          notifyTrades: data.notifyTrades,
-          notifySystem: data.notifySystem,
         };
       } else {
         payload = {
@@ -764,34 +650,19 @@ function EditIntegrationDialog({ integration, open, onOpenChange }: { integratio
                   </FormItem>
                 )}
               />
-              <div className="grid grid-cols-2 gap-3">
-                <FormField
-                  control={discordForm.control}
-                  name="channelName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Channel Name</FormLabel>
-                      <FormControl>
-                        <Input {...field} data-testid="input-edit-discord-channel" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={discordForm.control}
-                  name="serverId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Server ID</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Optional" {...field} data-testid="input-edit-discord-server" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+              <FormField
+                control={discordForm.control}
+                name="channelName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Channel Name</FormLabel>
+                    <FormControl>
+                      <Input {...field} data-testid="input-edit-discord-channel" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <FormField
                 control={discordForm.control}
                 name="webhookUrl"
@@ -805,50 +676,6 @@ function EditIntegrationDialog({ integration, open, onOpenChange }: { integratio
                   </FormItem>
                 )}
               />
-              <div className="space-y-3 rounded-lg border p-3">
-                <p className="text-sm font-medium">Notification Settings</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-sm">
-                      <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span>Signals</span>
-                    </div>
-                    <FormField
-                      control={discordForm.control}
-                      name="notifySignals"
-                      render={({ field }) => (
-                        <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-edit-discord-signals" />
-                      )}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-sm">
-                      <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span>Trades</span>
-                    </div>
-                    <FormField
-                      control={discordForm.control}
-                      name="notifyTrades"
-                      render={({ field }) => (
-                        <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-edit-discord-trades" />
-                      )}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-sm">
-                      <Cpu className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span>System</span>
-                    </div>
-                    <FormField
-                      control={discordForm.control}
-                      name="notifySystem"
-                      render={({ field }) => (
-                        <Switch checked={field.value} onCheckedChange={field.onChange} data-testid="switch-edit-discord-system" />
-                      )}
-                    />
-                  </div>
-                </div>
-              </div>
               <Button type="submit" className="w-full" disabled={updateMutation.isPending} data-testid="button-save-edit-discord">
                 {updateMutation.isPending ? "Saving..." : "Save Changes"}
               </Button>
