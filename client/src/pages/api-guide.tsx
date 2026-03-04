@@ -586,6 +586,7 @@ const sections: SectionDef[] = [
           { name: "stop_loss", type: "number", required: false, description: "Stop loss price in the same space as entry_price (option / LETF / stock)." },
           { name: "auto_track", type: "boolean", required: false, description: "Enable automatic tracking of target hits and stop loss against live price. Defaults to true." },
           { name: "time_stop", type: "string", required: false, description: "Time-based stop — exit the trade by this date (e.g., '2026-03-01')." },
+          { name: "discord_channel_webhook", type: "string", required: false, description: "Optional Discord webhook URL. When set, the signal alert is sent to this channel instead of the app's configured webhooks." },
           { name: "targets", type: "json", required: false, description: "Take-profit targets. Target prices must be in the same space as entry_price (option / LETF / stock).", explanation: `The targets object defines your profit-taking strategy. Each key (tp1, tp2, etc.) maps to a target with a price (option contract price for Options, LETF price for LETF, stock price for Shares), a take_off_percent indicating how much of the position to close, and an optional raise_stop_loss that adjusts your stop loss when the target is hit.
 
 Structure:
@@ -665,6 +666,83 @@ Example:
 }`,
       },
       {
+        method: "POST",
+        path: "/api/signals/:id/target-hit",
+        description: "Manually mark a take-profit target as hit for an active signal when auto_track is false. Updates hit_targets, raises stop loss if the target defines raise_stop_loss, sends Discord alert, and creates activity. If all targets become hit, signal status is set to completed.",
+        params: [
+          { name: "id", type: "string", required: true, description: "The unique signal ID (UUID) of the active trade." },
+          { name: "targetKey", type: "string", required: true, description: "Target key to mark as hit (e.g. tp1, tp2). Must match a key in the signal's data.targets." },
+          { name: "currentPrice", type: "number", required: false, description: "Optional price at which the target was hit. If omitted, the target's price is used." },
+        ],
+        responseExample: `{
+  "id": "abc-123",
+  "data": {
+    "ticker": "AAPL",
+    "instrument_type": "Options",
+    "direction": "Call",
+    "entry_price": 31,
+    "targets": { "tp1": { "price": 40, "take_off_percent": 50 }, "tp2": { "price": 50, "take_off_percent": 50 } },
+    "stop_loss": 31,
+    "hit_targets": { "tp1": { "hitAt": "2026-03-01T14:00:00.000Z", "price": 40.5, "manual": true } }
+  },
+  "status": "active",
+  "sourceAppName": "Situ Trader",
+  "createdAt": "2026-02-26T12:00:00.000Z"
+}`,
+      },
+      {
+        method: "POST",
+        path: "/api/signals/:id/stop-loss-hit",
+        description: "Manually mark stop loss as hit for an active signal when auto_track is false. Sets stop_loss_hit, stop_loss_hit_at, stop_loss_hit_price, and signal status to \"stopped_out\"; sends Discord alert and creates activity. The signal must have data.stop_loss set.",
+        params: [
+          { name: "id", type: "string", required: true, description: "The unique signal ID (UUID) of the active trade." },
+          { name: "currentPrice", type: "number", required: false, description: "Optional price at which stop loss was hit. If omitted, the signal's stop_loss value is used." },
+        ],
+        responseExample: `{
+  "id": "abc-123",
+  "data": {
+    "ticker": "AAPL",
+    "instrument_type": "Shares",
+    "direction": "Long",
+    "entry_price": 189.5,
+    "stop_loss": 182,
+    "stop_loss_hit": true,
+    "stop_loss_hit_at": "2026-03-01T14:00:00.000Z",
+    "stop_loss_hit_price": 181.5,
+    "stop_loss_hit_manual": true
+  },
+  "status": "stopped_out",
+  "sourceAppName": "Situ Trader",
+  "createdAt": "2026-02-26T12:00:00.000Z"
+}`,
+      },
+      {
+        method: "POST",
+        path: "/api/signals/:id/stop-auto-track",
+        description: "Disable automatic target/stop-loss tracking for an active signal by setting data.auto_track to false. After this, targets and stop loss must be maintained manually via the manual APIs.",
+        params: [
+          { name: "id", type: "string", required: true, description: "The unique signal ID (UUID) of the active trade." },
+        ],
+        responseExample: `{
+  "id": "abc-123",
+  "data": {
+    "ticker": "AAPL",
+    "instrument_type": "Options",
+    "direction": "Call",
+    "entry_price": 31,
+    "targets": {
+      "tp1": { "price": 40, "take_off_percent": 50, "raise_stop_loss": { "price": 31 } },
+      "tp2": { "price": 50, "take_off_percent": 50, "raise_stop_loss": { "price": 40 } }
+    },
+    "stop_loss": 25,
+    "auto_track": false
+  },
+  "status": "active",
+  "sourceAppName": "Situ Trader",
+  "createdAt": "2026-02-26T12:00:00.000Z"
+}`,
+      },
+      {
         method: "GET",
         path: "/api/signals",
         description: "List all trading signals, ordered by most recent first.",
@@ -699,31 +777,6 @@ Example:
         description: "Get a specific signal by its unique ID.",
         params: [
           { name: "id", type: "string", required: true, description: "The unique signal ID (UUID format)." },
-        ],
-      },
-      {
-        method: "POST",
-        path: "/api/signals",
-        description: "Create a signal manually (internal use, no API key required).",
-        params: [
-          { name: "data", type: "json", required: true, description: "JSON object with signal data (ticker, instrument_type, direction, entry_price, etc.)" },
-          { name: "status", type: "string", required: false, description: "Signal status", enumValues: ["active", "closed", "expired"] },
-        ],
-      },
-      {
-        method: "PATCH",
-        path: "/api/signals/:id",
-        description: "Update an existing signal. Send only the fields you want to change.",
-        params: [
-          { name: "id", type: "string", required: true, description: "Signal ID to update" },
-        ],
-      },
-      {
-        method: "DELETE",
-        path: "/api/signals/:id",
-        description: "Delete a signal by ID.",
-        params: [
-          { name: "id", type: "string", required: true, description: "Signal ID to delete" },
         ],
       },
     ],

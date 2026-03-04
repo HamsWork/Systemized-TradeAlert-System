@@ -5,7 +5,15 @@ import { asyncHandler } from "../lib/async-handler";
 import { getParam } from "../lib/params";
 import { processSignal } from "../services/signal-processor";
 import { executeIbkrClose } from "../services/trade-executor";
-import { sendTradeClosedManuallyDiscord, sendSignalDiscordAlert, sendTargetHitDiscordAlert, sendStopLossHitDiscord, sendStopLossRaisedDiscord } from "../services/discord";
+
+import {
+  sendTradeClosedManuallyDiscord,
+  sendSignalDiscordAlert,
+  sendTargetHitDiscordAlert,
+  sendStopLossHitDiscord,
+  sendStopLossRaisedDiscord,
+} from "../services/discord";
+
 import type { ConnectedApp } from "@shared/schema";
 import { generateDiscordPreviews } from "../services/discord-preview";
 
@@ -25,23 +33,77 @@ async function authenticateApiKey(
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ message: "Authorization header with Bearer token is required" });
+    await storage
+      .createActivity({
+        type: "ingest_failed",
+        title: "Signal ingest failed: no API key",
+        description:
+          "POST /api/ingest/signals called without Authorization header. Requests must include Bearer token.",
+        symbol: null,
+        signalId: null,
+        metadata: { reason: "no_api_key", path: "/api/ingest/signals" },
+      })
+      .catch(() => {});
+    return res
+      .status(401)
+      .json({ message: "Authorization header with Bearer token is required" });
   }
 
   const apiKey = authHeader.slice(7);
   const connectedApp = await storage.getConnectedAppByApiKey(apiKey);
 
   if (!connectedApp) {
+    await storage
+      .createActivity({
+        type: "ingest_failed",
+        title: "Signal ingest failed: invalid API key",
+        description:
+          "POST /api/ingest/signals called with an invalid or unknown API key.",
+        symbol: null,
+        signalId: null,
+        metadata: { reason: "invalid_api_key", path: "/api/ingest/signals" },
+      })
+      .catch(() => {});
     return res.status(401).json({ message: "Invalid API key" });
   }
 
   if (connectedApp.status !== "active") {
+    await storage
+      .createActivity({
+        type: "ingest_failed",
+        title: "Signal ingest rejected: app inactive",
+        description: `App "${connectedApp.name}" is inactive. Enable it in TradeSync to send signals.`,
+        symbol: null,
+        signalId: null,
+        metadata: {
+          reason: "app_inactive",
+          path: "/api/ingest/signals",
+          appId: connectedApp.id,
+          appName: connectedApp.name,
+        },
+      })
+      .catch(() => {});
     return res.status(403).json({
       message: "App is inactive. Enable it in TradeSync to send signals.",
     });
   }
 
   if (!connectedApp.syncSignals) {
+    await storage
+      .createActivity({
+        type: "ingest_failed",
+        title: "Signal ingest rejected: sync disabled",
+        description: `Signal sync is disabled for app "${connectedApp.name}".`,
+        symbol: null,
+        signalId: null,
+        metadata: {
+          reason: "sync_signals_disabled",
+          path: "/api/ingest/signals",
+          appId: connectedApp.id,
+          appName: connectedApp.name,
+        },
+      })
+      .catch(() => {});
     return res
       .status(403)
       .json({ message: "Signal sync is disabled for this app." });
@@ -87,19 +149,23 @@ export function registerSignalRoutes(app: Express) {
       const signal = await storage.getSignal(getParam(req, "id"));
       if (!signal) return res.status(404).json({ message: "Signal not found" });
       const data = { ...(signal.data as Record<string, any>) };
-      const newValue = req.body.auto_track !== undefined ? !!req.body.auto_track : false;
+      const newValue =
+        req.body.auto_track !== undefined ? !!req.body.auto_track : false;
       data.auto_track = newValue;
       const updated = await storage.updateSignal(signal.id, { data });
-      if (!updated) return res.status(500).json({ message: "Failed to update signal" });
+      if (!updated)
+        return res.status(500).json({ message: "Failed to update signal" });
       const ticker = data.ticker || data.symbol || "";
-      await storage.createActivity({
-        type: "auto_track_changed",
-        title: `Auto-track ${newValue ? "enabled" : "disabled"}: ${ticker}`,
-        description: `Auto-track for ${ticker} has been ${newValue ? "enabled" : "disabled"}`,
-        symbol: ticker || null,
-        signalId: signal.id,
-        metadata: { auto_track: newValue },
-      }).catch(() => {});
+      await storage
+        .createActivity({
+          type: "auto_track_changed",
+          title: `Auto-track ${newValue ? "enabled" : "disabled"}: ${ticker}`,
+          description: `Auto-track for ${ticker} has been ${newValue ? "enabled" : "disabled"}`,
+          symbol: ticker || null,
+          signalId: signal.id,
+          metadata: { auto_track: newValue },
+        })
+        .catch(() => {});
       res.json(updated);
     }),
   );
@@ -110,18 +176,28 @@ export function registerSignalRoutes(app: Express) {
       const signal = await storage.getSignal(getParam(req, "id"));
       if (!signal) return res.status(404).json({ message: "Signal not found" });
       const { messageType } = req.body;
-      if (!messageType) return res.status(400).json({ message: "messageType is required" });
+      if (!messageType)
+        return res.status(400).json({ message: "messageType is required" });
       const data = (signal.data || {}) as Record<string, any>;
       const ticker = data.ticker || data.symbol || "UNKNOWN";
       const app = signal.sourceAppId
         ? await storage.getConnectedApp(signal.sourceAppId)
         : null;
-      if (!app) return res.status(400).json({ message: "No source app found for this signal" });
-      if (!app.sendDiscordMessages) return res.status(400).json({ message: `Discord messages are disabled for ${app.name}` });
+      if (!app)
+        return res
+          .status(400)
+          .json({ message: "No source app found for this signal" });
+      if (!app.sendDiscordMessages)
+        return res
+          .status(400)
+          .json({ message: `Discord messages are disabled for ${app.name}` });
 
       const updateSignal = !!req.body.updateSignal;
 
-      let result: { sent: boolean; error: string | null } = { sent: false, error: null };
+      let result: { sent: boolean; error: string | null } = {
+        sent: false,
+        error: null,
+      };
       switch (messageType) {
         case "signal_alert":
           result = await sendSignalDiscordAlert(signal, app);
@@ -130,18 +206,40 @@ export function registerSignalRoutes(app: Express) {
           const targetKey = req.body.targetKey || "tp1";
           const targets = data.targets || {};
           const t = targets[targetKey];
-          if (!t?.price) return res.status(400).json({ message: `Target ${targetKey} not found` });
-          await sendTargetHitDiscordAlert(signal, app, {
-            key: targetKey, price: Number(t.price), takeOffPercent: Number(t.take_off_percent) || 50, raiseStopLoss: t.raise_stop_loss?.price ? Number(t.raise_stop_loss.price) : undefined,
-          }, Number(t.price), ticker, data);
+          if (!t?.price)
+            return res
+              .status(400)
+              .json({ message: `Target ${targetKey} not found` });
+          await sendTargetHitDiscordAlert(
+            signal,
+            app,
+            {
+              key: targetKey,
+              price: Number(t.price),
+              takeOffPercent: Number(t.take_off_percent) || 50,
+              raiseStopLoss: t.raise_stop_loss?.price
+                ? Number(t.raise_stop_loss.price)
+                : undefined,
+            },
+            Number(t.price),
+            ticker,
+            data,
+          );
           if (updateSignal) {
             const updatedData = { ...data };
             if (!updatedData.hit_targets) updatedData.hit_targets = {};
-            updatedData.hit_targets[targetKey] = { hitAt: new Date().toISOString(), price: Number(t.price) };
-            if (t.raise_stop_loss?.price) updatedData.stop_loss = Number(t.raise_stop_loss.price);
+            updatedData.hit_targets[targetKey] = {
+              hitAt: new Date().toISOString(),
+              price: Number(t.price),
+            };
+            if (t.raise_stop_loss?.price)
+              updatedData.stop_loss = Number(t.raise_stop_loss.price);
             const allKeys = Object.keys(targets);
-            const allHit = allKeys.every(k => updatedData.hit_targets[k]);
-            await storage.updateSignal(signal.id, { data: updatedData, ...(allHit ? { status: "completed" } : {}) });
+            const allHit = allKeys.every((k) => updatedData.hit_targets[k]);
+            await storage.updateSignal(signal.id, {
+              data: updatedData,
+              ...(allHit ? { status: "completed" } : {}),
+            });
           }
           result = { sent: true, error: null };
           break;
@@ -150,10 +248,23 @@ export function registerSignalRoutes(app: Express) {
           const targetKey = req.body.targetKey || "tp1";
           const targets = data.targets || {};
           const t = targets[targetKey];
-          if (!t?.raise_stop_loss?.price) return res.status(400).json({ message: `No raise_stop_loss on ${targetKey}` });
+          if (!t?.raise_stop_loss?.price)
+            return res
+              .status(400)
+              .json({ message: `No raise_stop_loss on ${targetKey}` });
           const newSL = Number(t.raise_stop_loss.price);
-          const currentPrice = data.entry_price ? Number(data.entry_price) : newSL;
-          await sendStopLossRaisedDiscord(signal, app, newSL, targetKey, currentPrice, ticker, data);
+          const currentPrice = data.entry_price
+            ? Number(data.entry_price)
+            : newSL;
+          await sendStopLossRaisedDiscord(
+            signal,
+            app,
+            newSL,
+            targetKey,
+            currentPrice,
+            ticker,
+            data,
+          );
           if (updateSignal) {
             const updatedData = { ...data, stop_loss: newSL };
             await storage.updateSignal(signal.id, { data: updatedData });
@@ -162,12 +273,29 @@ export function registerSignalRoutes(app: Express) {
           break;
         }
         case "stop_loss_hit": {
-          const stopLoss = data.stop_loss != null ? Number(data.stop_loss) : null;
-          if (stopLoss == null) return res.status(400).json({ message: "No stop loss defined" });
-          await sendStopLossHitDiscord(signal, app, stopLoss, stopLoss, ticker, data);
+          const stopLoss =
+            data.stop_loss != null ? Number(data.stop_loss) : null;
+          if (stopLoss == null)
+            return res.status(400).json({ message: "No stop loss defined" });
+          await sendStopLossHitDiscord(
+            signal,
+            app,
+            stopLoss,
+            stopLoss,
+            ticker,
+            data,
+          );
           if (updateSignal) {
-            const updatedData = { ...data, stop_loss_hit: true, stop_loss_hit_at: new Date().toISOString(), stop_loss_hit_price: stopLoss };
-            await storage.updateSignal(signal.id, { data: updatedData, status: "stopped_out" });
+            const updatedData = {
+              ...data,
+              stop_loss_hit: true,
+              stop_loss_hit_at: new Date().toISOString(),
+              stop_loss_hit_price: stopLoss,
+            };
+            await storage.updateSignal(signal.id, {
+              data: updatedData,
+              status: "stopped_out",
+            });
           }
           result = { sent: true, error: null };
           break;
@@ -180,7 +308,9 @@ export function registerSignalRoutes(app: Express) {
           result = { sent: true, error: null };
           break;
         default:
-          return res.status(400).json({ message: `Unknown message type: ${messageType}` });
+          return res
+            .status(400)
+            .json({ message: `Unknown message type: ${messageType}` });
       }
 
       res.json(result);
@@ -219,46 +349,148 @@ export function registerSignalRoutes(app: Express) {
   );
 
   app.post(
+    "/api/signals/:id/target-hit",
+    asyncHandler(async (req, res) => {
+      const signal = await storage.getSignal(getParam(req, "id"));
+      if (!signal) return res.status(404).json({ message: "Signal not found" });
+      const body = (req.body || {}) as Record<string, unknown>;
+      const targetKey =
+        typeof body.targetKey === "string"
+          ? body.targetKey.trim()
+          : typeof body.target_key === "string"
+            ? body.target_key.trim()
+            : null;
+      if (!targetKey) {
+        return res.status(400).json({
+          message:
+            "targetKey (or target_key) is required and must be a non-empty string (e.g. tp1, tp2)",
+        });
+      }
+      const currentPrice =
+        typeof body.currentPrice === "number" && body.currentPrice > 0
+          ? body.currentPrice
+          : typeof body.current_price === "number" && body.current_price > 0
+            ? body.current_price
+            : null;
+      const result = await recordManualTargetHit(
+        signal,
+        targetKey,
+        currentPrice,
+      );
+      if (result.error) return res.status(400).json({ message: result.error });
+      return res.json(result.signal);
+    }),
+  );
+
+  app.post(
+    "/api/signals/:id/stop-loss-hit",
+    asyncHandler(async (req, res) => {
+      const signal = await storage.getSignal(getParam(req, "id"));
+      if (!signal) return res.status(404).json({ message: "Signal not found" });
+      const body = (req.body || {}) as Record<string, unknown>;
+      const currentPrice =
+        typeof body.currentPrice === "number" && body.currentPrice > 0
+          ? body.currentPrice
+          : typeof body.current_price === "number" && body.current_price > 0
+            ? body.current_price
+            : null;
+      const result = await recordManualStopLossHit(signal, currentPrice);
+      if (result.error) return res.status(400).json({ message: result.error });
+      return res.json(result.signal);
+    }),
+  );
+
+  app.post(
+    "/api/signals/:id/stop-auto-track",
+    asyncHandler(async (req, res) => {
+      const signal = await storage.getSignal(getParam(req, "id"));
+      if (!signal) return res.status(404).json({ message: "Signal not found" });
+      if (signal.status !== "active") {
+        return res.status(400).json({
+          message: `Signal is not active (current status: ${signal.status}). Only active signals can change auto tracking.`,
+        });
+      }
+      const data = (signal.data || {}) as Record<string, any>;
+      if (data.auto_track === false) {
+        return res.json(signal);
+      }
+      const updatedData = { ...data, auto_track: false };
+      const updated = await storage.updateSignal(signal.id, {
+        data: updatedData,
+      });
+      if (!updated)
+        return res.status(500).json({ message: "Failed to update signal" });
+
+      const ticker =
+        (data.ticker as string) || (data.symbol as string) || "Unknown";
+      await storage
+        .createActivity({
+          type: "auto_track_disabled",
+          title: `Auto tracking disabled for ${ticker}`,
+          description:
+            "Automatic target and stop-loss tracking disabled; manual control only.",
+          symbol: ticker,
+          signalId: signal.id,
+          metadata: { auto_track: false },
+        })
+        .catch(() => {});
+
+      return res.json(updated);
+    }),
+  );
+
+  app.post(
     "/api/signals/:id/close",
     asyncHandler(async (req, res) => {
       const signal = await storage.getSignal(getParam(req, "id"));
-      if (!signal)
-        return res.status(404).json({ message: "Signal not found" });
+      if (!signal) return res.status(404).json({ message: "Signal not found" });
       if (signal.status !== "active")
         return res.status(400).json({
           message: `Signal is not active (current status: ${signal.status}). Only active signals can be closed.`,
         });
 
       const data = (signal.data || {}) as Record<string, unknown>;
-      const ticker = (data.ticker as string) || (data.symbol as string) || "Unknown";
+      const ticker =
+        (data.ticker as string) || (data.symbol as string) || "Unknown";
       const app = signal.sourceAppId
         ? await storage.getConnectedApp(signal.sourceAppId)
         : null;
 
       const closeResult = await executeIbkrClose(signal, app ?? null);
-      if (closeResult.error && closeResult.executed === false && closeResult.error !== "No filled position to close for this signal") {
-        console.warn(`[Close API] IBKR close skipped or failed for ${ticker}: ${closeResult.error}`);
+      if (
+        closeResult.error &&
+        closeResult.executed === false &&
+        closeResult.error !== "No filled position to close for this signal"
+      ) {
+        console.warn(
+          `[Close API] IBKR close skipped or failed for ${ticker}: ${closeResult.error}`,
+        );
       }
 
-      const updated = await storage.updateSignal(signal.id, { status: "closed" });
-      if (!updated) return res.status(500).json({ message: "Failed to update signal" });
+      const updated = await storage.updateSignal(signal.id, {
+        status: "closed",
+      });
+      if (!updated)
+        return res.status(500).json({ message: "Failed to update signal" });
 
-      await storage.createActivity({
-        type: "trade_closed",
-        title: `Trade closed: ${ticker}`,
-        description: closeResult.executed
-          ? `Signal closed manually. IBKR close order placed (orderId: ${closeResult.orderId}, qty: ${closeResult.quantity}).`
-          : `Signal manually closed (was active).${closeResult.error ? ` IBKR: ${closeResult.error}` : ""}`,
-        symbol: ticker,
-        signalId: signal.id,
-        metadata: {
-          reason: "api_close",
-          closedManually: true,
-          sourceApp: signal.sourceAppName || null,
-          ibkrCloseOrderId: closeResult.orderId ?? null,
-          ibkrCloseExecuted: closeResult.executed,
-        },
-      }).catch(() => {});
+      await storage
+        .createActivity({
+          type: "trade_closed",
+          title: `Trade closed: ${ticker}`,
+          description: closeResult.executed
+            ? `Signal closed manually. IBKR close order placed (orderId: ${closeResult.orderId}, qty: ${closeResult.quantity}).`
+            : `Signal manually closed (was active).${closeResult.error ? ` IBKR: ${closeResult.error}` : ""}`,
+          symbol: ticker,
+          signalId: signal.id,
+          metadata: {
+            reason: "api_close",
+            closedManually: true,
+            sourceApp: signal.sourceAppName || null,
+            ibkrCloseOrderId: closeResult.orderId ?? null,
+            ibkrCloseExecuted: closeResult.executed,
+          },
+        })
+        .catch(() => {});
 
       await sendTradeClosedManuallyDiscord(
         updated,

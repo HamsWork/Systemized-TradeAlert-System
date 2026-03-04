@@ -396,11 +396,11 @@ export async function processSignal(
 
   const signalPayload = {
     data: signalDataObj,
-    discordChannelId: body.discordChannelId || null,
     status: "active",
     sourceAppId: sourceId,
     sourceAppName: sourceName,
   };
+
 
   const parsed = insertSignalSchema.parse(signalPayload);
   const signal = await storage.createSignal(parsed);
@@ -414,7 +414,11 @@ export async function processSignal(
     description: `${instrumentType} signal for ${ticker} (${direction})`,
     symbol: ticker,
     signalId: signal.id,
-    metadata: { sourceApp: sourceName, sourceAppId: sourceId },
+    metadata: {
+      sourceApp: sourceName,
+      sourceAppId: sourceId,
+      rawSignal: body,
+    },
   }).catch(() => {});
 
   if (instrumentType === "Options" && strike && expiration) {
@@ -431,7 +435,16 @@ export async function processSignal(
     fetchPolygonBars({ symbol: ticker, secType: "STK" }).catch(() => {});
   }
 
-  const discordResult = await sendSignalDiscordAlert(signal, app);
+  const discordChannelWebhook =
+    typeof body.discord_channel_webhook === "string"
+      ? body.discord_channel_webhook.trim() || null
+      : null;
+  console.log(`[Signal] Sending discord alert to ${discordChannelWebhook} for ${ticker}`);
+  const discordResult = await sendSignalDiscordAlert(
+    signal,
+    app,
+    discordChannelWebhook,
+  );
   result.discord.sent = discordResult.sent;
   if (discordResult.error) {
     result.discord.errors.push(discordResult.error);

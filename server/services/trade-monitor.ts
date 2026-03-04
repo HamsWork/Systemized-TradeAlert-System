@@ -63,10 +63,20 @@ async function checkActiveTrades(): Promise<void> {
   }
 }
 
+function isAutoTrackEnabled(data: Record<string, any>): boolean {
+  const v = data.auto_track;
+  if (v === false) return false;
+  if (v === "false" || v === 0) return false;
+  return true;
+}
+
 async function checkSignalTargets(signal: Signal): Promise<void> {
   const data = signal.data as Record<string, any>;
   const ticker = data.ticker;
   if (!ticker) return;
+  if (!isAutoTrackEnabled(data)) {
+    return;
+  }
 
   const orders = await storage.getIbkrOrdersBySignal(signal.id);
   const fromOrder =
@@ -233,6 +243,203 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
       })
       .catch(() => {});
   }
+}
+
+/**
+ * Manually record a target hit for an active signal (e.g. from API or UI).
+ * Updates signal data (hit_targets, stop_loss if raise_stop_loss), sends Discord, creates activity.
+ * If all targets become hit, sets signal status to "completed".
+ */
+export async function recordManualTargetHit(
+  signal: Signal,
+  targetKey: string,
+  currentPrice?: number | null,
+): Promise<{ signal: Signal; error?: string }> {
+  const data = signal.data as Record<string, any>;
+  if (data.auto_track !== false) {
+    return {
+      signal,
+      error: "Manual target hit is only allowed when auto_track is false. Disable auto tracking for this signal first.",
+    };
+  }
+  const ticker = data.ticker || "UNKNOWN";
+  const targets = parseTargets(data);
+  const target = targets.find((t) => t.key === targetKey);
+  if (!target) {
+    return {
+      signal,
+      error: `Target "${targetKey}" not found. Valid keys: ${targets.map((t) => t.key).join(", ") || "none"}`,
+    };
+  }
+  const hitTargetsData = (data.hit_targets && typeof data.hit_targets === "object")
+    ? (data.hit_targets as Record<string, unknown>)
+    : {};
+  if (hitTargetsData[targetKey]) {
+    return { signal, error: `Target "${targetKey}" was already marked as hit` };
+  }
+  if (signal.status !== "active") {
+    return { signal, error: `Signal is not active (status: ${signal.status}). Only active signals can have targets marked as hit.` };
+  }
+
+  let app: ConnectedApp | null = null;
+  if (signal.sourceAppId) {
+    app = (await storage.getConnectedApp(signal.sourceAppId)) || null;
+  }
+
+  const priceAtHit = currentPrice != null && currentPrice > 0 ? currentPrice : target.price;
+  const updatedData = { ...data };
+  if (!updatedData.hit_targets) updatedData.hit_targets = {};
+  (updatedData.hit_targets as Record<string, any>)[targetKey] = {
+    hitAt: new Date().toISOString(),
+    price: priceAtHit,
+    manual: true,
+  };
+
+  if (target.raiseStopLoss) {
+    updatedData.stop_loss = target.raiseStopLoss;
+    console.log(
+      `[TradeMonitor] Stop loss raised to ${fmtPrice(target.raiseStopLoss)} for ${ticker} (manual target hit)`,
+    );
+  }
+
+  const updated = await storage.updateSignal(signal.id, { data: updatedData });
+  if (!updated) return { signal, error: "Failed to update signal" };
+
+  if (target.raiseStopLoss) {
+    await sendStopLossRaisedDiscord(
+      updated,
+      app,
+      target.raiseStopLoss,
+      targetKey,
+      priceAtHit,
+      ticker,
+      updatedData,
+    );
+    await storage.createActivity({
+      type: "stop_loss_raised",
+      title: `Stop loss raised to ${fmtPrice(target.raiseStopLoss)} for ${ticker}`,
+      description: `Stop loss raised to ${fmtPrice(target.raiseStopLoss)} after ${targetKey.toUpperCase()} hit (manual)`,
+      symbol: ticker,
+      signalId: signal.id,
+      metadata: {
+        newStopLoss: target.raiseStopLoss,
+        targetKey,
+        currentPrice: priceAtHit,
+        manual: true,
+        sourceApp: app?.name || null,
+      },
+    }).catch(() => {});
+  }
+
+  const targetForDiscord = {
+    key: target.key,
+    price: target.price,
+    takeOffPercent: target.takeOffPercent,
+    raiseStopLoss: target.raiseStopLoss,
+  };
+  await sendTargetHitDiscordAlert(updated, app, targetForDiscord, priceAtHit, ticker, updatedData);
+
+  await storage.createActivity({
+    type: "target_hit",
+    title: `${targetKey.toUpperCase()} hit for ${ticker} (manual)`,
+    description: `${targetKey.toUpperCase()} marked as hit at ${fmtPrice(priceAtHit)} (target: ${fmtPrice(target.price)})`,
+    symbol: ticker,
+    signalId: signal.id,
+    metadata: {
+      targetKey,
+      targetPrice: target.price,
+      currentPrice: priceAtHit,
+      raiseStopLoss: target.raiseStopLoss ?? null,
+      manual: true,
+      sourceApp: app?.name || null,
+    },
+  }).catch(() => {});
+
+  const allTargetsHit = targets.every((t) =>
+    t.key === targetKey || !!(updatedData.hit_targets as Record<string, unknown>)?.[t.key],
+  );
+  if (allTargetsHit) {
+    await storage.updateSignal(signal.id, { status: "completed" });
+    const completedSignal = await storage.getSignal(signal.id);
+    console.log(`[TradeMonitor] All targets hit for ${ticker} (manual) — signal completed`);
+    await storage.createActivity({
+      type: "signal_completed",
+      title: `All targets hit for ${ticker}`,
+      description: `Signal completed — all ${targets.length} target(s) reached (manual)`,
+      symbol: ticker,
+      signalId: signal.id,
+    }).catch(() => {});
+    return { signal: completedSignal || updated };
+  }
+
+  return { signal: updated };
+}
+
+/**
+ * Manually record a stop loss hit for an active signal (e.g. from API or UI).
+ * Sets stop_loss_hit, stop_loss_hit_at, stop_loss_hit_price, status to "stopped_out",
+ * sends Discord, and creates activity.
+ */
+export async function recordManualStopLossHit(
+  signal: Signal,
+  currentPrice?: number | null,
+): Promise<{ signal: Signal; error?: string }> {
+  if (signal.status !== "active") {
+    return { signal, error: `Signal is not active (status: ${signal.status}). Only active signals can have stop loss marked as hit.` };
+  }
+  const data = signal.data as Record<string, any>;
+  if (data.auto_track !== false) {
+    return {
+      signal,
+      error: "Manual stop loss hit is only allowed when auto_track is false. Disable auto tracking for this signal first.",
+    };
+  }
+  const stopLoss = data.stop_loss != null ? Number(data.stop_loss) : null;
+  if (stopLoss == null || isNaN(stopLoss)) {
+    return { signal, error: "Signal has no stop_loss set. Cannot mark stop loss as hit." };
+  }
+  if (data.stop_loss_hit === true) {
+    return { signal, error: "Stop loss was already marked as hit for this signal." };
+  }
+
+  let app: ConnectedApp | null = null;
+  if (signal.sourceAppId) {
+    app = (await storage.getConnectedApp(signal.sourceAppId)) || null;
+  }
+
+  const ticker = data.ticker || "UNKNOWN";
+  const priceAtHit = currentPrice != null && currentPrice > 0 ? currentPrice : stopLoss;
+
+  const updatedData = { ...data };
+  updatedData.stop_loss_hit = true;
+  updatedData.stop_loss_hit_at = new Date().toISOString();
+  updatedData.stop_loss_hit_price = priceAtHit;
+  updatedData.stop_loss_hit_manual = true;
+
+  const updated = await storage.updateSignal(signal.id, { data: updatedData, status: "stopped_out" });
+  if (!updated) return { signal, error: "Failed to update signal" };
+
+  console.log(
+    `[TradeMonitor] STOP LOSS HIT (manual): ${ticker} @ ${fmtPrice(priceAtHit)} (SL: ${fmtPrice(stopLoss)})`,
+  );
+
+  await sendStopLossHitDiscord(updated, app, stopLoss, priceAtHit, ticker, updatedData);
+
+  await storage.createActivity({
+    type: "stop_loss_hit",
+    title: `Stop loss hit for ${ticker} (manual)`,
+    description: `Stop loss triggered at ${fmtPrice(priceAtHit)} (SL: ${fmtPrice(stopLoss)})`,
+    symbol: ticker,
+    signalId: signal.id,
+    metadata: {
+      stopLoss,
+      currentPrice: priceAtHit,
+      manual: true,
+      sourceApp: app?.name || null,
+    },
+  }).catch(() => {});
+
+  return { signal: updated };
 }
 
 export function startTradeMonitor(): void {

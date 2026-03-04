@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
@@ -40,6 +40,8 @@ import {
   FileText,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   CheckCircle2,
   XCircle,
   AlertTriangle,
@@ -588,13 +590,27 @@ function SignalCard({ signal, onDelete, onOpen }: { signal: Signal; onDelete: (i
   );
 }
 
+const SIGNALS_PAGE_SIZE = 12;
+
 export default function SignalsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedSignal, setSelectedSignal] = useState<Signal | null>(null);
-  const [filter, setFilter] = useState<string>("all");
+  const [filter, setFilter] = useState<string>("active");
+  const [page, setPage] = useState(1);
   const { toast } = useToast();
 
-  const signalsQuery = useQuery<Signal[]>({ queryKey: ["/api/signals"] });
+  const signalsQuery = useQuery<Signal[]>({
+    queryKey: ["/api/signals"],
+    refetchInterval: 5000,
+    staleTime: 2000,
+  });
+
+  const signalsList = signalsQuery.data ?? [];
+  useEffect(() => {
+    if (!selectedSignal || signalsList.length === 0) return;
+    const updated = signalsList.find((s) => s.id === selectedSignal.id);
+    if (updated && updated !== selectedSignal) setSelectedSignal(updated);
+  }, [signalsList, selectedSignal?.id]);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -606,6 +622,21 @@ export default function SignalsPage() {
       toast({ title: "Signal removed" });
     },
   });
+
+  const signals = signalsList;
+  const filtered = filter === "all" ? signals : signals.filter((s) => s.status === filter);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / SIGNALS_PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginated = filtered.slice((currentPage - 1) * SIGNALS_PAGE_SIZE, currentPage * SIGNALS_PAGE_SIZE);
+
+  useEffect(() => {
+    if (page > totalPages && totalPages >= 1) setPage(1);
+  }, [totalPages, page]);
+
+  const setFilterAndResetPage = (f: string) => {
+    setFilter(f);
+    setPage(1);
+  };
 
   if (signalsQuery.isLoading) {
     return (
@@ -619,9 +650,6 @@ export default function SignalsPage() {
       </div>
     );
   }
-
-  const signals = signalsQuery.data ?? [];
-  const filtered = filter === "all" ? signals : signals.filter((s) => s.status === filter);
 
   return (
     <div className="space-y-6 p-6" data-testid="page-signals">
@@ -638,23 +666,28 @@ export default function SignalsPage() {
         }
       />
 
-      <div className="flex items-center gap-2 flex-wrap">
-        {["all", "active", "completed", "stopped_out", "closed", "expired"].map((f) => {
-          const label = f === "stopped_out" ? "Stopped Out" : f.charAt(0).toUpperCase() + f.slice(1);
-          const count = f === "all" ? signals.length : signals.filter(s => s.status === f).length;
-          return (
-            <Button
-              key={f}
-              variant={filter === f ? "default" : "secondary"}
-              size="sm"
-              onClick={() => setFilter(f)}
-              data-testid={`button-filter-signal-${f}`}
-            >
-              {label}
-              {count > 0 && f !== "all" && <span className="ml-1 text-[10px] opacity-70">({count})</span>}
-            </Button>
-          );
-        })}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          {["active", "all", "completed", "stopped_out", "closed", "expired"].map((f) => {
+            const label = f === "stopped_out" ? "Stopped Out" : f.charAt(0).toUpperCase() + f.slice(1);
+            const count = f === "all" ? signals.length : signals.filter(s => s.status === f).length;
+            return (
+              <Button
+                key={f}
+                variant={filter === f ? "default" : "secondary"}
+                size="sm"
+                onClick={() => setFilterAndResetPage(f)}
+                data-testid={`button-filter-signal-${f}`}
+              >
+                {label}
+                {count > 0 && <span className="ml-1 text-[10px] opacity-70">({count})</span>}
+              </Button>
+            );
+          })}
+        </div>
+        <span className="text-xs text-muted-foreground" title="List refreshes every 5 seconds">
+          Live · updates every 5s
+        </span>
       </div>
 
       {filtered.length === 0 ? (
@@ -676,16 +709,50 @@ export default function SignalsPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-1 lg:grid-cols-2">
-          {filtered.map((signal) => (
-            <SignalCard
-              key={signal.id}
-              signal={signal}
-              onDelete={(id) => deleteMutation.mutate(id)}
-              onOpen={(s) => setSelectedSignal(s)}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid gap-3 sm:grid-cols-1 lg:grid-cols-2">
+            {paginated.map((signal) => (
+              <SignalCard
+                key={signal.id}
+                signal={signal}
+                onDelete={(id) => deleteMutation.mutate(id)}
+                onOpen={(s) => setSelectedSignal(s)}
+              />
+            ))}
+          </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between gap-4 pt-2">
+              <p className="text-sm text-muted-foreground">
+                Showing {(currentPage - 1) * SIGNALS_PAGE_SIZE + 1}–{Math.min(currentPage * SIGNALS_PAGE_SIZE, filtered.length)} of {filtered.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage <= 1}
+                  data-testid="button-prev-page"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+                <span className="text-sm font-medium min-w-[6rem] text-center" data-testid="text-page-indicator">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage >= totalPages}
+                  data-testid="button-next-page"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       <CreateSignalDialog open={dialogOpen} onOpenChange={setDialogOpen} />
