@@ -693,53 +693,42 @@ function DiscordSendModal({ preview, signalId, open, onOpenChange }: {
     },
   });
 
-  const description = preview.embed.description || "";
-  const fields = (preview.embed.fields || []).filter(f => f.name !== "\u200b");
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="modal-discord-send">
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto" data-testid="modal-discord-send">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4 text-[#5865F2]" />
             Send: {preview.label}
           </DialogTitle>
-          <DialogDescription>Review the message before sending to Discord</DialogDescription>
+          <DialogDescription>Review the embed JSON and preview before sending to Discord</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="rounded-lg bg-[#313338] p-3 space-y-2">
-            {preview.content && (
-              <p className="text-[13px] text-[#dbdee1]">{preview.content}</p>
-            )}
-            <DiscordEmbed msg={preview} />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Embed JSON</p>
+            <pre
+              className="rounded-lg bg-muted/50 border border-border p-3 text-[11px] font-mono leading-relaxed overflow-auto max-h-[60vh] whitespace-pre-wrap break-words"
+              data-testid="text-discord-json"
+            >{JSON.stringify({
+                content: preview.content || undefined,
+                embeds: [{
+                  description: preview.embed.description,
+                  color: preview.embed.color,
+                  fields: preview.embed.fields,
+                  footer: preview.embed.footer,
+                  ...(preview.embed.timestamp ? { timestamp: preview.embed.timestamp } : {}),
+                }],
+              }, null, 2)}</pre>
           </div>
 
-          <Separator />
-
-          <div className="space-y-3">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Message Details</p>
-            {preview.content && (
-              <div>
-                <label className="text-xs text-muted-foreground">Content</label>
-                <p className="mt-1 text-sm text-foreground bg-muted/50 px-3 py-2 rounded-md" data-testid="text-discord-content">{preview.content}</p>
-              </div>
-            )}
-            <div>
-              <label className="text-xs text-muted-foreground">Description</label>
-              <p className="mt-1 text-sm text-foreground bg-muted/50 px-3 py-2 rounded-md" data-testid="text-discord-description">
-                {description.replace(/\*\*/g, "")}
-              </p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {fields.map((field, i) => (
-                <div key={i} className={field.inline ? "" : "sm:col-span-2"}>
-                  <label className="text-xs text-muted-foreground">{field.name}</label>
-                  <p className="mt-1 text-sm text-foreground bg-muted/50 px-3 py-2 rounded-md whitespace-pre-wrap" data-testid={`text-discord-field-${i}`}>
-                    {field.value || "\u200b"}
-                  </p>
-                </div>
-              ))}
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Preview</p>
+            <div className="rounded-lg bg-[#313338] p-3 space-y-2">
+              {preview.content && (
+                <p className="text-[13px] text-[#dbdee1]">{preview.content}</p>
+              )}
+              <DiscordEmbed msg={preview} />
             </div>
           </div>
         </div>
