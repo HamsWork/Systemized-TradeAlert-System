@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -31,6 +32,7 @@ import {
   Eye,
   X,
   AlertCircle,
+  Plus,
 } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 
@@ -57,9 +59,9 @@ interface TemplateGroup {
 
 interface DiscordChannel {
   id: string;
-  appId: string;
-  appName: string;
-  channelType: string;
+  integrationId: string;
+  name: string;
+  channelName: string;
   webhookUrl: string;
 }
 
@@ -179,6 +181,7 @@ function SendFromTemplateModal({ template, open, onOpenChange }: {
   onOpenChange: (open: boolean) => void;
 }) {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [selectedChannelId, setSelectedChannelId] = useState<string>("");
   const [jsonText, setJsonText] = useState(() => buildPayloadJson(template));
   const [jsonError, setJsonError] = useState<string | null>(null);
@@ -211,6 +214,15 @@ function SendFromTemplateModal({ template, open, onOpenChange }: {
   });
 
   const channels = channelsQuery.data || [];
+
+  const handleChannelChange = (value: string) => {
+    if (value === "__add_new__") {
+      onOpenChange(false);
+      setLocation("/integrations");
+      return;
+    }
+    setSelectedChannelId(value);
+  };
 
   const sendMutation = useMutation({
     mutationFn: async () => {
@@ -253,20 +265,29 @@ function SendFromTemplateModal({ template, open, onOpenChange }: {
         <div className="space-y-3">
           <div className="space-y-1.5">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Discord Channel</p>
-            <Select value={selectedChannelId} onValueChange={setSelectedChannelId}>
+            <Select value={selectedChannelId} onValueChange={handleChannelChange}>
               <SelectTrigger data-testid="select-discord-channel">
                 <SelectValue placeholder="Select a Discord channel to send to..." />
               </SelectTrigger>
               <SelectContent>
                 {channels.map((ch) => (
                   <SelectItem key={ch.id} value={ch.id} data-testid={`option-channel-${ch.id}`}>
-                    {ch.appName} - {ch.channelType}
+                    <span className="flex items-center gap-1.5">
+                      <SiDiscord className="h-3 w-3 text-[#5865F2] shrink-0" />
+                      {ch.name} — #{ch.channelName}
+                    </span>
                   </SelectItem>
                 ))}
+                <SelectItem value="__add_new__" data-testid="option-add-new-channel">
+                  <span className="flex items-center gap-1.5 text-muted-foreground">
+                    <Plus className="h-3 w-3 shrink-0" />
+                    Add new Discord channel...
+                  </span>
+                </SelectItem>
               </SelectContent>
             </Select>
             {channels.length === 0 && !channelsQuery.isLoading && (
-              <p className="text-[11px] text-muted-foreground">No Discord channels configured. Add webhook URLs in Connected Apps.</p>
+              <p className="text-[11px] text-muted-foreground">No Discord channels configured. Add one via Integrations.</p>
             )}
           </div>
 
