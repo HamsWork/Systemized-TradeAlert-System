@@ -778,6 +778,62 @@ Example:
         params: [
           { name: "id", type: "string", required: true, description: "The unique signal ID (UUID format)." },
         ],
+        responseExample: `{
+  "id": "abc-123",
+  "data": {
+    "ticker": "AAPL",
+    "instrument_type": "Options",
+    "direction": "Call",
+    "entry_price": 31,
+    "expiration": "2026-03-20",
+    "strike": "190",
+    "targets": {
+      "tp1": { "price": 40, "take_off_percent": 50, "raise_stop_loss": { "price": 31 } },
+      "tp2": { "price": 50, "take_off_percent": 50, "raise_stop_loss": { "price": 40 } }
+    },
+    "stop_loss": 25,
+    "trade_plan_type": "option_price_based",
+    "auto_track": true
+  },
+  "status": "active",
+  "sourceAppName": "Situ Trader",
+  "createdAt": "2026-02-26T12:00:00.000Z"
+}`,
+      },
+      {
+        method: "PATCH",
+        path: "/api/signals/:id",
+        description: "Update a signal's data. Accepts partial updates — only include the fields you want to change. The data field is a JSON object and will be merged with the existing signal data.",
+        params: [
+          { name: "id", type: "string", required: true, description: "The unique signal ID (UUID format)." },
+          { name: "status", type: "string", required: false, description: "Update the signal status.", enumValues: ["active", "closed", "completed", "stopped_out"] },
+          { name: "data", type: "json", required: false, description: "Partial signal data to update (e.g. stop_loss, targets, auto_track)." },
+        ],
+        responseExample: `{
+  "id": "abc-123",
+  "data": {
+    "ticker": "AAPL",
+    "instrument_type": "Shares",
+    "direction": "Long",
+    "entry_price": 189.5,
+    "stop_loss": 185,
+    "auto_track": true
+  },
+  "status": "active",
+  "sourceAppName": "Situ Trader",
+  "createdAt": "2026-02-26T12:00:00.000Z"
+}`,
+      },
+      {
+        method: "DELETE",
+        path: "/api/signals/:id",
+        description: "Permanently delete a signal by its ID. This action cannot be undone.",
+        params: [
+          { name: "id", type: "string", required: true, description: "The unique signal ID (UUID format) to delete." },
+        ],
+        responseExample: `{
+  "success": true
+}`,
       },
     ],
   },
