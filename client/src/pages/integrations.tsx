@@ -462,32 +462,34 @@ function IntegrationCard({ integration, onDelete, onEdit, connectedApps = [] }: 
           </div>
         )}
 
-        <div className="mb-3 flex items-center gap-2">
-          <Badge
-            variant={integration.enabled ? "default" : "destructive"}
-            className="text-xs"
-            data-testid={`badge-connection-status-${integration.id}`}
-          >
-            {integration.enabled ? (
-              <><Wifi className="mr-1 h-3 w-3" />Connected</>
-            ) : (
-              <><WifiOff className="mr-1 h-3 w-3" />Disconnected</>
-            )}
-          </Badge>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 text-xs"
-            onClick={() => handleToggle("enabled", !integration.enabled)}
-            data-testid={`button-toggle-connection-${integration.id}`}
-          >
-            {integration.enabled ? (
-              <><WifiOff className="mr-1 h-3 w-3" />Disconnect</>
-            ) : (
-              <><Wifi className="mr-1 h-3 w-3" />Connect</>
-            )}
-          </Button>
-        </div>
+        {isIBKR && (
+          <div className="mb-3 flex items-center gap-2">
+            <Badge
+              variant={integration.enabled ? "default" : "destructive"}
+              className="text-xs"
+              data-testid={`badge-connection-status-${integration.id}`}
+            >
+              {integration.enabled ? (
+                <><Wifi className="mr-1 h-3 w-3" />Connected</>
+              ) : (
+                <><WifiOff className="mr-1 h-3 w-3" />Disconnected</>
+              )}
+            </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => handleToggle("enabled", !integration.enabled)}
+              data-testid={`button-toggle-connection-${integration.id}`}
+            >
+              {integration.enabled ? (
+                <><WifiOff className="mr-1 h-3 w-3" />Disconnect</>
+              ) : (
+                <><Wifi className="mr-1 h-3 w-3" />Connect</>
+              )}
+            </Button>
+          </div>
+        )}
 
 
         {isIBKR && linkedApps.length > 0 && (
