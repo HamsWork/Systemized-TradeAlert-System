@@ -1031,6 +1031,8 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
               </CardContent>
             </Card>
 
+            <DiscordPreviewSection signalId={signal.id} open={open} />
+
             <Card data-testid="card-orders">
               <CardContent className="p-3">
                 <div className="flex items-center gap-2 mb-2">
@@ -1056,8 +1058,6 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                 )}
               </CardContent>
             </Card>
-
-            <DiscordPreviewSection signalId={signal.id} open={open} />
           </div>
 
           <div className="space-y-4">
