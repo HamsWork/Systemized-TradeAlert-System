@@ -55,12 +55,12 @@ interface TemplateGroup {
   templates: DiscordPreviewMsg[];
 }
 
-interface SignalOption {
+interface DiscordChannel {
   id: string;
-  ticker: string;
-  instrumentType: string;
-  status: string;
-  sourceAppId: string | null;
+  appId: string;
+  appName: string;
+  channelType: string;
+  webhookUrl: string;
 }
 
 const COLOR_HEX: Record<number, string> = {
@@ -173,25 +173,20 @@ function parseJsonToPreview(json: string, fallback: DiscordPreviewMsg): DiscordP
   }
 }
 
-function extractTargetKey(preview: DiscordPreviewMsg): string | undefined {
-  const match = preview.label.match(/(?:TP|Target\s*)(\d+)/i);
-  return match ? `tp${match[1]}` : undefined;
-}
-
 function SendFromTemplateModal({ template, open, onOpenChange }: {
   template: DiscordPreviewMsg;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const { toast } = useToast();
-  const [selectedSignalId, setSelectedSignalId] = useState<string>("");
+  const [selectedChannelId, setSelectedChannelId] = useState<string>("");
   const [jsonText, setJsonText] = useState(() => buildPayloadJson(template));
   const [jsonError, setJsonError] = useState<string | null>(null);
 
   useEffect(() => {
     setJsonText(buildPayloadJson(template));
     setJsonError(null);
-    setSelectedSignalId("");
+    setSelectedChannelId("");
   }, [template]);
 
   const livePreview = useMemo(() => parseJsonToPreview(jsonText, template), [jsonText, template]);
@@ -211,35 +206,20 @@ function SendFromTemplateModal({ template, open, onOpenChange }: {
     }
   };
 
-  const signalsQuery = useQuery<any[]>({
-    queryKey: ["/api/signals"],
+  const channelsQuery = useQuery<DiscordChannel[]>({
+    queryKey: ["/api/discord/channels"],
   });
 
-  const signals: SignalOption[] = useMemo(() => {
-    if (!signalsQuery.data) return [];
-    return signalsQuery.data
-      .filter((s: any) => s.sourceAppId)
-      .map((s: any) => {
-        const data = (s.data || {}) as Record<string, any>;
-        return {
-          id: s.id,
-          ticker: data.ticker || data.symbol || "UNKNOWN",
-          instrumentType: data.instrument_type || "Shares",
-          status: s.status || "active",
-          sourceAppId: s.sourceAppId,
-        };
-      });
-  }, [signalsQuery.data]);
+  const channels = channelsQuery.data || [];
 
   const sendMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedSignalId) throw new Error("Select a signal first");
-      const body: Record<string, any> = {
-        messageType: template.type,
-        targetKey: extractTargetKey(template),
-        customPayload: JSON.parse(jsonText),
+      if (!selectedChannelId) throw new Error("Select a Discord channel first");
+      const body = {
+        channelId: selectedChannelId,
+        payload: JSON.parse(jsonText),
       };
-      const res = await apiRequest("POST", `/api/signals/${encodeURIComponent(selectedSignalId)}/send-discord`, body);
+      const res = await apiRequest("POST", "/api/discord/send-manual", body);
       const result = await res.json();
       if (result.sent === false) {
         throw new Error(result.error || "Discord webhook delivery failed");
@@ -267,24 +247,27 @@ function SendFromTemplateModal({ template, open, onOpenChange }: {
             <SiDiscord className="h-4 w-4 text-[#5865F2]" />
             Send: {template.label}
           </DialogTitle>
-          <DialogDescription>Select a signal, edit the embed, then send to Discord</DialogDescription>
+          <DialogDescription>Select a Discord channel, edit the embed, then send</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Target Signal</p>
-            <Select value={selectedSignalId} onValueChange={setSelectedSignalId}>
-              <SelectTrigger data-testid="select-signal-for-template">
-                <SelectValue placeholder="Select a signal to send this message for..." />
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Discord Channel</p>
+            <Select value={selectedChannelId} onValueChange={setSelectedChannelId}>
+              <SelectTrigger data-testid="select-discord-channel">
+                <SelectValue placeholder="Select a Discord channel to send to..." />
               </SelectTrigger>
               <SelectContent>
-                {signals.map((s) => (
-                  <SelectItem key={s.id} value={s.id} data-testid={`option-signal-${s.id}`}>
-                    {s.ticker} ({s.instrumentType}) - {s.status}
+                {channels.map((ch) => (
+                  <SelectItem key={ch.id} value={ch.id} data-testid={`option-channel-${ch.id}`}>
+                    {ch.appName} - {ch.channelType}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {channels.length === 0 && !channelsQuery.isLoading && (
+              <p className="text-[11px] text-muted-foreground">No Discord channels configured. Add webhook URLs in Connected Apps.</p>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -333,7 +316,7 @@ function SendFromTemplateModal({ template, open, onOpenChange }: {
           </Button>
           <Button
             onClick={() => sendMutation.mutate()}
-            disabled={sendMutation.isPending || !!jsonError || !selectedSignalId}
+            disabled={sendMutation.isPending || !!jsonError || !selectedChannelId}
             className="bg-[#5865F2] hover:bg-[#4752C4] text-white"
             data-testid="button-confirm-template-send"
           >

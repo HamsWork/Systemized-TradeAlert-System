@@ -72,6 +72,21 @@ async function sendWebhook(
   }
 }
 
+export async function sendDirectWebhook(
+  webhookUrl: string,
+  payload: { content?: string; embeds: any[] },
+): Promise<{ sent: boolean; error: string | null }> {
+  let sent = false;
+  let error: string | null = null;
+  try {
+    sent = await sendWebhook(webhookUrl, payload.content || "", payload.embeds || []);
+    if (!sent) error = "Webhook request failed";
+  } catch (err: any) {
+    error = err.message;
+  }
+  return { sent, error };
+}
+
 export async function sendRawDiscordEmbed(
   signal: Signal,
   app: ConnectedApp,
