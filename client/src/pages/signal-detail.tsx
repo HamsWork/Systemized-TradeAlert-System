@@ -542,6 +542,7 @@ function OptionChartTabs({ symbol, strike, expiration, optionType, entryPrice, t
       </div>
       {activeTab === "option" ? (
         <TradeChart
+          key="option-contract"
           symbol={symbol}
           instrumentType="Options"
           strike={strike}
@@ -554,6 +555,7 @@ function OptionChartTabs({ symbol, strike, expiration, optionType, entryPrice, t
         />
       ) : (
         <TradeChart
+          key="underlying-stock"
           symbol={symbol}
           entryPrice={showTargetsOnUnderlying ? entryPrice : undefined}
           tpLevels={showTargetsOnUnderlying ? tpLevels : []}
@@ -622,6 +624,7 @@ function LetfChartTabs({ symbol, entryPrice, tpLevels, slLevels, direction, unde
       </div>
       {activeTab === "letf" ? (
         <TradeChart
+          key="letf-chart"
           symbol={symbol}
           instrumentType="LETF"
           entryPrice={underlyingPriceBased ? undefined : entryPrice}
@@ -631,6 +634,7 @@ function LetfChartTabs({ symbol, entryPrice, tpLevels, slLevels, direction, unde
         />
       ) : (
         <TradeChart
+          key="letf-underlying"
           symbol={underlying}
           entryPrice={underlyingPriceBased ? entryPrice : undefined}
           tpLevels={underlyingPriceBased ? tpLevels : []}
