@@ -125,6 +125,26 @@ export async function sendRawDiscordEmbed(
   return { sent, error };
 }
 
+function getContentForInstrument(
+  app: ConnectedApp,
+  instrumentType: string,
+): string {
+  switch (instrumentType) {
+    case "Options":
+      return app.discordContentOptions || "@everyone";
+    case "Shares":
+      return app.discordContentShares || "@everyone";
+    case "LETF":
+      return app.discordContentLetf || "@everyone";
+    case "LETF Option":
+      return app.discordContentLetfOption || "@everyone";
+    case "Crypto":
+      return app.discordContentCrypto || "@everyone";
+    default:
+      return "@everyone";
+  }
+}
+
 function getWebhookForInstrument(
   app: ConnectedApp,
   instrumentType: string,
@@ -893,7 +913,8 @@ export async function sendTargetHitDiscordAlert(
   const isLETF = instrumentType === "LETF";
 
   const embed = buildTargetHitEmbed(data, ticker, target);
-  const sent = await sendWebhook(webhookUrl, "@everyone", [embed]);
+  const content = app ? getContentForInstrument(app, instrumentType) : "@everyone";
+  const sent = await sendWebhook(webhookUrl, content, [embed]);
 
   await storage.createDiscordMessage({
     signalId: signal.id,
@@ -975,7 +996,8 @@ export async function sendStopLossRaisedDiscord(
   if (!webhookUrl) return;
 
   const embed = buildStopLossRaisedEmbed(data, ticker, targetKey, newStopLoss);
-  const sent = await sendWebhook(webhookUrl, "@everyone", [embed]);
+  const content = app ? getContentForInstrument(app, instrumentType) : "@everyone";
+  const sent = await sendWebhook(webhookUrl, content, [embed]);
 
   await storage.createDiscordMessage({
     signalId: signal.id,
@@ -1009,7 +1031,8 @@ export async function sendStopLossHitDiscord(
   if (!webhookUrl) return;
 
   const embed = buildStopLossHitEmbed(data, ticker, stopLoss);
-  const sent = await sendWebhook(webhookUrl, "@everyone", [embed]);
+  const content = app ? getContentForInstrument(app, instrumentType) : "@everyone";
+  const sent = await sendWebhook(webhookUrl, content, [embed]);
 
   await storage.createDiscordMessage({
     signalId: signal.id,
@@ -1041,7 +1064,8 @@ export async function sendTradeClosedManuallyDiscord(
   if (!webhookUrl) return;
 
   const embed = buildTradeClosedEmbed(data, ticker);
-  const sent = await sendWebhook(webhookUrl, "@everyone", [embed]);
+  const content = app ? getContentForInstrument(app, instrumentType) : "@everyone";
+  const sent = await sendWebhook(webhookUrl, content, [embed]);
 
   await storage.createDiscordMessage({
     signalId: signal.id,
@@ -1101,10 +1125,11 @@ export async function sendSignalDiscordAlert(
   const expendName = app.name === "Discord Scalper" ? "Scalp Trade" : app.name;
 
   const embed = buildSignalAlertEmbed(data, ticker, expendName);
+  const content = getContentForInstrument(app, instrumentType);
   let sent = false;
   let error: string | null = null;
   try {
-    sent = await sendWebhook(webhookUrl, "@everyone", [embed]);
+    sent = await sendWebhook(webhookUrl, content, [embed]);
     if (!sent) error = "Webhook request failed";
   } catch (err: any) {
     error = err.message;
@@ -1191,10 +1216,11 @@ export async function sendTradeExecutedDiscordAlert(
     footer: { text: DISCLAIMER },
   };
 
+  const content = getContentForInstrument(app, instrumentType);
   let sent = false;
   let error: string | null = null;
   try {
-    sent = await sendWebhook(webhookUrl, "@everyone", [embed]);
+    sent = await sendWebhook(webhookUrl, content, [embed]);
     if (!sent) error = "Webhook request failed";
   } catch (err: any) {
     error = err.message;
