@@ -153,7 +153,7 @@ function CreateAppDialog({ open, onOpenChange, ibkrAccounts }: { open: boolean; 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Connect New App</DialogTitle>
         </DialogHeader>
@@ -361,7 +361,7 @@ function EditAppDialog({ app, open, onOpenChange, ibkrAccounts }: { app: Connect
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings2 className="h-5 w-5 text-primary" />
