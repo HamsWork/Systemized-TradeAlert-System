@@ -1,6 +1,7 @@
 import type { Signal, ConnectedApp } from "@shared/schema";
 import { insertSignalSchema } from "@shared/schema";
 import { storage } from "../storage";
+import { LETF_UNDERLYING } from "../constants/letf";
 import { executeIbkrTrade } from "./trade-executor";
 import { sendSignalDiscordAlert } from "./discord";
 import { fetchPolygonBars, fetchOptionContractPrice, fetchStockPrice } from "./polygon";
@@ -29,15 +30,6 @@ const VALID_INSTRUMENT_TYPES = ["Options", "Shares", "LETF", "LETF Option", "Cry
 const VALID_DIRECTIONS_OPTIONS = ["Call", "Put"];
 const VALID_DIRECTIONS_DEFAULT = ["Long", "Short"];
 const VALID_TRADE_PLAN_TYPES = ["stock_price_based", "option_price_based"];
-
-/** LETF ticker -> underlying index (for fetching underlying price only; trade plan uses LETF price) */
-const LETF_UNDERLYING: Record<string, string> = {
-  TQQQ: "QQQ", SQQQ: "QQQ", UPRO: "SPY", SPXU: "SPY", SPXL: "SPY", SPXS: "SPY",
-  UDOW: "DIA", SDOW: "DIA", TNA: "IWM", TZA: "IWM", LABU: "XBI", LABD: "XBI",
-  HIBL: "XHB", HIBS: "XHB", SOXL: "SOX", SOXS: "SOX", TECL: "XLK", TECS: "XLK",
-  FAS: "XLF", FAZ: "XLF", YINN: "FXI", YANG: "FXI", NUGT: "GDX", DUST: "GDX",
-  JNUG: "GDXJ", JDST: "GDXJ",
-};
 
 const TDI_INSTRUMENT_MAP: Record<string, string> = {
   "SHARES": "Shares",
