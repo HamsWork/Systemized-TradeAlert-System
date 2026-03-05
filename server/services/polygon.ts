@@ -255,9 +255,11 @@ export async function fetchLastPrice(ticker: string): Promise<number | null> {
         return fetchLastPriceFallback(ticker);
       }
       const data = await res.json();
-      const result = data.results;
+      const raw = data.results;
+      const result = Array.isArray(raw) ? raw[0] : raw;
       if (!result) return fetchLastPriceFallback(ticker);
       const price = result.last_trade?.price ?? result.day?.close ?? result.prev_day?.close ?? null;
+      if (price === null) return fetchLastPriceFallback(ticker);
       return price;
     } catch {
       return fetchLastPriceFallback(ticker);
