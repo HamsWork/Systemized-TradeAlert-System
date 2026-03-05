@@ -153,8 +153,12 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
     app = (await storage.getConnectedApp(signal.sourceAppId)) || null;
   }
 
-  for (const target of targets) {
+  for (let i = 0; i < targets.length; i++) {
+    const target = targets[i];
     if (signalHits.has(target.key)) continue;
+
+    const prevTarget = i > 0 ? targets[i - 1] : null;
+    if (prevTarget && !signalHits.has(prevTarget.key)) break;
 
     const targetHit = bullish
       ? currentPrice >= target.price
@@ -307,7 +311,8 @@ export async function recordManualTargetHit(
     };
   }
   const ticker = data.ticker || "UNKNOWN";
-  const targets = parseTargets(data);
+  const bullish = isBullishTrade(data);
+  const targets = parseTargets(data, bullish);
   const target = targets.find((t) => t.key === targetKey);
   if (!target) {
     return {
@@ -323,6 +328,13 @@ export async function recordManualTargetHit(
   }
   if (signal.status !== "active") {
     return { signal, error: `Signal is not active (status: ${signal.status}). Only active signals can have targets marked as hit.` };
+  }
+  const targetIdx = targets.findIndex((t) => t.key === targetKey);
+  if (targetIdx > 0) {
+    const prevTarget = targets[targetIdx - 1];
+    if (!hitTargetsData[prevTarget.key]) {
+      return { signal, error: `Cannot hit ${targetKey.toUpperCase()} before ${prevTarget.key.toUpperCase()} is hit` };
+    }
   }
 
   let app: ConnectedApp | null = null;

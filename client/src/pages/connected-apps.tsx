@@ -104,6 +104,48 @@ function IbkrAccountSelector({ form, ibkrAccounts, testIdPrefix }: { form: any; 
   );
 }
 
+function DiscordChannelFields({ form, label, webhookName, contentName, testIdPrefix }: {
+  form: any;
+  label: string;
+  webhookName: string;
+  contentName: string;
+  testIdPrefix: string;
+}) {
+  const slug = label.toLowerCase().replace(/\s+/g, "-");
+  const prefix = testIdPrefix ? `${testIdPrefix}-` : "";
+  return (
+    <div className="space-y-2 rounded border border-dashed p-2.5 bg-muted/20">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <FormField
+        control={form.control}
+        name={webhookName}
+        render={({ field }: any) => (
+          <FormItem>
+            <FormLabel className="text-xs">Webhook URL</FormLabel>
+            <FormControl>
+              <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid={`input-${prefix}discord-${slug}`} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+      <FormField
+        control={form.control}
+        name={contentName}
+        render={({ field }: any) => (
+          <FormItem>
+            <FormLabel className="text-xs">Message Content</FormLabel>
+            <FormControl>
+              <Input placeholder="@everyone" {...field} value={field.value ?? "@everyone"} data-testid={`input-${prefix}discord-content-${slug}`} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+    </div>
+  );
+}
+
 function CreateAppDialog({ open, onOpenChange, ibkrAccounts }: { open: boolean; onOpenChange: (open: boolean) => void; ibkrAccounts: Integration[] }) {
   const { toast } = useToast();
 
@@ -119,6 +161,11 @@ function CreateAppDialog({ open, onOpenChange, ibkrAccounts }: { open: boolean; 
       discordWebhookLetf: "",
       discordWebhookLetfOption: "",
       discordWebhookCrypto: "",
+      discordContentShares: "@everyone",
+      discordContentOptions: "@everyone",
+      discordContentLetf: "@everyone",
+      discordContentLetfOption: "@everyone",
+      discordContentCrypto: "@everyone",
       sendDiscordMessages: false,
       executeIbkrTrades: false,
       ibkrClientId: "",
@@ -228,71 +275,11 @@ function CreateAppDialog({ open, onOpenChange, ibkrAccounts }: { open: boolean; 
                   )}
                 />
               </div>
-              <FormField
-                control={form.control}
-                name="discordWebhookShares"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Shares Webhook URL</FormLabel>
-                    <FormControl>
-                      <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-discord-shares" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="discordWebhookOptions"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Options Webhook URL</FormLabel>
-                    <FormControl>
-                      <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-discord-options" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="discordWebhookLetf"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Leveraged ETF Webhook URL</FormLabel>
-                    <FormControl>
-                      <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-discord-letf" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="discordWebhookLetfOption"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>LETF Option Webhook URL</FormLabel>
-                    <FormControl>
-                      <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-discord-letf-option" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="discordWebhookCrypto"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Crypto Webhook URL</FormLabel>
-                    <FormControl>
-                      <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-discord-crypto" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <DiscordChannelFields form={form} label="Shares" webhookName="discordWebhookShares" contentName="discordContentShares" testIdPrefix="" />
+              <DiscordChannelFields form={form} label="Options" webhookName="discordWebhookOptions" contentName="discordContentOptions" testIdPrefix="" />
+              <DiscordChannelFields form={form} label="Leveraged ETF" webhookName="discordWebhookLetf" contentName="discordContentLetf" testIdPrefix="" />
+              <DiscordChannelFields form={form} label="LETF Option" webhookName="discordWebhookLetfOption" contentName="discordContentLetfOption" testIdPrefix="" />
+              <DiscordChannelFields form={form} label="Crypto" webhookName="discordWebhookCrypto" contentName="discordContentCrypto" testIdPrefix="" />
             </div>
             <div className="space-y-3 rounded-lg border p-3">
               <div className="flex items-center justify-between">
@@ -335,6 +322,11 @@ function EditAppDialog({ app, open, onOpenChange, ibkrAccounts }: { app: Connect
       discordWebhookLetf: app.discordWebhookLetf ?? "",
       discordWebhookLetfOption: app.discordWebhookLetfOption ?? "",
       discordWebhookCrypto: app.discordWebhookCrypto ?? "",
+      discordContentShares: app.discordContentShares ?? "@everyone",
+      discordContentOptions: app.discordContentOptions ?? "@everyone",
+      discordContentLetf: app.discordContentLetf ?? "@everyone",
+      discordContentLetfOption: app.discordContentLetfOption ?? "@everyone",
+      discordContentCrypto: app.discordContentCrypto ?? "@everyone",
       sendDiscordMessages: app.sendDiscordMessages,
       executeIbkrTrades: app.executeIbkrTrades,
       ibkrClientId: app.ibkrClientId ?? "",
@@ -425,71 +417,11 @@ function EditAppDialog({ app, open, onOpenChange, ibkrAccounts }: { app: Connect
                   )}
                 />
               </div>
-              <FormField
-                control={form.control}
-                name="discordWebhookShares"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Shares Webhook URL</FormLabel>
-                    <FormControl>
-                      <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-edit-discord-shares" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="discordWebhookOptions"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Options Webhook URL</FormLabel>
-                    <FormControl>
-                      <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-edit-discord-options" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="discordWebhookLetf"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Leveraged ETF Webhook URL</FormLabel>
-                    <FormControl>
-                      <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-edit-discord-letf" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="discordWebhookLetfOption"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>LETF Option Webhook URL</FormLabel>
-                    <FormControl>
-                      <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-edit-discord-letf-option" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="discordWebhookCrypto"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Crypto Webhook URL</FormLabel>
-                    <FormControl>
-                      <Input placeholder="https://discord.com/api/webhooks/..." {...field} value={field.value ?? ""} data-testid="input-edit-discord-crypto" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <DiscordChannelFields form={form} label="Shares" webhookName="discordWebhookShares" contentName="discordContentShares" testIdPrefix="edit" />
+              <DiscordChannelFields form={form} label="Options" webhookName="discordWebhookOptions" contentName="discordContentOptions" testIdPrefix="edit" />
+              <DiscordChannelFields form={form} label="Leveraged ETF" webhookName="discordWebhookLetf" contentName="discordContentLetf" testIdPrefix="edit" />
+              <DiscordChannelFields form={form} label="LETF Option" webhookName="discordWebhookLetfOption" contentName="discordContentLetfOption" testIdPrefix="edit" />
+              <DiscordChannelFields form={form} label="Crypto" webhookName="discordWebhookCrypto" contentName="discordContentCrypto" testIdPrefix="edit" />
             </div>
             <div className="space-y-3 rounded-lg border p-3">
               <div className="flex items-center justify-between">
