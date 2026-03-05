@@ -429,7 +429,7 @@ function buildTargetHitEmbeds(
   });
 }
 
-function buildStopLossHitEmbed(
+function buildStopLossHitTemplate(
   data: Record<string, any>,
   ticker: string,
 ): DiscordPreviewMessage | null {
@@ -487,7 +487,7 @@ function buildStopLossHitEmbed(
   };
 }
 
-function buildTradeClosedEmbed(
+function buildTradeClosedTemplate(
   data: Record<string, any>,
   ticker: string,
 ): DiscordPreviewMessage {
@@ -638,10 +638,10 @@ export function generateAllTemplates(): TemplateGroup[] {
     templates.push(...buildTargetHitEmbeds(sampleData, ticker));
     templates.push(...buildStopLossRaisedEmbeds(sampleData, ticker));
 
-    const slHit = buildStopLossHitEmbed(sampleData, ticker);
+    const slHit = buildStopLossHitTemplate(sampleData, ticker);
     if (slHit) templates.push(slHit);
 
-    templates.push(buildTradeClosedEmbed(sampleData, ticker));
+    templates.push(buildTradeClosedTemplate(sampleData, ticker));
 
     groups.push({ instrumentType: label, ticker, templates });
   }
@@ -654,13 +654,14 @@ export function generateDiscordPreviews(
 ): DiscordPreviewMessage[] {
   const data = (signal.data || {}) as Record<string, any>;
   const ticker = data.ticker || data.symbol || "UNKNOWN";
+  const appName = signal.sourceAppName || undefined;
   const previews: DiscordPreviewMessage[] = [];
 
   previews.push({
     type: "signal_alert",
     label: "Entry Signal",
     content: "@everyone",
-    embed: buildSignalAlertEmbed(data, ticker),
+    embed: buildSignalAlertEmbed(data, ticker, appName),
   });
 
   const targets =
@@ -680,7 +681,7 @@ export function generateDiscordPreviews(
       type: "target_hit",
       label: `Target ${key.toUpperCase()} Hit`,
       content: "",
-      embed: buildTargetHitEmbed(data, ticker, { key, price }),
+      embed: buildTargetHitEmbed(data, ticker, { key, price }, appName),
     });
   }
 
@@ -694,7 +695,7 @@ export function generateDiscordPreviews(
       type: "stop_loss_raised",
       label: `SL Raised (${key.toUpperCase()})`,
       content: "",
-      embed: buildStopLossRaisedEmbed(data, ticker, key, newStop),
+      embed: buildStopLossRaisedEmbed(data, ticker, key, newStop, appName),
     });
   }
 
@@ -704,7 +705,7 @@ export function generateDiscordPreviews(
       type: "stop_loss_hit",
       label: "Stop Loss Hit",
       content: "@everyone",
-      embed: buildStopLossHitEmbed(data, ticker, stopLoss),
+      embed: buildStopLossHitEmbed(data, ticker, stopLoss, appName),
     });
   }
 
