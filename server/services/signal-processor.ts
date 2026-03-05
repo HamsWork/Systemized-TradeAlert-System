@@ -37,6 +37,8 @@ const LETF_UNDERLYING: Record<string, string> = {
   HIBL: "XHB", HIBS: "XHB", SOXL: "SOX", SOXS: "SOX", TECL: "XLK", TECS: "XLK",
   FAS: "XLF", FAZ: "XLF", YINN: "FXI", YANG: "FXI", NUGT: "GDX", DUST: "GDX",
   JNUG: "GDXJ", JDST: "GDXJ",
+  NVDL: "NVDA", NVDS: "NVDA",
+  TSLL: "TSLA", TSLQ: "TSLA",
 };
 
 const TDI_INSTRUMENT_MAP: Record<string, string> = {
