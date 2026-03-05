@@ -612,14 +612,13 @@ export function buildTargetHitEmbed(
   const entryInstrument = getInstrumentEntryPrice(data, instrumentType);
   const isStockBased = data.trade_plan_type === "stock_price_based";
   const isOption = instrumentType === "Options" || instrumentType === "LETF Option";
+  const underlyingBased = data.underlying_price_based === true || (isOption && isStockBased);
   const currentInstrumentPrice = data.current_instrument_price != null ? Number(data.current_instrument_price) : null;
   let pctProfit: string | null = null;
   if (currentInstrumentPrice != null && entryInstrument != null && entryInstrument > 0) {
     pctProfit = (((currentInstrumentPrice - entryInstrument) / entryInstrument) * 100).toFixed(1);
-  } else if (!isOption || !isStockBased) {
-    if (entryInstrument != null && entryInstrument > 0) {
-      pctProfit = (((target.price - entryInstrument) / entryInstrument) * 100).toFixed(1);
-    }
+  } else if (!underlyingBased && entryInstrument != null && entryInstrument > 0) {
+    pctProfit = (((target.price - entryInstrument) / entryInstrument) * 100).toFixed(1);
   }
   const isLETF = instrumentType === "LETF" || instrumentType === "LETF Option";
   const isCrypto = instrumentType === "Crypto";
@@ -719,7 +718,6 @@ export function buildStopLossRaisedEmbed(
   return { description, color: ORANGE, fields, footer: { text: DISCLAIMER } };
 }
 
-/** Builds the stop loss hit embed. Used by preview and send. */
 /** Builds the stop loss hit embed. Profit/result % is always based on instrument price. */
 export function buildStopLossHitEmbed(
   data: Record<string, any>,
@@ -738,6 +736,7 @@ export function buildStopLossHitEmbed(
       : isCrypto
         ? `**\u{1F6D1} ${ticker} Crypto Stop Loss Hit**`
         : `**\u{1F6D1} ${ticker} ${isSharesSymbol} Stop Loss Hit**`;
+  const underlyingBased = data.underlying_price_based === true || (isOption && isStockBased);
   const entryInstrument = getInstrumentEntryPrice(data, instrumentType);
   const currentInstrumentPrice = data.current_instrument_price != null ? Number(data.current_instrument_price) : null;
   const stopLossHitPrice =
@@ -747,10 +746,8 @@ export function buildStopLossHitEmbed(
     stopLossHitPct = String(data.stop_loss_hit_pct);
   } else if (currentInstrumentPrice != null && entryInstrument != null && entryInstrument > 0) {
     stopLossHitPct = (((currentInstrumentPrice - entryInstrument) / entryInstrument) * 100).toFixed(1);
-  } else if (!isOption || !isStockBased) {
-    if (entryInstrument != null && entryInstrument > 0) {
-      stopLossHitPct = (((stopLossHitPrice - entryInstrument) / entryInstrument) * 100).toFixed(1);
-    }
+  } else if (!underlyingBased && entryInstrument != null && entryInstrument > 0) {
+    stopLossHitPct = (((stopLossHitPrice - entryInstrument) / entryInstrument) * 100).toFixed(1);
   }
   const fields: DiscordField[] = [];
   pushInstrumentFields(fields, instrumentType, data);
