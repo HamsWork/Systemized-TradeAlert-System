@@ -89,7 +89,9 @@ function buildEntryEmbed(
 
   if (instrumentType === "Options" || instrumentType === "LETF Option") {
     const right = direction === "Put" ? "PUT" : "CALL";
-    const optionPrice = entryPrice;
+    const isStockBased = data.trade_plan_type === "stock_price_based";
+    const displayOptionPrice = data.entry_option_price != null ? Number(data.entry_option_price) : entryPrice;
+    const refPrice = isStockBased ? (stockPrice || entryPrice) : (entryPrice || stockPrice);
     fields.push(
       { name: "\ud83d\udfe2 Ticker", value: ticker, inline: true },
       {
@@ -110,13 +112,13 @@ function buildEntryEmbed(
       },
       {
         name: "\ud83d\udcb5 Option Price",
-        value: optionPrice ? fmtPrice(optionPrice) : "\u2014",
+        value: displayOptionPrice ? fmtPrice(displayOptionPrice) : "\u2014",
         inline: true,
       },
       { ...SPACER },
     );
-    addTradePlan(fields, data, optionPrice);
-    addTakeProfitPlan(fields, data, optionPrice);
+    addTradePlan(fields, data, refPrice);
+    addTakeProfitPlan(fields, data, refPrice);
   } else if (instrumentType === "LETF") {
     const entryForPct = stockPrice ?? entryPrice ?? 0;
     const dir = direction === "Short" ? "BEAR" : "BULL";
@@ -274,8 +276,12 @@ function buildStopLossRaisedEmbeds(
   const instrumentType = data.instrument_type || "Shares";
   const isLETF = instrumentType === "LETF" || instrumentType === "LETF Option";
   const isCrypto = instrumentType === "Crypto";
+  const isOption = instrumentType === "Options" || instrumentType === "LETF Option";
+  const isStockBased = data.trade_plan_type === "stock_price_based";
   const letfInfo = isLETF ? getLetfInfo(ticker) : null;
   const entryPrice = data.entry_price ? Number(data.entry_price) : null;
+  const stockPrice = data.entry_underlying_price ? Number(data.entry_underlying_price) : null;
+  const refPrice = (isOption && isStockBased) ? (stockPrice || entryPrice) : entryPrice;
 
   const entries = Object.entries(targets)
     .filter(([, val]) => (val as any)?.raise_stop_loss?.price)
@@ -286,7 +292,7 @@ function buildStopLossRaisedEmbeds(
   return entries.map(([key, val]) => {
     const t = val as any;
     const newStopLoss = Number(t.raise_stop_loss.price);
-    const isBreakEven = entryPrice && Math.abs(newStopLoss - entryPrice) < 0.01;
+    const isBreakEven = refPrice && Math.abs(newStopLoss - refPrice) < 0.01;
 
     const heading = isLETF
       ? `**\ud83d\udee1\ufe0f ${letfInfo?.underlying || ticker} \u2192 ${ticker}${instrumentType === "LETF Option" ? " Option" : ""} Stop Loss Raised**`
@@ -305,8 +311,9 @@ function buildStopLossRaisedEmbeds(
         ? allTargets[currentIdx + 1]
         : null;
 
+    const entryLabel = (isOption && isStockBased) ? "Entry (Stock)" : "Entry";
     const fields: DiscordField[] = [
-      { name: "\u2705 Entry", value: fmtPrice(entryPrice), inline: true },
+      { name: `\u2705 ${entryLabel}`, value: fmtPrice(refPrice), inline: true },
       {
         name: "\ud83d\udee1\ufe0f New Stop",
         value: `${fmtPrice(newStopLoss)}${isBreakEven ? " (Break Even)" : ""}`,
@@ -316,8 +323,8 @@ function buildStopLossRaisedEmbeds(
         name: "\ud83d\udcb8 Risk",
         value: isBreakEven
           ? "0% (Risk-Free)"
-          : entryPrice
-            ? fmtPct(entryPrice, newStopLoss)
+          : refPrice
+            ? fmtPct(refPrice, newStopLoss)
             : "\u2014",
         inline: true,
       },
@@ -367,8 +374,12 @@ function buildTargetHitEmbeds(
   const instrumentType = data.instrument_type || "Shares";
   const isLETF = instrumentType === "LETF" || instrumentType === "LETF Option";
   const isCrypto = instrumentType === "Crypto";
+  const isOption = instrumentType === "Options" || instrumentType === "LETF Option";
+  const isStockBased = data.trade_plan_type === "stock_price_based";
   const letfInfo = isLETF ? getLetfInfo(ticker) : null;
   const entryPrice = data.entry_price ? Number(data.entry_price) : null;
+  const stockPrice = data.entry_underlying_price ? Number(data.entry_underlying_price) : null;
+  const refPrice = (isOption && isStockBased) ? (stockPrice || entryPrice) : entryPrice;
 
   const entries = Object.entries(targets)
     .filter(([, val]) => (val as any)?.price)
@@ -378,8 +389,8 @@ function buildTargetHitEmbeds(
     const t = val as any;
     const targetPrice = Number(t.price);
     const pctProfit =
-      entryPrice && entryPrice > 0
-        ? (((targetPrice - entryPrice) / entryPrice) * 100).toFixed(1)
+      refPrice && refPrice > 0
+        ? (((targetPrice - refPrice) / refPrice) * 100).toFixed(1)
         : null;
 
     const heading = isLETF
@@ -388,8 +399,9 @@ function buildTargetHitEmbeds(
         ? `**\ud83c\udfaf ${ticker} Crypto Take Profit ${key.toUpperCase()} HIT**`
         : `**\ud83c\udfaf ${ticker} Take Profit ${key.toUpperCase()} HIT**`;
 
+    const entryLabel = (isOption && isStockBased) ? "Entry (Stock)" : "Entry";
     const fields: DiscordField[] = [
-      { name: "\u2705 Entry", value: fmtPrice(entryPrice), inline: true },
+      { name: `\u2705 ${entryLabel}`, value: fmtPrice(refPrice), inline: true },
       {
         name: "\ud83c\udfaf TP Hit",
         value: fmtPrice(targetPrice),
@@ -397,7 +409,7 @@ function buildTargetHitEmbeds(
       },
       {
         name: "\ud83d\udcb8 Profit",
-        value: pctProfit ? `+${pctProfit}%` : "\u2014",
+        value: pctProfit ? `${pctProfit}%` : "\u2014",
         inline: true,
       },
       { ...SPACER },
@@ -417,12 +429,12 @@ function buildTargetHitEmbeds(
 
     if (t.raise_stop_loss?.price) {
       const rsl = Number(t.raise_stop_loss.price);
-      const isBreakEven = entryPrice && Math.abs(rsl - entryPrice) < 0.01;
+      const isBreakEven = refPrice && Math.abs(rsl - refPrice) < 0.01;
       fields.push({ ...SPACER });
       fields.push({
         name: "\ud83d\udee1\ufe0f Risk Management",
         value: isBreakEven
-          ? `Raising stop loss to ${fmtPrice(entryPrice)} (break even) on remaining position to secure gains while allowing room to run.`
+          ? `Raising stop loss to ${fmtPrice(refPrice)} (break even) on remaining position to secure gains while allowing room to run.`
           : `Raising stop loss to ${fmtPrice(rsl)} on remaining position.`,
         inline: false,
       });
@@ -451,12 +463,16 @@ function buildStopLossHitEmbed(
   const instrumentType = data.instrument_type || "Shares";
   const isLETF = instrumentType === "LETF" || instrumentType === "LETF Option";
   const isCrypto = instrumentType === "Crypto";
+  const isOption = instrumentType === "Options" || instrumentType === "LETF Option";
+  const isStockBased = data.trade_plan_type === "stock_price_based";
   const letfInfo = isLETF ? getLetfInfo(ticker) : null;
   const entryPrice = data.entry_price ? Number(data.entry_price) : null;
+  const stockPrice = data.entry_underlying_price ? Number(data.entry_underlying_price) : null;
+  const refPrice = (isOption && isStockBased) ? (stockPrice || entryPrice) : entryPrice;
   const stopLoss = Number(data.stop_loss);
   const pctLoss =
-    entryPrice && entryPrice > 0
-      ? (((stopLoss - entryPrice) / entryPrice) * 100).toFixed(1)
+    refPrice && refPrice > 0
+      ? (((stopLoss - refPrice) / refPrice) * 100).toFixed(1)
       : null;
 
   const heading = isLETF
@@ -465,8 +481,9 @@ function buildStopLossHitEmbed(
       ? `**\ud83d\uded1 ${ticker} Crypto Stop Loss Hit**`
       : `**\ud83d\uded1 ${ticker} Stop Loss Hit**`;
 
+  const entryLabel = (isOption && isStockBased) ? "Entry (Stock)" : "Entry";
   const fields: DiscordField[] = [
-    { name: "\u2705 Entry", value: fmtPrice(entryPrice), inline: true },
+    { name: `\u2705 ${entryLabel}`, value: fmtPrice(refPrice), inline: true },
     { name: "\ud83d\uded1 Stop Hit", value: fmtPrice(stopLoss), inline: true },
     {
       name: "\ud83d\udcb8 Result",
@@ -502,8 +519,12 @@ function buildTradeClosedEmbed(
   const instrumentType = data.instrument_type || "Shares";
   const isLETF = instrumentType === "LETF" || instrumentType === "LETF Option";
   const isCrypto = instrumentType === "Crypto";
+  const isOption = instrumentType === "Options" || instrumentType === "LETF Option";
+  const isStockBased = data.trade_plan_type === "stock_price_based";
   const letfInfo = isLETF ? getLetfInfo(ticker) : null;
   const entryPrice = data.entry_price ? Number(data.entry_price) : null;
+  const stockPrice = data.entry_underlying_price ? Number(data.entry_underlying_price) : null;
+  const refPrice = (isOption && isStockBased) ? (stockPrice || entryPrice) : entryPrice;
 
   const heading = isLETF
     ? `**\ud83d\udcb0 ${letfInfo?.underlying || ticker} \u2192 ${ticker}${instrumentType === "LETF Option" ? " Option" : ""} Closed Manually**`
@@ -511,8 +532,9 @@ function buildTradeClosedEmbed(
       ? `**\ud83d\udcb0 ${ticker} Crypto Closed Manually**`
       : `**\ud83d\udcb0 ${ticker} Closed Manually**`;
 
+  const entryLabel = (isOption && isStockBased) ? "Entry (Stock)" : "Entry";
   const fields: DiscordField[] = [
-    { name: "\u2705 Entry", value: fmtPrice(entryPrice), inline: true },
+    { name: `\u2705 ${entryLabel}`, value: fmtPrice(refPrice), inline: true },
     { name: "\ud83c\udfc1 Exit", value: "\u2014", inline: true },
     { name: "\ud83d\udcb8 Profit", value: "\u2014", inline: true },
     { ...SPACER },
@@ -541,6 +563,7 @@ const SAMPLE_OPTIONS_DATA: Record<string, any> = {
   instrument_type: "Options",
   direction: "Call",
   entry_price: 5.2,
+  entry_option_price: 5.2,
   entry_underlying_price: 195.5,
   expiration: "2026-04-18",
   strike: 200,
@@ -591,6 +614,7 @@ const SAMPLE_LETF_OPTION_DATA: Record<string, any> = {
   instrument_type: "LETF Option",
   direction: "Call",
   entry_price: 6.50,
+  entry_option_price: 6.50,
   entry_underlying_price: 72.50,
   expiration: "2026-04-18",
   strike: 80,

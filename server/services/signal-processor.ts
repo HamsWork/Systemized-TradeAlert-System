@@ -274,6 +274,10 @@ async function buildSignalData(body: Record<string, any>): Promise<{ data: Recor
     signalDataObj.expiration = expiration;
     signalDataObj.strike = strike;
 
+    if (entryPrice) {
+      signalDataObj.entry_option_price = Number(entryPrice);
+    }
+
     const right = direction === "Put" ? "P" : "C";
 
     try {
@@ -287,9 +291,11 @@ async function buildSignalData(body: Record<string, any>): Promise<{ data: Recor
       if (!contractResult.exists) {
         errors.push(`Option contract not found: ${ticker} ${expiration} ${strike} ${direction}`);
       } else if (contractResult.price !== null) {
+        signalDataObj.entry_option_price = contractResult.price;
+        console.log(`[Signal] Fetched option contract price from Polygon: $${contractResult.price} for ${ticker} ${expiration} ${strike} ${direction}`);
         if (!signalDataObj.entry_price) {
           signalDataObj.entry_price = contractResult.price;
-          console.log(`[Signal] Auto-filled entryPrice from Polygon: $${contractResult.price} for ${ticker} ${expiration} ${strike} ${direction}`);
+          console.log(`[Signal] Auto-filled entryPrice from option price: $${contractResult.price}`);
         }
       }
     } catch (err: any) {
@@ -352,6 +358,15 @@ async function buildSignalData(body: Record<string, any>): Promise<{ data: Recor
       : (instrumentType === "Options" || instrumentType === "LETF Option") ? "option_price_based" : "stock_price_based");
   signalDataObj.auto_track = auto_track !== undefined ? auto_track : true;
   signalDataObj.underlying_price_based = isUnderlyingBased;
+
+  if (
+    signalDataObj.trade_plan_type === "stock_price_based" &&
+    (instrumentType === "Options" || instrumentType === "LETF Option") &&
+    signalDataObj.entry_underlying_price != null
+  ) {
+    signalDataObj.entry_price = signalDataObj.entry_underlying_price;
+    console.log(`[Signal] Stock-price-based option: set entry_price to stock price $${signalDataObj.entry_price}`);
+  }
 
   if (body.tdi_metadata) {
     signalDataObj.tdi_metadata = body.tdi_metadata;

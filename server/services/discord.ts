@@ -217,6 +217,9 @@ function buildOptionsFields(
   stockPrice: number | null,
 ): DiscordField[] {
   const right = direction === "Put" ? "PUT" : "CALL";
+  const isStockBased = data.trade_plan_type === "stock_price_based";
+  const displayOptionPrice = data.entry_option_price != null ? Number(data.entry_option_price) : optionPrice;
+  const refPrice = isStockBased ? (stockPrice || optionPrice) : (optionPrice || stockPrice);
   const fields: DiscordField[] = [
     { ...SPACER },
     { name: "🟢 Ticker", value: ticker, inline: true },
@@ -234,7 +237,7 @@ function buildOptionsFields(
     },
     {
       name: "💵 Option Price",
-      value: optionPrice ? fmtPrice(optionPrice) : "—",
+      value: displayOptionPrice ? fmtPrice(displayOptionPrice) : "—",
       inline: true,
     },
     { ...SPACER },
@@ -247,7 +250,7 @@ function buildOptionsFields(
     );
     const targetPrices = targetEntries.map(([, val]) => {
       const price = Number((val as any).price);
-      const pct = optionPrice ? fmtPct(optionPrice, price) : null;
+      const pct = refPrice ? fmtPct(refPrice, price) : null;
       return pct ? `${fmtPrice(price)} (${pct})` : fmtPrice(price);
     });
     if (targetPrices.length > 0) {
@@ -257,7 +260,7 @@ function buildOptionsFields(
 
   if (data.stop_loss != null) {
     const sl = Number(data.stop_loss);
-    const slPct = optionPrice ? fmtPct(optionPrice, sl) : null;
+    const slPct = refPrice ? fmtPct(refPrice, sl) : null;
     let slText = `🛑 Stop Loss: ${fmtPrice(sl)}(${slPct || "?"})`;
     const allTargets = Object.entries(data.targets || {}).filter(
       ([, val]) => (val as any)?.price,
@@ -265,7 +268,7 @@ function buildOptionsFields(
     allTargets.forEach(([, val]) => {
       if (!(val as any).raise_stop_loss?.price) return;
       const rsl = Number((val as any).raise_stop_loss?.price);
-      const rslPct = optionPrice ? fmtPct(optionPrice, rsl) : null;
+      const rslPct = refPrice ? fmtPct(refPrice, rsl) : null;
       slText += `, ${fmtPrice(rsl)}(${rslPct || "?"})`;
     });
     tradePlanParts.push(slText);
@@ -277,7 +280,7 @@ function buildOptionsFields(
 
   if (tradePlanParts.length > 0) {
     fields.push({
-      name: "📝 Trade Plan",
+      name: isStockBased ? "📝 Trade Plan (Stock Price Based)" : "📝 Trade Plan",
       value: tradePlanParts.join("\n"),
       inline: false,
     });
@@ -291,14 +294,14 @@ function buildOptionsFields(
     entries.forEach(([, val], i) => {
       const t = val as any;
       const price = Number(t.price);
-      const pct = optionPrice ? fmtPct(optionPrice, price) : null;
+      const pct = refPrice ? fmtPct(refPrice, price) : null;
       const takeOff = t.take_off_percent ? `${t.take_off_percent}%` : "100%";
       const positionLabel = i === 0 ? "of position" : "of remaining position";
       let line = `Take Profit (${i + 1}): At ${pct || fmtPrice(price)} take off ${takeOff} ${positionLabel}`;
       if (t.raise_stop_loss?.price) {
         const rslPrice = Number(t.raise_stop_loss.price);
         const isBreakEven =
-          optionPrice && Math.abs(rslPrice - optionPrice) < 0.01;
+          refPrice && Math.abs(rslPrice - refPrice) < 0.01;
         line += isBreakEven
           ? " and raise stop loss to break even."
           : ` and raise stop loss to ${fmtPrice(rslPrice)}.`;
@@ -590,9 +593,13 @@ export function buildTargetHitEmbed(
 ): DiscordEmbed {
   const instrumentType = data.instrument_type || "Shares";
   const entryPrice = data.entry_price != null ? Number(data.entry_price) : null;
+  const isStockBased = data.trade_plan_type === "stock_price_based";
+  const isOption = instrumentType === "Options" || instrumentType === "LETF Option";
+  const stockPrice = data.entry_underlying_price != null ? Number(data.entry_underlying_price) : null;
+  const refPrice = (isOption && isStockBased) ? (stockPrice || entryPrice) : entryPrice;
   const pctProfit =
-    entryPrice && entryPrice > 0
-      ? (((target.price - entryPrice) / entryPrice) * 100).toFixed(1)
+    refPrice && refPrice > 0
+      ? (((target.price - refPrice) / refPrice) * 100).toFixed(1)
       : null;
   const isLETF = instrumentType === "LETF" || instrumentType === "LETF Option";
   const isCrypto = instrumentType === "Crypto";
@@ -604,10 +611,11 @@ export function buildTargetHitEmbed(
     : isCrypto
       ? `**\u{1F3AF} ${ticker} Crypto Take Profit ${target.key.toUpperCase()} HIT**`
       : `**\u{1F3AF} ${ticker} Take Profit ${target.key.toUpperCase()} HIT**`;
+  const entryLabel = (isOption && isStockBased) ? "Entry (Stock)" : "Entry";
   fields.push(
-    { name: "\u2705 Entry", value: `${fmtPrice(entryPrice)}`, inline: true },
+    { name: `\u2705 ${entryLabel}`, value: `${fmtPrice(refPrice)}`, inline: true },
     { name: "\u{1F3AF} TP Hit", value: `${fmtPrice(target.price)}`, inline: true },
-    { name: "\u{1F4B8} Profit", value: `${pctProfit ?? "\u2014"}`, inline: true },
+    { name: "\u{1F4B8} Profit", value: `${pctProfit ? `${pctProfit}%` : "\u2014"}`, inline: true },
     { ...SPACER },
     {
       name: `\u{1F6A8} Status: TP ${target.key.toUpperCase()} Reached \u{1F6A8}`,
@@ -632,7 +640,7 @@ export function buildTargetHitEmbed(
   fields.push({ ...SPACER });
   fields.push({
     name: "\u{1F6E1}\uFE0F Risk Management",
-    value: `Raising stop loss to ${fmtPrice(entryPrice)} (break even) on remaining position to secure gains while allowing room to run.`,
+    value: `Raising stop loss to ${fmtPrice(refPrice)} (break even) on remaining position to secure gains while allowing room to run.`,
     inline: false,
   });
   return { description, color: GREEN, fields, footer: { text: DISCLAIMER } };
@@ -698,6 +706,8 @@ export function buildStopLossHitEmbed(
   const instrumentType = data.instrument_type || "Shares";
   const isLETF = instrumentType === "LETF" || instrumentType === "LETF Option";
   const isCrypto = instrumentType === "Crypto";
+  const isOption = instrumentType === "Options" || instrumentType === "LETF Option";
+  const isStockBased = data.trade_plan_type === "stock_price_based";
   const { underlying } = getLetfUnderlyingAndLeverage(ticker);
   const description = isLETF
     ? `**\u{1F6D1} ${underlying} \u2192 ${ticker}${instrumentType === "LETF Option" ? " Option" : ""} Stop Loss Hit**`
@@ -705,18 +715,21 @@ export function buildStopLossHitEmbed(
       ? `**\u{1F6D1} ${ticker} Crypto Stop Loss Hit**`
       : `**\u{1F6D1} ${ticker} Stop Loss Hit**`;
   const entryPrice = data.entry_price != null ? Number(data.entry_price) : null;
+  const stockPrice = data.entry_underlying_price != null ? Number(data.entry_underlying_price) : null;
+  const refPrice = (isOption && isStockBased) ? (stockPrice || entryPrice) : entryPrice;
   const stopLossHitPrice =
     data.stop_loss_hit_price != null ? Number(data.stop_loss_hit_price) : stopLoss;
   const stopLossHitPct =
     data.stop_loss_hit_pct != null
       ? String(data.stop_loss_hit_pct)
-      : entryPrice && entryPrice > 0
-        ? (((stopLossHitPrice - entryPrice) / entryPrice) * 100).toFixed(1)
+      : refPrice && refPrice > 0
+        ? (((stopLossHitPrice - refPrice) / refPrice) * 100).toFixed(1)
         : null;
   const fields: DiscordField[] = [];
   pushInstrumentFields(fields, instrumentType, data);
+  const entryLabel = (isOption && isStockBased) ? "Entry (Stock)" : "Entry";
   fields.push(
-    { name: "\u2705 Entry", value: `${fmtPrice(entryPrice)}`, inline: true },
+    { name: `\u2705 ${entryLabel}`, value: `${fmtPrice(refPrice)}`, inline: true },
     {
       name: "\u{1F6D1} Stop Hit",
       value: stopLossHitPrice != null ? fmtPrice(stopLossHitPrice) : "\u2014",
@@ -758,6 +771,8 @@ export function buildTradeClosedEmbed(
   const emoji = pnl != null && pnl > 0 ? "\u{1F4B0}" : "\u{1F4C9}";
   const isLETF = instrumentType === "LETF" || instrumentType === "LETF Option";
   const isCrypto = instrumentType === "Crypto";
+  const isOption = instrumentType === "Options" || instrumentType === "LETF Option";
+  const isStockBased = data.trade_plan_type === "stock_price_based";
   const { underlying } = getLetfUnderlyingAndLeverage(ticker);
   const description = isLETF
     ? `**${emoji} ${underlying} \u2192 ${ticker}${instrumentType === "LETF Option" ? " Option" : ""} Closed Manually**`
@@ -765,13 +780,16 @@ export function buildTradeClosedEmbed(
       ? `**${emoji} ${ticker} Crypto Closed Manually**`
       : `**${emoji} ${ticker} Closed Manually**`;
   const entryPrice = data.entry_price != null ? Number(data.entry_price) : null;
+  const stockPrice = data.entry_underlying_price != null ? Number(data.entry_underlying_price) : null;
+  const refPrice = (isOption && isStockBased) ? (stockPrice || entryPrice) : entryPrice;
   const exitPrice = data.exit_price != null ? Number(data.exit_price) : null;
   const pnlPct = data.pnl_pct != null ? String(data.pnl_pct) : null;
   const rMultiple = data.r_multiple != null ? Number(data.r_multiple) : null;
   const fields: DiscordField[] = [];
   pushInstrumentFields(fields, instrumentType, data);
+  const entryLabel = (isOption && isStockBased) ? "Entry (Stock)" : "Entry";
   fields.push(
-    { name: "\u2705 Entry", value: `${fmtPrice(entryPrice)}`, inline: true },
+    { name: `\u2705 ${entryLabel}`, value: `${fmtPrice(refPrice)}`, inline: true },
     { name: "\u{1F3C1} Exit", value: `${fmtPrice(exitPrice)}`, inline: true },
     { name: "\u{1F4B8} Profit", value: `${pnlPct ?? "\u2014"}`, inline: true },
     { ...SPACER },
@@ -897,6 +915,7 @@ function pushInstrumentFields(fields: DiscordField[], instrumentType: string, da
     );
   } else if (instrumentType === "Options" || instrumentType === "LETF Option") {
     const right = direction === "Put" ? "PUT" : "CALL";
+    const displayOptionPrice = data.entry_option_price != null ? Number(data.entry_option_price) : entryPrice;
     fields.push(
       { name: "\u274C Expiration", value: `${data.expiration ?? "\u2014"}`, inline: true },
       {
@@ -906,10 +925,17 @@ function pushInstrumentFields(fields: DiscordField[], instrumentType: string, da
       },
       {
         name: "\u{1F4B5} Option Price",
-        value: entryPrice != null ? fmtPrice(entryPrice) : "\u2014",
+        value: displayOptionPrice != null ? fmtPrice(displayOptionPrice) : "\u2014",
         inline: true,
       },
     );
+    if (data.trade_plan_type === "stock_price_based" && stockPrice != null) {
+      fields.push({
+        name: "\u{1F4CA} Stock Price",
+        value: fmtPrice(stockPrice),
+        inline: true,
+      });
+    }
   }
 }
 
