@@ -492,7 +492,7 @@ function ActivityRow({ entry }: { entry: ActivityLogEntry }) {
   );
 }
 
-function OptionChartTabs({ symbol, strike, expiration, optionType, entryPrice, tpLevels, slLevels, direction, tradePlanType }: {
+function OptionChartTabs({ symbol, strike, expiration, optionType, entryPrice, tpLevels, slLevels, direction, tradePlanType, underlyingPriceBased }: {
   symbol: string;
   strike?: string;
   expiration?: string;
@@ -502,9 +502,10 @@ function OptionChartTabs({ symbol, strike, expiration, optionType, entryPrice, t
   slLevels: number[];
   direction?: string;
   tradePlanType?: string;
+  underlyingPriceBased?: boolean;
 }) {
-  const isStockPriceBased = tradePlanType === "stock_price_based";
-  const [activeTab, setActiveTab] = useState<"option" | "underlying">(isStockPriceBased ? "underlying" : "option");
+  const showTargetsOnUnderlying = underlyingPriceBased === true || tradePlanType === "stock_price_based";
+  const [activeTab, setActiveTab] = useState<"option" | "underlying">(showTargetsOnUnderlying ? "underlying" : "option");
 
   const optionLabel = strike && expiration ? `${symbol} $${strike} ${expiration}` : symbol;
 
@@ -546,17 +547,17 @@ function OptionChartTabs({ symbol, strike, expiration, optionType, entryPrice, t
           strike={strike}
           expiration={expiration}
           optionType={optionType}
-          entryPrice={isStockPriceBased ? undefined : entryPrice}
-          tpLevels={isStockPriceBased ? [] : tpLevels}
-          slLevels={isStockPriceBased ? [] : slLevels}
+          entryPrice={showTargetsOnUnderlying ? undefined : entryPrice}
+          tpLevels={showTargetsOnUnderlying ? [] : tpLevels}
+          slLevels={showTargetsOnUnderlying ? [] : slLevels}
           direction={direction}
         />
       ) : (
         <TradeChart
           symbol={symbol}
-          entryPrice={isStockPriceBased ? entryPrice : undefined}
-          tpLevels={isStockPriceBased ? tpLevels : []}
-          slLevels={isStockPriceBased ? slLevels : []}
+          entryPrice={showTargetsOnUnderlying ? entryPrice : undefined}
+          tpLevels={showTargetsOnUnderlying ? tpLevels : []}
+          slLevels={showTargetsOnUnderlying ? slLevels : []}
           direction={direction}
         />
       )}
@@ -564,15 +565,16 @@ function OptionChartTabs({ symbol, strike, expiration, optionType, entryPrice, t
   );
 }
 
-function LetfChartTabs({ symbol, entryPrice, tpLevels, slLevels, direction }: {
+function LetfChartTabs({ symbol, entryPrice, tpLevels, slLevels, direction, underlyingPriceBased }: {
   symbol: string;
   entryPrice?: number;
   tpLevels: number[];
   slLevels: number[];
   direction?: string;
+  underlyingPriceBased?: boolean;
 }) {
   const underlying = getLetfUnderlying(symbol);
-  const [activeTab, setActiveTab] = useState<"letf" | "underlying">("letf");
+  const [activeTab, setActiveTab] = useState<"letf" | "underlying">(underlyingPriceBased ? "underlying" : "letf");
 
   if (!underlying) {
     return (
@@ -622,9 +624,9 @@ function LetfChartTabs({ symbol, entryPrice, tpLevels, slLevels, direction }: {
         <TradeChart
           symbol={symbol}
           instrumentType="LETF"
-          entryPrice={entryPrice}
-          tpLevels={tpLevels}
-          slLevels={slLevels}
+          entryPrice={underlyingPriceBased ? undefined : entryPrice}
+          tpLevels={underlyingPriceBased ? [] : tpLevels}
+          slLevels={underlyingPriceBased ? [] : slLevels}
           direction={direction}
         />
       ) : (
@@ -1148,6 +1150,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                     slLevels={slLevels}
                     direction={direction}
                     tradePlanType={tradePlanType}
+                    underlyingPriceBased={data.underlying_price_based === true}
                   />
                 ) : instrumentType === "LETF" ? (
                   <LetfChartTabs
@@ -1156,6 +1159,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                     tpLevels={tpLevels}
                     slLevels={slLevels}
                     direction={direction}
+                    underlyingPriceBased={data.underlying_price_based === true}
                   />
                 ) : (
                   <TradeChart
@@ -1392,14 +1396,13 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                         <BarChart3 className="h-3.5 w-3.5 text-blue-500/70" />
                         <span className="text-[10px] font-medium text-blue-500/80 uppercase tracking-wider">Plan Type</span>
                       </div>
-                      <Badge variant="outline" className="text-xs text-blue-500 border-blue-500/30 bg-blue-500/5" data-testid="badge-trade-plan-type">
-                        {tradePlanType === "stock_price_based" ? "Stock Price Based" : "Option Price Based"}
+                      <Badge variant="outline" className={`text-xs ${data.underlying_price_based === true ? "text-purple-500 border-purple-500/30 bg-purple-500/5" : "text-blue-500 border-blue-500/30 bg-blue-500/5"}`} data-testid="badge-trade-plan-type">
+                        {data.underlying_price_based === true
+                          ? "Underlying Stock Price Based"
+                          : tradePlanType === "stock_price_based"
+                            ? "Stock Price Based"
+                            : "Option Price Based"}
                       </Badge>
-                      {data.underlying_price_based === true && (
-                        <Badge variant="outline" className="text-xs text-purple-500 border-purple-500/30 bg-purple-500/5 ml-1.5" data-testid="badge-underlying-price-based">
-                          Underlying Price Tracking
-                        </Badge>
-                      )}
                     </div>
                   </>
                 )}

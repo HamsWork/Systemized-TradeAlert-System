@@ -344,11 +344,14 @@ async function buildSignalData(body: Record<string, any>): Promise<{ data: Recor
     signalDataObj.time_stop = time_stop;
   }
 
+  const isUnderlyingBased = underlying_price_based === true;
   signalDataObj.trade_plan_type =
     trade_plan_type ??
-    ((instrumentType === "Options" || instrumentType === "LETF Option") ? "option_price_based" : "stock_price_based");
+    (isUnderlyingBased
+      ? "stock_price_based"
+      : (instrumentType === "Options" || instrumentType === "LETF Option") ? "option_price_based" : "stock_price_based");
   signalDataObj.auto_track = auto_track !== undefined ? auto_track : true;
-  signalDataObj.underlying_price_based = underlying_price_based === true ? true : false;
+  signalDataObj.underlying_price_based = isUnderlyingBased;
 
   if (body.tdi_metadata) {
     signalDataObj.tdi_metadata = body.tdi_metadata;
