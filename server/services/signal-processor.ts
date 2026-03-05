@@ -1,9 +1,14 @@
 import type { Signal, ConnectedApp } from "@shared/schema";
 import { insertSignalSchema } from "@shared/schema";
 import { storage } from "../storage";
+import { LETF_UNDERLYING } from "../constants/letf";
 import { executeIbkrTrade } from "./trade-executor";
 import { sendSignalDiscordAlert } from "./discord";
-import { fetchPolygonBars, fetchOptionContractPrice, fetchStockPrice } from "./polygon";
+import {
+  fetchPolygonBars,
+  fetchOptionContractPrice,
+  fetchStockPrice,
+} from "./polygon";
 
 interface ProcessResult {
   signal: Signal | null;
@@ -25,53 +30,52 @@ interface ProcessResult {
   validationErrors: string[];
 }
 
-const VALID_INSTRUMENT_TYPES = ["Options", "Shares", "LETF", "LETF Option", "Crypto"];
+const VALID_INSTRUMENT_TYPES = [
+  "Options",
+  "Shares",
+  "LETF",
+  "LETF Option",
+  "Crypto",
+];
 const VALID_DIRECTIONS_OPTIONS = ["Call", "Put"];
 const VALID_DIRECTIONS_DEFAULT = ["Long", "Short"];
 const VALID_TRADE_PLAN_TYPES = ["stock_price_based", "option_price_based"];
 
-/** LETF ticker -> underlying index (for fetching underlying price only; trade plan uses LETF price) */
-const LETF_UNDERLYING: Record<string, string> = {
-  TQQQ: "QQQ", SQQQ: "QQQ", UPRO: "SPY", SPXU: "SPY", SPXL: "SPY", SPXS: "SPY",
-  UDOW: "DIA", SDOW: "DIA", TNA: "IWM", TZA: "IWM", LABU: "XBI", LABD: "XBI",
-  HIBL: "XHB", HIBS: "XHB", SOXL: "SOX", SOXS: "SOX", TECL: "XLK", TECS: "XLK",
-  FAS: "XLF", FAZ: "XLF", YINN: "FXI", YANG: "FXI", NUGT: "GDX", DUST: "GDX",
-  JNUG: "GDXJ", JDST: "GDXJ",
-  NVDL: "NVDA", NVDS: "NVDA",
-  TSLL: "TSLA", TSLQ: "TSLA",
-};
-
 const TDI_INSTRUMENT_MAP: Record<string, string> = {
-  "SHARES": "Shares",
-  "SHARE": "Shares",
-  "STOCK": "Shares",
-  "STK": "Shares",
-  "OPTION": "Options",
-  "OPTIONS": "Options",
-  "OPT": "Options",
-  "LETF": "LETF",
-  "LETF_OPTION": "LETF Option",
-  "LETF_OPT": "LETF Option",
-  "LETFOPTION": "LETF Option",
-  "CRYPTO": "Crypto",
-  "COIN": "Crypto",
+  SHARES: "Shares",
+  SHARE: "Shares",
+  STOCK: "Shares",
+  STK: "Shares",
+  OPTION: "Options",
+  OPTIONS: "Options",
+  OPT: "Options",
+  LETF: "LETF",
+  LETF_OPTION: "LETF Option",
+  LETF_OPT: "LETF Option",
+  LETFOPTION: "LETF Option",
+  CRYPTO: "Crypto",
+  COIN: "Crypto",
 };
 
 const TDI_DIRECTION_MAP: Record<string, string> = {
-  "long": "Long",
-  "LONG": "Long",
-  "short": "Short",
-  "SHORT": "Short",
-  "call": "Call",
-  "CALL": "Call",
-  "put": "Put",
-  "PUT": "Put",
+  long: "Long",
+  LONG: "Long",
+  short: "Short",
+  SHORT: "Short",
+  call: "Call",
+  CALL: "Call",
+  put: "Put",
+  PUT: "Put",
 };
 
 function isTdiFormat(body: Record<string, any>): boolean {
   return !!(
-    body.symbol && !body.ticker &&
-    (body.entry_price !== undefined || body.stop_price !== undefined || body.strategy_mode || body.timeframe)
+    body.symbol &&
+    !body.ticker &&
+    (body.entry_price !== undefined ||
+      body.stop_price !== undefined ||
+      body.strategy_mode ||
+      body.timeframe)
   );
 }
 
@@ -80,11 +84,15 @@ function transformTdiSignal(body: Record<string, any>): Record<string, any> {
   const instrumentType = TDI_INSTRUMENT_MAP[rawInstrument] || "Shares";
 
   let direction = TDI_DIRECTION_MAP[body.direction] || body.direction || "Long";
-  if ((instrumentType === "Options" || instrumentType === "LETF Option") && (direction === "Long" || direction === "Short")) {
+  if (
+    (instrumentType === "Options" || instrumentType === "LETF Option") &&
+    (direction === "Long" || direction === "Short")
+  ) {
     direction = direction === "Long" ? "Call" : "Put";
   }
 
-  const ticker = body.instrument_ticker || body.instrument_symbol || body.symbol;
+  const ticker =
+    body.instrument_ticker || body.instrument_symbol || body.symbol;
 
   const result: Record<string, any> = {
     ticker: ticker.toUpperCase(),
@@ -137,7 +145,8 @@ function transformTdiSignal(body: Record<string, any>): Record<string, any> {
 
   if (body.trade_plan_type) result.trade_plan_type = body.trade_plan_type;
   if (body.auto_track !== undefined) result.auto_track = body.auto_track;
-  if (body.underlying_price_based !== undefined) result.underlying_price_based = body.underlying_price_based;
+  if (body.underlying_price_based !== undefined)
+    result.underlying_price_based = body.underlying_price_based;
 
   result.tdi_metadata = {
     strategy_mode: body.strategy_mode || null,
@@ -150,11 +159,15 @@ function transformTdiSignal(body: Record<string, any>): Record<string, any> {
     quantity: body.quantity ?? null,
   };
 
-  console.log(`[Signal] Transformed TDI signal: ${body.symbol} → ${JSON.stringify(result)}`);
+  console.log(
+    `[Signal] Transformed TDI signal: ${body.symbol} → ${JSON.stringify(result)}`,
+  );
   return result;
 }
 
-function parseOptionTicker(opra: string): { expiration: string; strike: string } | null {
+function parseOptionTicker(
+  opra: string,
+): { expiration: string; strike: string } | null {
   const match = opra.match(/^[A-Z]+(\d{6})([CP])(\d+)$/);
   if (!match) return null;
   const dateStr = match[1];
@@ -177,7 +190,10 @@ function validateIngestBody(body: Record<string, any>): string[] {
     );
   }
 
-  const validDirections = (instrumentType === "Options" || instrumentType === "LETF Option") ? VALID_DIRECTIONS_OPTIONS : VALID_DIRECTIONS_DEFAULT;
+  const validDirections =
+    instrumentType === "Options" || instrumentType === "LETF Option"
+      ? VALID_DIRECTIONS_OPTIONS
+      : VALID_DIRECTIONS_DEFAULT;
   if (!direction || !validDirections.includes(direction)) {
     errors.push(
       `direction is required and must be one of: ${validDirections.join(", ")}`,
@@ -185,17 +201,23 @@ function validateIngestBody(body: Record<string, any>): string[] {
   }
 
   if (instrumentType === "Options" || instrumentType === "LETF Option") {
-    if (!body.expiration) errors.push(`expiration is required for ${instrumentType}`);
+    if (!body.expiration)
+      errors.push(`expiration is required for ${instrumentType}`);
     if (!body.strike) errors.push(`strike is required for ${instrumentType}`);
   }
 
-  if (body.entryPrice != null && (isNaN(Number(body.entryPrice)) || Number(body.entryPrice) <= 0)) {
+  if (
+    body.entryPrice != null &&
+    (isNaN(Number(body.entryPrice)) || Number(body.entryPrice) <= 0)
+  ) {
     errors.push("entryPrice must be a positive number");
   }
 
   if (body.targets != null) {
     if (typeof body.targets !== "object" || Array.isArray(body.targets)) {
-      errors.push("targets must be an object (e.g. { tp1: { price: 100 }, tp2: { price: 110 } })");
+      errors.push(
+        "targets must be an object (e.g. { tp1: { price: 100 }, tp2: { price: 110 } })",
+      );
     } else {
       for (const [key, val] of Object.entries(body.targets)) {
         const t = val as any;
@@ -208,46 +230,76 @@ function validateIngestBody(body: Record<string, any>): string[] {
         }
         if (t.take_off_percent == null) {
           errors.push(`targets.${key}.take_off_percent is required`);
-        } else if (isNaN(Number(t.take_off_percent)) || Number(t.take_off_percent) < 0 || Number(t.take_off_percent) > 100) {
-          errors.push(`targets.${key}.take_off_percent must be a number between 0 and 100`);
+        } else if (
+          isNaN(Number(t.take_off_percent)) ||
+          Number(t.take_off_percent) < 0 ||
+          Number(t.take_off_percent) > 100
+        ) {
+          errors.push(
+            `targets.${key}.take_off_percent must be a number between 0 and 100`,
+          );
         }
         if (t.raise_stop_loss != null) {
           if (typeof t.raise_stop_loss !== "object") {
-            errors.push(`targets.${key}.raise_stop_loss must be an object with a price field`);
-          } else if (t.raise_stop_loss.price == null || isNaN(Number(t.raise_stop_loss.price)) || Number(t.raise_stop_loss.price) <= 0) {
-            errors.push(`targets.${key}.raise_stop_loss.price must be a positive number`);
+            errors.push(
+              `targets.${key}.raise_stop_loss must be an object with a price field`,
+            );
+          } else if (
+            t.raise_stop_loss.price == null ||
+            isNaN(Number(t.raise_stop_loss.price)) ||
+            Number(t.raise_stop_loss.price) <= 0
+          ) {
+            errors.push(
+              `targets.${key}.raise_stop_loss.price must be a positive number`,
+            );
           }
         }
       }
     }
   }
 
-  if (body.stop_loss != null && (isNaN(Number(body.stop_loss)) || Number(body.stop_loss) <= 0)) {
+  if (
+    body.stop_loss != null &&
+    (isNaN(Number(body.stop_loss)) || Number(body.stop_loss) <= 0)
+  ) {
     errors.push("stop_loss must be a positive number");
   }
 
   if (body.time_stop != null) {
-    if (typeof body.time_stop !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(body.time_stop)) {
+    if (
+      typeof body.time_stop !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(body.time_stop)
+    ) {
       errors.push("time_stop must be a date string in YYYY-MM-DD format");
     }
   }
 
-  if (body.trade_plan_type != null && !VALID_TRADE_PLAN_TYPES.includes(body.trade_plan_type)) {
-    errors.push(`trade_plan_type must be one of: ${VALID_TRADE_PLAN_TYPES.join(", ")}`);
+  if (
+    body.trade_plan_type != null &&
+    !VALID_TRADE_PLAN_TYPES.includes(body.trade_plan_type)
+  ) {
+    errors.push(
+      `trade_plan_type must be one of: ${VALID_TRADE_PLAN_TYPES.join(", ")}`,
+    );
   }
 
   if (body.auto_track != null && typeof body.auto_track !== "boolean") {
     errors.push("auto_track must be a boolean (true or false)");
   }
 
-  if (body.underlying_price_based != null && typeof body.underlying_price_based !== "boolean") {
+  if (
+    body.underlying_price_based != null &&
+    typeof body.underlying_price_based !== "boolean"
+  ) {
     errors.push("underlying_price_based must be a boolean (true or false)");
   }
 
   return errors;
 }
 
-async function buildSignalData(body: Record<string, any>): Promise<{ data: Record<string, any>; errors: string[] }> {
+async function buildSignalData(
+  body: Record<string, any>,
+): Promise<{ data: Record<string, any>; errors: string[] }> {
   const {
     ticker,
     instrumentType,
@@ -291,13 +343,19 @@ async function buildSignalData(body: Record<string, any>): Promise<{ data: Recor
       );
 
       if (!contractResult.exists) {
-        errors.push(`Option contract not found: ${ticker} ${expiration} ${strike} ${direction}`);
+        errors.push(
+          `Option contract not found: ${ticker} ${expiration} ${strike} ${direction}`,
+        );
       } else if (contractResult.price !== null) {
         signalDataObj.entry_option_price = contractResult.price;
-        console.log(`[Signal] Fetched option contract price from Polygon: $${contractResult.price} for ${ticker} ${expiration} ${strike} ${direction}`);
+        console.log(
+          `[Signal] Fetched option contract price from Polygon: $${contractResult.price} for ${ticker} ${expiration} ${strike} ${direction}`,
+        );
         if (!signalDataObj.entry_price) {
           signalDataObj.entry_price = contractResult.price;
-          console.log(`[Signal] Auto-filled entryPrice from option price: $${contractResult.price}`);
+          console.log(
+            `[Signal] Auto-filled entryPrice from option price: $${contractResult.price}`,
+          );
         }
       }
     } catch (err: any) {
@@ -310,30 +368,41 @@ async function buildSignalData(body: Record<string, any>): Promise<{ data: Recor
       const stockPrice = await fetchStockPrice(ticker);
       if (stockPrice !== null) {
         signalDataObj.entry_underlying_price = stockPrice;
-        console.log(`[Signal] Fetched underlying stock price from Polygon: $${stockPrice} for ${ticker}`);
+        console.log(
+          `[Signal] Fetched underlying stock price from Polygon: $${stockPrice} for ${ticker}`,
+        );
       }
     } else if (instrumentType === "LETF Option") {
       const letfPrice = await fetchStockPrice(ticker);
       if (letfPrice !== null) {
         signalDataObj.entry_underlying_price = letfPrice;
-        console.log(`[Signal] Fetched LETF price from Polygon: $${letfPrice} for ${ticker}`);
+        console.log(
+          `[Signal] Fetched LETF price from Polygon: $${letfPrice} for ${ticker}`,
+        );
       }
     } else if (instrumentType === "LETF") {
-      const underlyingSymbol = LETF_UNDERLYING[(ticker || "").toUpperCase().trim()];
+      const underlyingSymbol =
+        LETF_UNDERLYING[(ticker || "").toUpperCase().trim()];
       if (underlyingSymbol) {
         const underlyingPrice = await fetchStockPrice(underlyingSymbol);
         if (underlyingPrice !== null) {
           signalDataObj.entry_underlying_price = underlyingPrice;
-          console.log(`[Signal] Fetched underlying index price from Polygon: $${underlyingPrice} for ${ticker} (${underlyingSymbol})`);
+          console.log(
+            `[Signal] Fetched underlying index price from Polygon: $${underlyingPrice} for ${ticker} (${underlyingSymbol})`,
+          );
         }
       }
     } else if (instrumentType === "Crypto") {
-      console.log(`[Signal] Crypto signal — skipping Polygon price fetch for ${ticker}`);
+      console.log(
+        `[Signal] Crypto signal — skipping Polygon price fetch for ${ticker}`,
+      );
     } else {
       const stockPrice = await fetchStockPrice(ticker);
       if (stockPrice !== null) {
         signalDataObj.entry_underlying_price = stockPrice;
-        console.log(`[Signal] Fetched stock price from Polygon: $${stockPrice} for ${ticker}`);
+        console.log(
+          `[Signal] Fetched stock price from Polygon: $${stockPrice} for ${ticker}`,
+        );
       }
     }
   } catch (err: any) {
@@ -357,7 +426,9 @@ async function buildSignalData(body: Record<string, any>): Promise<{ data: Recor
     trade_plan_type ??
     (isUnderlyingBased
       ? "stock_price_based"
-      : (instrumentType === "Options" || instrumentType === "LETF Option") ? "option_price_based" : "stock_price_based");
+      : instrumentType === "Options" || instrumentType === "LETF Option"
+        ? "option_price_based"
+        : "stock_price_based");
   signalDataObj.auto_track = auto_track !== undefined ? auto_track : true;
   signalDataObj.underlying_price_based = isUnderlyingBased;
 
@@ -367,7 +438,9 @@ async function buildSignalData(body: Record<string, any>): Promise<{ data: Recor
     signalDataObj.entry_underlying_price != null
   ) {
     signalDataObj.entry_price = signalDataObj.entry_underlying_price;
-    console.log(`[Signal] Stock-price-based option: set entry_price to stock price $${signalDataObj.entry_price}`);
+    console.log(
+      `[Signal] Stock-price-based option: set entry_price to stock price $${signalDataObj.entry_price}`,
+    );
   }
 
   if (body.tdi_metadata) {
@@ -377,7 +450,8 @@ async function buildSignalData(body: Record<string, any>): Promise<{ data: Recor
   if (body.underlying_symbol) {
     signalDataObj.underlying_symbol = body.underlying_symbol;
   } else if (instrumentType === "LETF" || instrumentType === "LETF Option") {
-    const underlyingSymbol = LETF_UNDERLYING[(ticker || "").toUpperCase().trim()];
+    const underlyingSymbol =
+      LETF_UNDERLYING[(ticker || "").toUpperCase().trim()];
     if (underlyingSymbol) {
       signalDataObj.underlying_symbol = underlyingSymbol;
     }
@@ -401,7 +475,9 @@ export async function processSignal(
 
   let normalizedBody = body;
   if (isTdiFormat(body)) {
-    console.log(`[Signal] Detected TDI format from ${app.name}, transforming...`);
+    console.log(
+      `[Signal] Detected TDI format from ${app.name}, transforming...`,
+    );
     normalizedBody = transformTdiSignal(body);
   }
 
@@ -409,14 +485,21 @@ export async function processSignal(
   if (validationErrors.length > 0) {
     result.validationErrors = validationErrors;
     const ticker = normalizedBody.ticker || normalizedBody.symbol || "unknown";
-    storage.createActivity({
-      type: "signal_rejected",
-      title: `Signal rejected from ${app.name}: ${ticker}`,
-      description: `Validation failed: ${validationErrors.join("; ")}`,
-      symbol: ticker,
-      signalId: null,
-      metadata: { sourceApp: app.name, sourceAppId: app.id, errors: validationErrors, rawSignal: body },
-    }).catch(() => {});
+    storage
+      .createActivity({
+        type: "signal_rejected",
+        title: `Signal rejected from ${app.name}: ${ticker}`,
+        description: `Validation failed: ${validationErrors.join("; ")}`,
+        symbol: ticker,
+        signalId: null,
+        metadata: {
+          sourceApp: app.name,
+          sourceAppId: app.id,
+          errors: validationErrors,
+          rawSignal: body,
+        },
+      })
+      .catch(() => {});
     return result;
   }
 
@@ -426,18 +509,31 @@ export async function processSignal(
   if (buildResult.errors.length > 0) {
     result.validationErrors = buildResult.errors;
     const ticker = normalizedBody.ticker || normalizedBody.symbol || "unknown";
-    storage.createActivity({
-      type: "signal_rejected",
-      title: `Signal rejected from ${app.name}: ${ticker}`,
-      description: `Build failed: ${buildResult.errors.join("; ")}`,
-      symbol: ticker,
-      signalId: null,
-      metadata: { sourceApp: app.name, sourceAppId: app.id, errors: buildResult.errors, rawSignal: body },
-    }).catch(() => {});
+    storage
+      .createActivity({
+        type: "signal_rejected",
+        title: `Signal rejected from ${app.name}: ${ticker}`,
+        description: `Build failed: ${buildResult.errors.join("; ")}`,
+        symbol: ticker,
+        signalId: null,
+        metadata: {
+          sourceApp: app.name,
+          sourceAppId: app.id,
+          errors: buildResult.errors,
+          rawSignal: body,
+        },
+      })
+      .catch(() => {});
     return result;
   }
 
-  const { ticker, instrument_type: instrumentType, direction, expiration, strike } = signalDataObj;
+  const {
+    ticker,
+    instrument_type: instrumentType,
+    direction,
+    expiration,
+    strike,
+  } = signalDataObj;
   const sourceName = app.name;
   const sourceId = app.id;
 
@@ -448,27 +544,34 @@ export async function processSignal(
     sourceAppName: sourceName,
   };
 
-
   const parsed = insertSignalSchema.parse(signalPayload);
   const signal = await storage.createSignal(parsed);
   result.signal = signal;
 
-  storage.updateConnectedApp(app.id, { lastSyncAt: new Date() } as any).catch(() => {});
+  storage
+    .updateConnectedApp(app.id, { lastSyncAt: new Date() } as any)
+    .catch(() => {});
 
-  storage.createActivity({
-    type: "signal_ingested",
-    title: `Signal from ${sourceName}: ${ticker} ${direction}`,
-    description: `${instrumentType} signal for ${ticker} (${direction})`,
-    symbol: ticker,
-    signalId: signal.id,
-    metadata: {
-      sourceApp: sourceName,
-      sourceAppId: sourceId,
-      rawSignal: body,
-    },
-  }).catch(() => {});
+  storage
+    .createActivity({
+      type: "signal_ingested",
+      title: `Signal from ${sourceName}: ${ticker} ${direction}`,
+      description: `${instrumentType} signal for ${ticker} (${direction})`,
+      symbol: ticker,
+      signalId: signal.id,
+      metadata: {
+        sourceApp: sourceName,
+        sourceAppId: sourceId,
+        rawSignal: body,
+      },
+    })
+    .catch(() => {});
 
-  if ((instrumentType === "Options" || instrumentType === "LETF Option") && strike && expiration) {
+  if (
+    (instrumentType === "Options" || instrumentType === "LETF Option") &&
+    strike &&
+    expiration
+  ) {
     const right = direction === "Put" ? "P" : "C";
     fetchPolygonBars({ symbol: ticker, secType: "STK" }).catch(() => {});
     fetchPolygonBars({
@@ -488,7 +591,9 @@ export async function processSignal(
     typeof body.discord_channel_webhook === "string"
       ? body.discord_channel_webhook.trim() || null
       : null;
-  console.log(`[Signal] Sending discord alert to ${discordChannelWebhook} for ${ticker}`);
+  console.log(
+    `[Signal] Sending discord alert to ${discordChannelWebhook} for ${ticker}`,
+  );
   const discordResult = await sendSignalDiscordAlert(
     signal,
     app,
@@ -508,9 +613,13 @@ export async function processSignal(
 
   if (tradeExecution.executed && tradeExecution.trade) {
     const t = tradeExecution.trade;
-    console.log(`[Signal] IBKR entry order SUCCESS: ${t.side} ${t.quantity} ${t.symbol} | status=${t.status} | orderId=${t.orderId}`);
+    console.log(
+      `[Signal] IBKR entry order SUCCESS: ${t.side} ${t.quantity} ${t.symbol} | status=${t.status} | orderId=${t.orderId}`,
+    );
   } else if (tradeExecution.error) {
-    console.error(`[Signal] IBKR trade FAILED for ${ticker}: ${tradeExecution.error}`);
+    console.error(
+      `[Signal] IBKR trade FAILED for ${ticker}: ${tradeExecution.error}`,
+    );
   }
 
   return result;

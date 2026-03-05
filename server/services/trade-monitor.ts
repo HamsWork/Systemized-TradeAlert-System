@@ -1,10 +1,11 @@
 import type { Signal, ConnectedApp } from "@shared/schema";
 import { storage } from "../storage";
+import { getLETFUnderlying } from "../constants/letf";
 import { sendTargetHitDiscordAlert, sendStopLossRaisedDiscord, sendStopLossHitDiscord } from "./discord";
 import { fetchStockPrice, fetchOptionContractPrice } from "./polygon";
 
 function getUnderlyingTicker(data: Record<string, any>): string {
-  return data.underlying_symbol || data.ticker || "";
+  return data.underlying_symbol || getLETFUnderlying(data.ticker) || data.ticker || "";
 }
 
 function fmtPrice(p: number | null | undefined): string {
@@ -43,6 +44,24 @@ function isBullishTrade(data: Record<string, any>): boolean {
     return data.direction === "Call";
   }
   return data.direction === "Long" || data.direction !== "Short";
+}
+
+/** When underlying_price_based, fetch current instrument price for Discord profit display. */
+async function getCurrentInstrumentPrice(
+  data: Record<string, any>,
+  ticker: string,
+): Promise<number | null> {
+  const instrumentType = data.instrument_type || "Shares";
+  if (instrumentType === "Options" || instrumentType === "LETF Option") {
+    if (data.strike == null || !data.expiration || !data.direction) return null;
+    const right = data.direction === "Put" ? "P" : "C";
+    const result = await fetchOptionContractPrice(ticker, data.expiration, Number(data.strike), right);
+    return result.price ?? null;
+  }
+  if (instrumentType === "LETF") {
+    return fetchStockPrice(ticker);
+  }
+  return null;
 }
 
 const MONITOR_INTERVAL = 10000;
@@ -192,7 +211,12 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
       };
       await storage.updateSignal(signal.id, { data: updatedData });
 
-      await sendTargetHitDiscordAlert(signal, app, target, currentPrice, ticker, data);
+      const dataForDiscord = { ...data };
+      if (needsUnderlyingPrice) {
+        const currentInstrumentPrice = await getCurrentInstrumentPrice(data, ticker);
+        if (currentInstrumentPrice != null) dataForDiscord.current_instrument_price = currentInstrumentPrice;
+      }
+      await sendTargetHitDiscordAlert(signal, app, target, currentPrice, ticker, dataForDiscord);
 
       storage
         .createActivity({
@@ -227,9 +251,13 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
       updatedData.stop_loss_hit = true;
       updatedData.stop_loss_hit_at = new Date().toISOString();
       updatedData.stop_loss_hit_price = currentPrice;
+      if (needsUnderlyingPrice) {
+        const currentInstrumentPrice = await getCurrentInstrumentPrice(data, ticker);
+        if (currentInstrumentPrice != null) updatedData.current_instrument_price = currentInstrumentPrice;
+      }
       await storage.updateSignal(signal.id, { data: updatedData, status: "stopped_out" });
 
-      await sendStopLossHitDiscord(signal, app, stopLoss, currentPrice, ticker, data);
+      await sendStopLossHitDiscord(signal, app, stopLoss, currentPrice, ticker, updatedData);
 
       storage
         .createActivity({
