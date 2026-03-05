@@ -632,9 +632,9 @@ function LetfChartTabs({ symbol, entryPrice, tpLevels, slLevels, direction, unde
       ) : (
         <TradeChart
           symbol={underlying}
-          entryPrice={entryPrice}
-          tpLevels={tpLevels}
-          slLevels={slLevels}
+          entryPrice={underlyingPriceBased ? entryPrice : undefined}
+          tpLevels={underlyingPriceBased ? tpLevels : []}
+          slLevels={underlyingPriceBased ? slLevels : []}
           direction={direction}
         />
       )}
