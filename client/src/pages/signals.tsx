@@ -71,6 +71,7 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
   const [raiseMethod, setRaiseMethod] = useState("");
   const [raiseValue, setRaiseValue] = useState("");
   const [notes, setNotes] = useState("");
+  const [underlyingPriceBased, setUnderlyingPriceBased] = useState(false);
 
   const resetForm = () => {
     setTicker(""); setInstrumentType(""); setDirection("");
@@ -78,6 +79,7 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
     setTp1(""); setTp2(""); setTp3("");
     setSl1(""); setSl2(""); setSl3("");
     setRaiseMethod(""); setRaiseValue(""); setNotes("");
+    setUnderlyingPriceBased(false);
   };
 
   const createMutation = useMutation({
@@ -124,6 +126,7 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
       if (raiseValue) data.raise_stop_value = raiseValue;
     }
     if (notes) data.trade_plan = notes;
+    if (underlyingPriceBased) data.underlying_price_based = true;
 
     createMutation.mutate({
       data,
@@ -300,6 +303,20 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                   data-testid="input-signal-notes"
                 />
               </div>
+
+              {(instrumentType === "Options" || instrumentType === "LETF" || instrumentType === "LETF Option") && (
+                <label className="flex items-center gap-2 cursor-pointer select-none" data-testid="toggle-underlying-price-based">
+                  <input
+                    type="checkbox"
+                    checked={underlyingPriceBased}
+                    onChange={(e) => setUnderlyingPriceBased(e.target.checked)}
+                    className="rounded border-border h-4 w-4 accent-primary"
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    Underlying Price Based — targets &amp; stop loss track the underlying stock price
+                  </span>
+                </label>
+              )}
             </div>
           </div>
 

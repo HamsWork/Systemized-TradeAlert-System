@@ -135,6 +135,7 @@ function transformTdiSignal(body: Record<string, any>): Record<string, any> {
 
   if (body.trade_plan_type) result.trade_plan_type = body.trade_plan_type;
   if (body.auto_track !== undefined) result.auto_track = body.auto_track;
+  if (body.underlying_price_based !== undefined) result.underlying_price_based = body.underlying_price_based;
 
   result.tdi_metadata = {
     strategy_mode: body.strategy_mode || null,
@@ -237,6 +238,10 @@ function validateIngestBody(body: Record<string, any>): string[] {
     errors.push("auto_track must be a boolean (true or false)");
   }
 
+  if (body.underlying_price_based != null && typeof body.underlying_price_based !== "boolean") {
+    errors.push("underlying_price_based must be a boolean (true or false)");
+  }
+
   return errors;
 }
 
@@ -253,6 +258,7 @@ async function buildSignalData(body: Record<string, any>): Promise<{ data: Recor
     time_stop,
     trade_plan_type,
     auto_track,
+    underlying_price_based,
   } = body;
 
   const errors: string[] = [];
@@ -342,6 +348,7 @@ async function buildSignalData(body: Record<string, any>): Promise<{ data: Recor
     trade_plan_type ??
     ((instrumentType === "Options" || instrumentType === "LETF Option") ? "option_price_based" : "stock_price_based");
   signalDataObj.auto_track = auto_track !== undefined ? auto_track : true;
+  signalDataObj.underlying_price_based = underlying_price_based === true ? true : false;
 
   if (body.tdi_metadata) {
     signalDataObj.tdi_metadata = body.tdi_metadata;

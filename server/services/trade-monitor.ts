@@ -3,6 +3,20 @@ import { storage } from "../storage";
 import { sendTargetHitDiscordAlert, sendStopLossRaisedDiscord, sendStopLossHitDiscord } from "./discord";
 import { fetchStockPrice, fetchOptionContractPrice } from "./polygon";
 
+const LETF_UNDERLYING: Record<string, string> = {
+  TQQQ: "QQQ", SQQQ: "QQQ", UPRO: "SPY", SPXU: "SPY", SPXL: "SPY", SPXS: "SPY",
+  UDOW: "DIA", SDOW: "DIA", TNA: "IWM", TZA: "IWM", LABU: "XBI", LABD: "XBI",
+  HIBL: "XHB", HIBS: "XHB", SOXL: "SOX", SOXS: "SOX", TECL: "XLK", TECS: "XLK",
+  FAS: "XLF", FAZ: "XLF", YINN: "FXI", YANG: "FXI", NUGT: "GDX", DUST: "GDX",
+  JNUG: "GDXJ", JDST: "GDXJ",
+};
+
+function getUnderlyingTicker(ticker: string, instrumentType: string): string {
+  if (instrumentType === "Options") return ticker;
+  const upper = (ticker || "").toUpperCase().trim();
+  return LETF_UNDERLYING[upper] || ticker;
+}
+
 function fmtPrice(p: number | null | undefined): string {
   if (p == null) return "\u2014";
   return `$${Number(p).toFixed(2)}`;
@@ -90,20 +104,29 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
     fromOrder ??
     (fromData != null && fromData > 0 ? fromData : null);
 
-  if (!currentPrice || currentPrice <= 0) {
-    const instrumentType = data.instrument_type || "Shares";
+  const instrumentType = data.instrument_type || "Shares";
+  const underlyingPriceBased = data.underlying_price_based === true;
+  const needsUnderlyingPrice = underlyingPriceBased && (instrumentType === "Options" || instrumentType === "LETF" || instrumentType === "LETF Option");
+
+  if (needsUnderlyingPrice) {
+    const underlyingTicker = getUnderlyingTicker(ticker, instrumentType);
+    const underlyingPrice = await fetchStockPrice(underlyingTicker);
+    if (underlyingPrice && underlyingPrice > 0) {
+      currentPrice = underlyingPrice;
+    }
+  } else if (!currentPrice || currentPrice <= 0) {
     if ((instrumentType === "Options" || instrumentType === "LETF Option") && data.strike != null && data.expiration && data.direction) {
       const right = data.direction === "Put" ? "P" : "C";
       const strikeNum = Number(data.strike);
       const result = await fetchOptionContractPrice(ticker, data.expiration, strikeNum, right);
       currentPrice = result.price ?? null;
     } else if (instrumentType === "Crypto") {
-      // Crypto price not available via Polygon — auto-tracking requires external price updates
       return;
     } else {
       currentPrice = await fetchStockPrice(ticker);
     }
   }
+
   if (!currentPrice || currentPrice <= 0) return;
 
   const bullish = isBullishTrade(data);

@@ -1395,6 +1395,11 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                       <Badge variant="outline" className="text-xs text-blue-500 border-blue-500/30 bg-blue-500/5" data-testid="badge-trade-plan-type">
                         {tradePlanType === "stock_price_based" ? "Stock Price Based" : "Option Price Based"}
                       </Badge>
+                      {data.underlying_price_based === true && (
+                        <Badge variant="outline" className="text-xs text-purple-500 border-purple-500/30 bg-purple-500/5 ml-1.5" data-testid="badge-underlying-price-based">
+                          Underlying Price Tracking
+                        </Badge>
+                      )}
                     </div>
                   </>
                 )}
