@@ -5,6 +5,7 @@ import { asyncHandler } from "../lib/async-handler";
 import { getParam } from "../lib/params";
 import { processSignal } from "../services/signal-processor";
 import { executeIbkrClose } from "../services/trade-executor";
+import { recordManualTargetHit } from "../services/trade-monitor";
 
 import {
   sendTradeClosedManuallyDiscord,
