@@ -51,42 +51,6 @@ interface ChartBar {
   volume: number;
 }
 
-/** LETF ticker -> underlying index (for chart tabs) */
-const LETF_UNDERLYING: Record<string, string> = {
-  TQQQ: "QQQ", SQQQ: "QQQ", UPRO: "SPY", SPXU: "SPY", SPXL: "SPY", SPXS: "SPY",
-  UDOW: "DIA", SDOW: "DIA", TNA: "IWM", TZA: "IWM", LABU: "XBI", LABD: "XBI",
-  HIBL: "XHB", HIBS: "XHB", SOXL: "SOX", SOXS: "SOX", TECL: "XLK", TECS: "XLK",
-  FAS: "XLF", FAZ: "XLF", YINN: "FXI", YANG: "FXI", NUGT: "GDX", DUST: "GDX",
-  JNUG: "GDXJ", JDST: "GDXJ",
-};
-
-/** LETF ticker -> underlying + leverage (for detail card) */
-const LETF_INFO: Record<string, { underlying: string; leverage: number }> = {
-  TQQQ: { underlying: "QQQ", leverage: 3 }, SQQQ: { underlying: "QQQ", leverage: -3 },
-  UPRO: { underlying: "SPY", leverage: 3 }, SPXU: { underlying: "SPY", leverage: -3 },
-  SPXL: { underlying: "SPY", leverage: 3 }, SPXS: { underlying: "SPY", leverage: -3 },
-  UDOW: { underlying: "DIA", leverage: 3 }, SDOW: { underlying: "DIA", leverage: -3 },
-  TNA: { underlying: "IWM", leverage: 3 }, TZA: { underlying: "IWM", leverage: -3 },
-  LABU: { underlying: "XBI", leverage: 3 }, LABD: { underlying: "XBI", leverage: -3 },
-  HIBL: { underlying: "XHB", leverage: 3 }, HIBS: { underlying: "XHB", leverage: -3 },
-  SOXL: { underlying: "SOX", leverage: 3 }, SOXS: { underlying: "SOX", leverage: -3 },
-  TECL: { underlying: "XLK", leverage: 3 }, TECS: { underlying: "XLK", leverage: -3 },
-  FAS: { underlying: "XLF", leverage: 3 }, FAZ: { underlying: "XLF", leverage: -3 },
-  YINN: { underlying: "FXI", leverage: 3 }, YANG: { underlying: "FXI", leverage: -3 },
-  NUGT: { underlying: "GDX", leverage: 3 }, DUST: { underlying: "GDX", leverage: -3 },
-  JNUG: { underlying: "GDXJ", leverage: 3 }, JDST: { underlying: "GDXJ", leverage: -3 },
-};
-
-function getLetfUnderlying(ticker: string): string | null {
-  return LETF_UNDERLYING[(ticker || "").toUpperCase().trim()] ?? null;
-}
-
-function getLetfInfo(ticker: string): { underlying: string; leverage: string } | null {
-  const row = LETF_INFO[(ticker || "").toUpperCase().trim()];
-  if (!row) return null;
-  const lev = row.leverage < 0 ? `${row.leverage}x` : `+${row.leverage}x`;
-  return { underlying: row.underlying, leverage: lev };
-}
 
 function buildChartQueryUrl(params: {
   symbol: string;
@@ -567,15 +531,16 @@ function OptionChartTabs({ symbol, strike, expiration, optionType, entryPrice, t
   );
 }
 
-function LetfChartTabs({ symbol, entryPrice, tpLevels, slLevels, direction, underlyingPriceBased }: {
+function LetfChartTabs({ symbol, entryPrice, tpLevels, slLevels, direction, underlyingPriceBased, underlyingSymbol }: {
   symbol: string;
   entryPrice?: number;
   tpLevels: number[];
   slLevels: number[];
   direction?: string;
   underlyingPriceBased?: boolean;
+  underlyingSymbol?: string;
 }) {
-  const underlying = getLetfUnderlying(symbol);
+  const underlying = underlyingSymbol || null;
   const [activeTab, setActiveTab] = useState<"letf" | "underlying">(underlyingPriceBased ? "underlying" : "letf");
 
   if (!underlying) {
@@ -1063,7 +1028,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
   const entryPrice = data.entry_price ? parseFloat(data.entry_price) : undefined;
   const expiration = data.expiration;
   const strike = data.strike;
-  const letfInfo = (instrumentType === "LETF" || instrumentType === "LETF Option") && ticker ? getLetfInfo(ticker) : null;
+  const underlyingSymbol = data.underlying_symbol || null;
 
   const hitTargetsData = data.hit_targets as Record<string, { hitAt: string; price: number }> | undefined;
   const isStoppedOut = signal.status === "stopped_out";
@@ -1164,6 +1129,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                     slLevels={slLevels}
                     direction={direction}
                     underlyingPriceBased={data.underlying_price_based === true}
+                    underlyingSymbol={data.underlying_symbol}
                   />
                 ) : (
                   <TradeChart
@@ -1243,21 +1209,13 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                     </div>
                   )}
 
-                  {letfInfo && (
-                    <>
-                      <div className="flex items-center justify-between" data-testid="detail-letf-underlying">
-                        <span className="text-xs text-muted-foreground flex items-center gap-1.5">
-                          <TrendingUp className="h-3 w-3" /> Underlying
-                        </span>
-                        <span className="font-mono font-semibold text-sm">{letfInfo.underlying}</span>
-                      </div>
-                      <div className="flex items-center justify-between" data-testid="detail-letf-leverage">
-                        <span className="text-xs text-muted-foreground flex items-center gap-1.5">
-                          <BarChart3 className="h-3 w-3" /> Leverage
-                        </span>
-                        <span className="font-mono font-semibold text-sm">{letfInfo.leverage}</span>
-                      </div>
-                    </>
+                  {underlyingSymbol && (instrumentType === "LETF" || instrumentType === "LETF Option") && (
+                    <div className="flex items-center justify-between" data-testid="detail-letf-underlying">
+                      <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                        <TrendingUp className="h-3 w-3" /> Underlying
+                      </span>
+                      <span className="font-mono font-semibold text-sm">{underlyingSymbol}</span>
+                    </div>
                   )}
 
                   {signal.sourceAppName && (

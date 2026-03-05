@@ -374,6 +374,13 @@ async function buildSignalData(body: Record<string, any>): Promise<{ data: Recor
 
   if (body.underlying_symbol) {
     signalDataObj.underlying_symbol = body.underlying_symbol;
+  } else if (instrumentType === "LETF" || instrumentType === "LETF Option") {
+    const underlyingSymbol = LETF_UNDERLYING[(ticker || "").toUpperCase().trim()];
+    if (underlyingSymbol) {
+      signalDataObj.underlying_symbol = underlyingSymbol;
+    }
+  } else if (instrumentType === "Options") {
+    signalDataObj.underlying_symbol = ticker;
   }
 
   return { data: signalDataObj, errors };

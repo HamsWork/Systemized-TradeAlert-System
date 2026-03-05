@@ -32,31 +32,8 @@ function fmtPct(base: number | null, target: number): string {
   return `${(((target - base) / base) * 100).toFixed(1)}%`;
 }
 
-const LETF_LOOKUP: Record<string, { underlying: string; leverage: number }> = {
-  TQQQ: { underlying: "QQQ", leverage: 3 },
-  SQQQ: { underlying: "QQQ", leverage: -3 },
-  UPRO: { underlying: "SPY", leverage: 3 },
-  SPXU: { underlying: "SPY", leverage: -3 },
-  SPXL: { underlying: "SPY", leverage: 3 },
-  SPXS: { underlying: "SPY", leverage: -3 },
-  UDOW: { underlying: "DIA", leverage: 3 },
-  SDOW: { underlying: "DIA", leverage: -3 },
-  TNA: { underlying: "IWM", leverage: 3 },
-  TZA: { underlying: "IWM", leverage: -3 },
-  LABU: { underlying: "XBI", leverage: 3 },
-  LABD: { underlying: "XBI", leverage: -3 },
-  SOXL: { underlying: "SOX", leverage: 3 },
-  SOXS: { underlying: "SOX", leverage: -3 },
-  TECL: { underlying: "XLK", leverage: 3 },
-  TECS: { underlying: "XLK", leverage: -3 },
-  FAS: { underlying: "XLF", leverage: 3 },
-  FAZ: { underlying: "XLF", leverage: -3 },
-};
-
-function getLetfInfo(
-  ticker: string,
-): { underlying: string; leverage: number } | null {
-  return LETF_LOOKUP[(ticker || "").toUpperCase().trim()] || null;
+function getUnderlying(data: Record<string, any>, ticker: string): string {
+  return data.underlying_symbol || ticker;
 }
 
 function buildEntryEmbed(
@@ -73,14 +50,12 @@ function buildEntryEmbed(
 
   const isLETF = instrumentType === "LETF" || instrumentType === "LETF Option";
   const isCrypto = instrumentType === "Crypto";
-  const letfInfo = isLETF ? getLetfInfo(ticker) : null;
-  const displayTicker =
-    isLETF && letfInfo ? `${letfInfo.underlying} \u2192 ${ticker}` : ticker;
+  const underlying = getUnderlying(data, ticker);
 
   const heading = instrumentType === "LETF"
-    ? `**\ud83d\udea8 ${letfInfo?.underlying || ticker} \u2192 ${ticker} Swing Alert**`
+    ? `**\ud83d\udea8 ${underlying} \u2192 ${ticker} Swing Alert**`
     : instrumentType === "LETF Option"
-      ? `**\ud83d\udea8 ${letfInfo?.underlying || ticker} \u2192 ${ticker} Option Alert**`
+      ? `**\ud83d\udea8 ${underlying} \u2192 ${ticker} Option Alert**`
       : isCrypto
         ? `**\ud83d\udea8 ${ticker} Crypto Alert**`
         : `**\ud83d\udea8 ${ticker} Trade Alert**`;
@@ -125,7 +100,7 @@ function buildEntryEmbed(
     fields.push(
       {
         name: "\ud83d\udfe2 Ticker",
-        value: letfInfo?.underlying || ticker,
+        value: underlying,
         inline: true,
       },
       {
@@ -137,7 +112,7 @@ function buildEntryEmbed(
       { ...SPACER },
       {
         name: "\ud83d\udcf9 LETF",
-        value: `${ticker} (${letfInfo?.leverage || "?"}x ${dir})`,
+        value: `${ticker} (${dir})`,
         inline: true,
       },
       {
@@ -278,7 +253,7 @@ function buildStopLossRaisedEmbeds(
   const isCrypto = instrumentType === "Crypto";
   const isOption = instrumentType === "Options" || instrumentType === "LETF Option";
   const isStockBased = data.trade_plan_type === "stock_price_based";
-  const letfInfo = isLETF ? getLetfInfo(ticker) : null;
+  const underlying = getUnderlying(data, ticker);
   const entryPrice = data.entry_price ? Number(data.entry_price) : null;
   const stockPrice = data.entry_underlying_price ? Number(data.entry_underlying_price) : null;
   const refPrice = (isOption && isStockBased) ? (stockPrice || entryPrice) : entryPrice;
@@ -295,7 +270,7 @@ function buildStopLossRaisedEmbeds(
     const isBreakEven = refPrice && Math.abs(newStopLoss - refPrice) < 0.01;
 
     const heading = isLETF
-      ? `**\ud83d\udee1\ufe0f ${letfInfo?.underlying || ticker} \u2192 ${ticker}${instrumentType === "LETF Option" ? " Option" : ""} Stop Loss Raised**`
+      ? `**\ud83d\udee1\ufe0f ${underlying} \u2192 ${ticker}${instrumentType === "LETF Option" ? " Option" : ""} Stop Loss Raised**`
       : isCrypto
         ? `**\ud83d\udee1\ufe0f ${ticker} Crypto Stop Loss Raised**`
         : `**\ud83d\udee1\ufe0f ${ticker} Stop Loss Raised**`;
@@ -376,7 +351,7 @@ function buildTargetHitEmbeds(
   const isCrypto = instrumentType === "Crypto";
   const isOption = instrumentType === "Options" || instrumentType === "LETF Option";
   const isStockBased = data.trade_plan_type === "stock_price_based";
-  const letfInfo = isLETF ? getLetfInfo(ticker) : null;
+  const underlying = getUnderlying(data, ticker);
   const entryPrice = data.entry_price ? Number(data.entry_price) : null;
   const stockPrice = data.entry_underlying_price ? Number(data.entry_underlying_price) : null;
   const refPrice = (isOption && isStockBased) ? (stockPrice || entryPrice) : entryPrice;
@@ -394,7 +369,7 @@ function buildTargetHitEmbeds(
         : null;
 
     const heading = isLETF
-      ? `**\ud83c\udfaf ${letfInfo?.underlying || ticker} \u2192 ${ticker}${instrumentType === "LETF Option" ? " Option" : ""} Take Profit ${key.toUpperCase()} HIT**`
+      ? `**\ud83c\udfaf ${underlying} \u2192 ${ticker}${instrumentType === "LETF Option" ? " Option" : ""} Take Profit ${key.toUpperCase()} HIT**`
       : isCrypto
         ? `**\ud83c\udfaf ${ticker} Crypto Take Profit ${key.toUpperCase()} HIT**`
         : `**\ud83c\udfaf ${ticker} Take Profit ${key.toUpperCase()} HIT**`;
@@ -465,7 +440,7 @@ function buildStopLossHitEmbed(
   const isCrypto = instrumentType === "Crypto";
   const isOption = instrumentType === "Options" || instrumentType === "LETF Option";
   const isStockBased = data.trade_plan_type === "stock_price_based";
-  const letfInfo = isLETF ? getLetfInfo(ticker) : null;
+  const underlying = getUnderlying(data, ticker);
   const entryPrice = data.entry_price ? Number(data.entry_price) : null;
   const stockPrice = data.entry_underlying_price ? Number(data.entry_underlying_price) : null;
   const refPrice = (isOption && isStockBased) ? (stockPrice || entryPrice) : entryPrice;
@@ -476,7 +451,7 @@ function buildStopLossHitEmbed(
       : null;
 
   const heading = isLETF
-    ? `**\ud83d\uded1 ${letfInfo?.underlying || ticker} \u2192 ${ticker}${instrumentType === "LETF Option" ? " Option" : ""} Stop Loss Hit**`
+    ? `**\ud83d\uded1 ${underlying} \u2192 ${ticker}${instrumentType === "LETF Option" ? " Option" : ""} Stop Loss Hit**`
     : isCrypto
       ? `**\ud83d\uded1 ${ticker} Crypto Stop Loss Hit**`
       : `**\ud83d\uded1 ${ticker} Stop Loss Hit**`;
@@ -521,13 +496,13 @@ function buildTradeClosedEmbed(
   const isCrypto = instrumentType === "Crypto";
   const isOption = instrumentType === "Options" || instrumentType === "LETF Option";
   const isStockBased = data.trade_plan_type === "stock_price_based";
-  const letfInfo = isLETF ? getLetfInfo(ticker) : null;
+  const underlying = getUnderlying(data, ticker);
   const entryPrice = data.entry_price ? Number(data.entry_price) : null;
   const stockPrice = data.entry_underlying_price ? Number(data.entry_underlying_price) : null;
   const refPrice = (isOption && isStockBased) ? (stockPrice || entryPrice) : entryPrice;
 
   const heading = isLETF
-    ? `**\ud83d\udcb0 ${letfInfo?.underlying || ticker} \u2192 ${ticker}${instrumentType === "LETF Option" ? " Option" : ""} Closed Manually**`
+    ? `**\ud83d\udcb0 ${underlying} \u2192 ${ticker}${instrumentType === "LETF Option" ? " Option" : ""} Closed Manually**`
     : isCrypto
       ? `**\ud83d\udcb0 ${ticker} Crypto Closed Manually**`
       : `**\ud83d\udcb0 ${ticker} Closed Manually**`;
@@ -598,6 +573,7 @@ const SAMPLE_LETF_DATA: Record<string, any> = {
   direction: "Long",
   entry_price: 72.5,
   entry_underlying_price: 490.0,
+  underlying_symbol: "QQQ",
   stop_loss: 68.0,
   targets: {
     tp1: {
@@ -616,6 +592,7 @@ const SAMPLE_LETF_OPTION_DATA: Record<string, any> = {
   entry_price: 6.50,
   entry_option_price: 6.50,
   entry_underlying_price: 72.50,
+  underlying_symbol: "QQQ",
   expiration: "2026-04-18",
   strike: 80,
   stop_loss: 4.00,

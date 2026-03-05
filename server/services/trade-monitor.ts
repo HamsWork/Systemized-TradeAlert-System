@@ -3,18 +3,8 @@ import { storage } from "../storage";
 import { sendTargetHitDiscordAlert, sendStopLossRaisedDiscord, sendStopLossHitDiscord } from "./discord";
 import { fetchStockPrice, fetchOptionContractPrice } from "./polygon";
 
-const LETF_UNDERLYING: Record<string, string> = {
-  TQQQ: "QQQ", SQQQ: "QQQ", UPRO: "SPY", SPXU: "SPY", SPXL: "SPY", SPXS: "SPY",
-  UDOW: "DIA", SDOW: "DIA", TNA: "IWM", TZA: "IWM", LABU: "XBI", LABD: "XBI",
-  HIBL: "XHB", HIBS: "XHB", SOXL: "SOX", SOXS: "SOX", TECL: "XLK", TECS: "XLK",
-  FAS: "XLF", FAZ: "XLF", YINN: "FXI", YANG: "FXI", NUGT: "GDX", DUST: "GDX",
-  JNUG: "GDXJ", JDST: "GDXJ",
-};
-
-function getUnderlyingTicker(ticker: string, instrumentType: string): string {
-  if (instrumentType === "Options") return ticker;
-  const upper = (ticker || "").toUpperCase().trim();
-  return LETF_UNDERLYING[upper] || ticker;
+function getUnderlyingTicker(data: Record<string, any>): string {
+  return data.underlying_symbol || data.ticker || "";
 }
 
 function fmtPrice(p: number | null | undefined): string {
@@ -109,7 +99,7 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
   const needsUnderlyingPrice = underlyingPriceBased && (instrumentType === "Options" || instrumentType === "LETF" || instrumentType === "LETF Option");
 
   if (needsUnderlyingPrice) {
-    const underlyingTicker = getUnderlyingTicker(ticker, instrumentType);
+    const underlyingTicker = getUnderlyingTicker(data);
     const underlyingPrice = await fetchStockPrice(underlyingTicker);
     if (underlyingPrice && underlyingPrice > 0) {
       currentPrice = underlyingPrice;

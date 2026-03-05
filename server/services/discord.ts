@@ -169,44 +169,8 @@ function fmtPct(base: number | null, target: number): string {
   return `${(((target - base) / base) * 100).toFixed(1)}%`;
 }
 
-/** Known LETFs: ticker -> { underlying index, leverage multiplier } */
-const LETF_LOOKUP: Record<string, { underlying: string; leverage: number }> = {
-  TQQQ: { underlying: "QQQ", leverage: 3 },
-  SQQQ: { underlying: "QQQ", leverage: -3 },
-  UPRO: { underlying: "SPY", leverage: 3 },
-  SPXU: { underlying: "SPY", leverage: -3 },
-  SPXL: { underlying: "SPY", leverage: 3 },
-  SPXS: { underlying: "SPY", leverage: -3 },
-  UDOW: { underlying: "DIA", leverage: 3 },
-  SDOW: { underlying: "DIA", leverage: -3 },
-  TNA: { underlying: "IWM", leverage: 3 },
-  TZA: { underlying: "IWM", leverage: -3 },
-  LABU: { underlying: "XBI", leverage: 3 },
-  LABD: { underlying: "XBI", leverage: -3 },
-  HIBL: { underlying: "XHB", leverage: 3 },
-  HIBS: { underlying: "XHB", leverage: -3 },
-  SOXL: { underlying: "SOX", leverage: 3 },
-  SOXS: { underlying: "SOX", leverage: -3 },
-  TECL: { underlying: "XLK", leverage: 3 },
-  TECS: { underlying: "XLK", leverage: -3 },
-  FAS: { underlying: "XLF", leverage: 3 },
-  FAZ: { underlying: "XLF", leverage: -3 },
-  YINN: { underlying: "FXI", leverage: 3 },
-  YANG: { underlying: "FXI", leverage: -3 },
-  NUGT: { underlying: "GDX", leverage: 3 },
-  DUST: { underlying: "GDX", leverage: -3 },
-  JNUG: { underlying: "GDXJ", leverage: 3 },
-  JDST: { underlying: "GDXJ", leverage: -3 },
-};
-
-function getLetfUnderlyingAndLeverage(letfTicker: string): { underlying: string; leverage: string } {
-  const key = (letfTicker || "").toUpperCase().trim();
-  const row = LETF_LOOKUP[key];
-  if (row) {
-    const lev = row.leverage < 0 ? `${row.leverage}` : `+${row.leverage}`;
-    return { underlying: row.underlying, leverage: `${Math.abs(row.leverage)}` };
-  }
-  return { underlying: key || "?", leverage: "?" };
+function getUnderlying(data: Record<string, any>, ticker: string): string {
+  return data.underlying_symbol || ticker;
 }
 
 function buildOptionsFields(
@@ -330,7 +294,7 @@ function buildLetfFields(
   entryPrice: number | null,
   stockPrice: number | null,
 ): DiscordField[] {
-  const { underlying, leverage } = getLetfUnderlyingAndLeverage(ticker);
+  const underlying = getUnderlying(data, ticker);
   const dirText = data.direction ? (data.direction === "Short" ? "BEAR" : "BULL") : "?";
   // Underlying/stock price at entry (for "Stock Price" and for % vs targets/stop)
   const stockPriceAtEntry =
@@ -404,7 +368,7 @@ function buildLetfFields(
     { ...SPACER },
     {
       name: "📹 LETF",
-      value: `${ticker} (${leverage}x ${dirText})`,
+      value: `${ticker} (${dirText})`,
       inline: true,
     },
     {
@@ -559,13 +523,12 @@ export function buildSignalAlertEmbed(
     data.entry_underlying_price != null ? Number(data.entry_underlying_price) : null;
   const isBullish = direction === "Call" || direction === "Long";
   const instrumentType = data.instrument_type || "Shares";
-  const { underlying: letfUnderlying } =
-    (instrumentType === "LETF" || instrumentType === "LETF Option") ? getLetfUnderlyingAndLeverage(ticker) : { underlying: ticker };
+  const underlying = getUnderlying(data, ticker);
   const heading =
     instrumentType === "LETF"
-      ? `**\u{1F6A8} ${letfUnderlying} \u2192 ${ticker} Swing Alert**`
+      ? `**\u{1F6A8} ${underlying} \u2192 ${ticker} Swing Alert**`
       : instrumentType === "LETF Option"
-        ? `**\u{1F6A8} ${letfUnderlying} \u2192 ${ticker} Option Alert**`
+        ? `**\u{1F6A8} ${underlying} \u2192 ${ticker} Option Alert**`
         : instrumentType === "Crypto"
           ? `**\u{1F6A8} ${ticker} Crypto Alert**`
           : `**\u{1F6A8} ${ticker} Trade Alert**`;
@@ -603,7 +566,7 @@ export function buildTargetHitEmbed(
       : null;
   const isLETF = instrumentType === "LETF" || instrumentType === "LETF Option";
   const isCrypto = instrumentType === "Crypto";
-  const { underlying } = getLetfUnderlyingAndLeverage(ticker);
+  const underlying = getUnderlying(data, ticker);
   const fields: DiscordField[] = [];
   pushInstrumentFields(fields, instrumentType, data);
   const description = isLETF
@@ -656,7 +619,7 @@ export function buildStopLossRaisedEmbed(
   const instrumentType = data.instrument_type || "Shares";
   const isLETF = instrumentType === "LETF" || instrumentType === "LETF Option";
   const isCrypto = instrumentType === "Crypto";
-  const { underlying } = getLetfUnderlyingAndLeverage(ticker);
+  const underlying = getUnderlying(data, ticker);
   const description = isLETF
     ? `**\u{1F6E1}\uFE0F ${underlying} \u2192 ${ticker}${instrumentType === "LETF Option" ? " Option" : ""} Stop Loss Raised**`
     : isCrypto
@@ -708,7 +671,7 @@ export function buildStopLossHitEmbed(
   const isCrypto = instrumentType === "Crypto";
   const isOption = instrumentType === "Options" || instrumentType === "LETF Option";
   const isStockBased = data.trade_plan_type === "stock_price_based";
-  const { underlying } = getLetfUnderlyingAndLeverage(ticker);
+  const underlying = getUnderlying(data, ticker);
   const description = isLETF
     ? `**\u{1F6D1} ${underlying} \u2192 ${ticker}${instrumentType === "LETF Option" ? " Option" : ""} Stop Loss Hit**`
     : isCrypto
@@ -773,7 +736,7 @@ export function buildTradeClosedEmbed(
   const isCrypto = instrumentType === "Crypto";
   const isOption = instrumentType === "Options" || instrumentType === "LETF Option";
   const isStockBased = data.trade_plan_type === "stock_price_based";
-  const { underlying } = getLetfUnderlyingAndLeverage(ticker);
+  const underlying = getUnderlying(data, ticker);
   const description = isLETF
     ? `**${emoji} ${underlying} \u2192 ${ticker}${instrumentType === "LETF Option" ? " Option" : ""} Closed Manually**`
     : isCrypto
@@ -866,8 +829,6 @@ export async function sendTargetHitDiscordAlert(
   const pnlText = pctProfit ? `+${pctProfit}%` : "\u2014";
 
   const isLETF = instrumentType === "LETF";
-  const { underlying } = getLetfUnderlyingAndLeverage(ticker);
-  const letfLabel = (data.letf_label as string) || `${ticker} (LETF)`;
 
   const embed = buildTargetHitEmbed(data, ticker, target);
   const sent = await sendWebhook(webhookUrl, "", [embed]);
@@ -894,12 +855,12 @@ function pushInstrumentFields(fields: DiscordField[], instrumentType: string, da
   const direction = data.direction || "Long";
 
   if (instrumentType === "LETF") {
-    const { underlying, leverage } = getLetfUnderlyingAndLeverage(ticker);
+    const underlying = getUnderlying(data, ticker);
     const dir = direction === "Short" ? "BEAR" : "BULL";
     fields.push(
       {
         name: "\u{1F4B9} LETF",
-        value: `${ticker} (${leverage}x ${dir})`,
+        value: `${ticker} (${dir})`,
         inline: true,
       },
       {
