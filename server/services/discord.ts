@@ -468,7 +468,7 @@ function buildLetfFields(
   const dir = data.direction || "Long";
   const fields: DiscordField[] = [
     { ...SPACER },
-    { name: "🟢 Ticker", value: underlying, inline: true },
+    { name: "🟢 Ticker", value: ticker, inline: true },
     { name: "📈 Direction", value: dir, inline: true },
     { ...SPACER },
     {
@@ -526,7 +526,11 @@ function buildLetfFields(
       let slText = `🛑 Stop Loss: ${fmtPrice(stopPrice)}`;
       allTargets.forEach(([, val]) => {
         if (!(val as any).raise_stop_loss?.price) return;
-        slText = addRsl(Number((val as any).raise_stop_loss?.price), slText, false);
+        slText = addRsl(
+          Number((val as any).raise_stop_loss?.price),
+          slText,
+          false,
+        );
       });
       tradePlanParts.push(slText);
     } else {
@@ -534,7 +538,11 @@ function buildLetfFields(
       let slText = `🛑 Stop Loss: ${fmtPrice(stopPrice)}(${slPct || "?"})`;
       allTargets.forEach(([, val]) => {
         if (!(val as any).raise_stop_loss?.price) return;
-        slText = addRsl(Number((val as any).raise_stop_loss?.price), slText, true);
+        slText = addRsl(
+          Number((val as any).raise_stop_loss?.price),
+          slText,
+          true,
+        );
       });
       tradePlanParts.push(slText);
     }
@@ -922,9 +930,9 @@ export function buildSignalAlertEmbed(
   const underlying = getUnderlying(data, ticker);
   const heading = appendAppName(
     instrumentType === "LETF"
-      ? `**\u{1F6A8} ${underlying} Trade Alert**`
+      ? `**\u{1F6A8} ${ticker} Shares Entry**`
       : instrumentType === "LETF Option"
-        ? `**\u{1F6A8} ${underlying} Trade Alert**`
+        ? `**\u{1F6A8} ${ticer} Options Entry**`
         : instrumentType === "Crypto"
           ? `**\u{1F6A8} ${ticker} Crypto Alert**`
           : instrumentType === "Shares"
