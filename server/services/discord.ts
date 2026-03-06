@@ -643,7 +643,7 @@ function buildLetfOptionsFields(
     { ...SPACER },
     { name: "🟢 Ticker", value: ticker, inline: true },
     {
-      name: "📊 Stock Price",
+      name: "📊 LETF Price",
       value: stockPrice ? fmtPrice(stockPrice) : "—",
       inline: true,
     },
