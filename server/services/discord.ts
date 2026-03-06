@@ -706,7 +706,13 @@ export function buildSignalAlertEmbed(
 export function buildTargetHitEmbed(
   data: Record<string, any>,
   ticker: string,
-  target: { key: string; price: number; tpNumber?: number; takeOffPercent?: number; raiseStopLoss?: number },
+  target: {
+    key: string;
+    price: number;
+    tpNumber?: number;
+    takeOffPercent?: number;
+    raiseStopLoss?: number;
+  },
 ): DiscordEmbed {
   const instrumentType = data.instrument_type || "Shares";
   const direction = data.direction || "Long";
@@ -793,7 +799,9 @@ export function buildTargetHitEmbed(
   const positionMgmtLines = [
     `\u2705 Reduce position by ${takeOffPercent}% (lock in profit)`,
     ...(nextTarget
-      ? [`\u{1F3AF} Let remaining ${remainingPercent}% ride to ${(nextTarget[0] as string).toUpperCase()} (${fmtPrice(Number(nextTarget[1].price))})`]
+      ? [
+          `\u{1F3AF} Let remaining ${remainingPercent}% ride to ${(nextTarget[0] as string).toUpperCase()} (${fmtPrice(Number(nextTarget[1].price))})`,
+        ]
       : []),
   ];
   const newStopLoss =
@@ -802,7 +810,9 @@ export function buildTargetHitEmbed(
       ? Number(takeProfitArr[currentIdx][1].raise_stop_loss!.price)
       : null);
   const isBreakEven =
-    newStopLoss != null && entryInstrument != null && Math.abs(newStopLoss - entryInstrument) < 0.01;
+    newStopLoss != null &&
+    entryInstrument != null &&
+    Math.abs(newStopLoss - entryInstrument) < 0.01;
   const riskMgmtValue =
     newStopLoss != null
       ? isBreakEven
