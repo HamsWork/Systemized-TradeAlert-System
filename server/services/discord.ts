@@ -626,9 +626,25 @@ export function buildSignalAlertEmbed(
 export function buildTargetHitEmbed(
   data: Record<string, any>,
   ticker: string,
-  target: { key: string; price: number; tpNumber: number },
+  target: { key: string; price: number; tpNumber?: number; takeOffPercent?: number; raiseStopLoss?: number },
 ): DiscordEmbed {
   const instrumentType = data.instrument_type || "Shares";
+  const targetsArr =
+    data.targets && typeof data.targets === "object"
+      ? (Object.entries(data.targets) as [string, { price?: number; take_off_percent?: number; raise_stop_loss?: { price?: number } }][])
+          .filter(([, v]) => v?.price != null)
+          .sort(([, a], [, b]) => Number(a.price) - Number(b.price))
+      : [];
+  const currentIdx = targetsArr.findIndex(([k]) => k === target.key);
+  const tpDisplay = target.tpNumber ?? (currentIdx >= 0 ? currentIdx + 1 : target.key.replace(/^tp/i, "") || 1);
+  const takeOffPercent =
+    target.takeOffPercent ??
+    (currentIdx >= 0 && targetsArr[currentIdx]?.[1]?.take_off_percent != null
+      ? Number(targetsArr[currentIdx][1].take_off_percent)
+      : 50);
+  const nextTarget = currentIdx >= 0 && currentIdx < targetsArr.length - 1 ? targetsArr[currentIdx + 1] : null;
+  const remainingPercent = 100 - takeOffPercent;
+
   const entryInstrument = getInstrumentEntryPrice(data, instrumentType);
   const isStockBased = data.trade_plan_type === "stock_price_based";
   const isOption = instrumentType === "Options" || instrumentType === "LETF Option";
@@ -653,13 +669,13 @@ export function buildTargetHitEmbed(
   pushInstrumentFields(fields, instrumentType, data);
   const description =
     isLETF
-      ? `**\u{1F3AF} ${ticker} ${isSharesSymbol} Take Profit ${target.tpNumber} HIT**`
+      ? `**\u{1F3AF} ${ticker} ${isSharesSymbol} Take Profit ${tpDisplay} HIT**`
       : isCrypto
-        ? `**\u{1F3AF} ${ticker} Crypto Take Profit ${target.tpNumber} HIT**`
-        : `**\u{1F3AF} ${ticker} ${isSharesSymbol} Take Profit ${target.tpNumber} HIT**`;
+        ? `**\u{1F3AF} ${ticker} Crypto Take Profit ${tpDisplay} HIT**`
+        : `**\u{1F3AF} ${ticker} ${isSharesSymbol} Take Profit ${tpDisplay} HIT**`;
   fields.push(
     { name: "\u2705 Entry", value: `${fmtPrice(entryInstrument)}`, inline: true },
-    { name: `\u{1F3AF} TP${target.tpNumber} Hit`, value: `${fmtPrice(target.price)}`, inline: true },
+    { name: `\u{1F3AF} TP${tpDisplay} Hit`, value: `${fmtPrice(target.price)}`, inline: true },
     { name: "\u{1F4B8} Profit", value: `${pctProfit != null ? `${pctProfit}%` : "\u2014"}`, inline: true },
     { ...SPACER },
     {
@@ -668,25 +684,34 @@ export function buildTargetHitEmbed(
       inline: false,
     },
   );
-  const targetsArr =
-    data.targets && typeof data.targets === "object"
-      ? (Object.entries(data.targets) as [string, { price?: number }][])
-          .filter(([, v]) => v?.price)
-          .sort(([, a], [, b]) => Number(a.price) - Number(b.price))
-      : [];
-  const tp2 = targetsArr[1];
-  const breakEvenPrice = entryInstrument ?? null;
+  const positionMgmtLines = [
+    `\u2705 Reduce position by ${takeOffPercent}% (lock in profit)`,
+    ...(nextTarget
+      ? [`\u{1F3AF} Let remaining ${remainingPercent}% ride to ${(nextTarget[0] as string).toUpperCase()} (${fmtPrice(Number(nextTarget[1].price))})`]
+      : []),
+  ];
+  const newStopLoss =
+    target.raiseStopLoss ??
+    (currentIdx >= 0 && targetsArr[currentIdx]?.[1]?.raise_stop_loss?.price != null
+      ? Number(targetsArr[currentIdx][1].raise_stop_loss!.price)
+      : null);
+  const isBreakEven =
+    newStopLoss != null && entryInstrument != null && Math.abs(newStopLoss - entryInstrument) < 0.01;
+  const riskMgmtValue =
+    newStopLoss != null
+      ? isBreakEven
+        ? `Raising stop loss to ${fmtPrice(newStopLoss)} (break even) on remaining position to secure gains while allowing room to run.`
+        : `Raising stop loss to ${fmtPrice(newStopLoss)} on remaining position to secure gains while allowing room to run.`
+      : "No stop adjustment on this target.";
   fields.push({
     name: "\u{1F50D} Position Management",
-    value: `\u2705 Reduce position by 50% (lock in profit)${
-      tp2 ? `\n\u{1F3AF} Let remaining 50% ride to TP2 (${fmtPrice(Number(tp2[1].price))})` : ""
-    }`,
+    value: positionMgmtLines.join("\n"),
     inline: false,
   });
   fields.push({ ...SPACER });
   fields.push({
     name: "\u{1F6E1}\uFE0F Risk Management",
-    value: `Raising stop loss to ${fmtPrice(breakEvenPrice)} (break even) on remaining position to secure gains while allowing room to run.`,
+    value: riskMgmtValue,
     inline: false,
   });
   return { description, color: GREEN, fields, footer: { text: DISCLAIMER } };
