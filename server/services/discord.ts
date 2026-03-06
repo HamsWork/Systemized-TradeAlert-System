@@ -2,7 +2,6 @@ import type { Signal, ConnectedApp } from "@shared/schema";
 import { storage } from "../storage";
 import { getLETFUnderlying, getLETFLeverage } from "../constants/letf";
 
-
 /**
  * Price terminology (see server/docs/PRICE_TERMINOLOGY.md):
  * - currentTrackingPrice: price used for target/SL comparison (underlying when underlying_price_based, else instrument).
@@ -227,8 +226,7 @@ function profitPctFromInstrument(
 ): number {
   const isOption =
     instrumentType === "Options" || instrumentType === "LETF Option";
-  if (isOption)
-    return ((current - entry) / entry) * 100; // option P&L: we're long the option, profit when option price rises
+  if (isOption) return ((current - entry) / entry) * 100; // option P&L: we're long the option, profit when option price rises
   const isBullish = direction === "Call" || direction === "Long";
   return isBullish
     ? ((current - entry) / entry) * 100
@@ -334,7 +332,11 @@ function buildOptionsFields(
       let slText = `🛑 Stop Loss: ${fmtPrice(sl)}`;
       allTargets.forEach(([, val]) => {
         if (!(val as any).raise_stop_loss?.price) return;
-        slText = addRsl(Number((val as any).raise_stop_loss?.price), slText, false);
+        slText = addRsl(
+          Number((val as any).raise_stop_loss?.price),
+          slText,
+          false,
+        );
       });
       tradePlanParts.push(slText);
     } else {
@@ -342,7 +344,11 @@ function buildOptionsFields(
       let slText = `🛑 Stop Loss: ${fmtPrice(sl)}(${slPct || "?"})`;
       allTargets.forEach(([, val]) => {
         if (!(val as any).raise_stop_loss?.price) return;
-        slText = addRsl(Number((val as any).raise_stop_loss?.price), slText, true);
+        slText = addRsl(
+          Number((val as any).raise_stop_loss?.price),
+          slText,
+          true,
+        );
       });
       tradePlanParts.push(slText);
     }
@@ -441,9 +447,13 @@ function buildLetfFields(
       ? Number(data.entry_underlying_price)
       : (stockPrice ?? null);
   // LETF instrument entry price (for "Leveraged ETF Entry").
-  // When underlying_price_based is true, we prefer the fetched/current instrument price (set upstream),
-  // otherwise we fall back to the original entry instrument price.
-  const letfEntryPrice = entryPrice ?? 0;
+
+  // Prefer the stored entry_instrument_price on the signal; fall back to the original entry price.
+  const letfEntryPrice =
+    data.entry_instrument_price != null
+      ? Number(data.entry_instrument_price)
+      : (entryPrice ?? 0);
+
   const stopPrice = data.stop_loss != null ? Number(data.stop_loss) : null;
   const entryForPct = stockPriceAtEntry ?? letfEntryPrice ?? 0;
   const stopPct =
@@ -747,7 +757,16 @@ export function buildTargetHitEmbed(
   const isBullish = direction === "Call" || direction === "Long";
   const takeProfitArr =
     data.targets && typeof data.targets === "object"
-      ? (Object.entries(data.targets) as [string, { price?: number; take_off_percent?: number; raise_stop_loss?: { price?: number } }][])
+      ? (
+          Object.entries(data.targets) as [
+            string,
+            {
+              price?: number;
+              take_off_percent?: number;
+              raise_stop_loss?: { price?: number };
+            },
+          ][]
+        )
           .filter(([, v]) => v?.price != null && (v?.take_off_percent ?? 0) > 0)
           .sort(([, a], [, b]) =>
             isBullish
@@ -756,13 +775,18 @@ export function buildTargetHitEmbed(
           )
       : [];
   const currentIdx = takeProfitArr.findIndex(([k]) => k === target.key);
-  const tpDisplay = target.tpNumber ?? (currentIdx >= 0 ? currentIdx + 1 : target.key.replace(/^tp/i, "") || 1);
+  const tpDisplay =
+    target.tpNumber ??
+    (currentIdx >= 0 ? currentIdx + 1 : target.key.replace(/^tp/i, "") || 1);
   const takeOffPercent =
     target.takeOffPercent ??
     (currentIdx >= 0 && takeProfitArr[currentIdx]?.[1]?.take_off_percent != null
       ? Number(takeProfitArr[currentIdx][1].take_off_percent)
       : 50);
-  const nextTarget = currentIdx >= 0 && currentIdx < takeProfitArr.length - 1 ? takeProfitArr[currentIdx + 1] : null;
+  const nextTarget =
+    currentIdx >= 0 && currentIdx < takeProfitArr.length - 1
+      ? takeProfitArr[currentIdx + 1]
+      : null;
   const remainingPercent = 100 - takeOffPercent;
 
   const entryInstrument = getInstrumentEntryPrice(data, instrumentType);
@@ -843,7 +867,8 @@ export function buildTargetHitEmbed(
   ];
   const newStopLoss =
     target.raiseStopLoss ??
-    (currentIdx >= 0 && takeProfitArr[currentIdx]?.[1]?.raise_stop_loss?.price != null
+    (currentIdx >= 0 &&
+    takeProfitArr[currentIdx]?.[1]?.raise_stop_loss?.price != null
       ? Number(takeProfitArr[currentIdx][1].raise_stop_loss!.price)
       : null);
   const isBreakEven =
@@ -919,10 +944,9 @@ export function buildStopLossRaisedEmbed(
   if (isBreakEven) {
     riskValue = "0% (Risk-Free)";
   } else if (entryForStop != null && entryForStop > 0) {
-    const riskPct =
-      isBullish
-        ? ((entryForStop - newStopLoss) / entryForStop) * 100
-        : ((newStopLoss - entryForStop) / entryForStop) * 100;
+    const riskPct = isBullish
+      ? ((entryForStop - newStopLoss) / entryForStop) * 100
+      : ((newStopLoss - entryForStop) / entryForStop) * 100;
     riskValue = `${riskPct.toFixed(1)}%`;
   } else {
     riskValue = "\u2014";
@@ -1179,7 +1203,10 @@ export async function sendTargetHitDiscordAlert(
   const hasSignalWebhook = !!signalData.discord_webhook_url;
   if (!hasSignalWebhook && (!app || !app.sendDiscordMessages)) return;
   const instrumentType = signalData.instrument_type || "Shares";
-  const signalForWebhook = { id: signalId, data: signalData } as unknown as Signal;
+  const signalForWebhook = {
+    id: signalId,
+    data: signalData,
+  } as unknown as Signal;
   const webhookUrl = resolveWebhookUrl(signalForWebhook, app, instrumentType);
   if (!webhookUrl) return;
 
@@ -1187,7 +1214,8 @@ export async function sendTargetHitDiscordAlert(
   const dataForEmbed = {
     ...signalData,
     current_tracking_price: currentTrackingPrice,
-    current_instrument_price: currentInstrumentPrice ?? signalData.current_instrument_price,
+    current_instrument_price:
+      currentInstrumentPrice ?? signalData.current_instrument_price,
   };
   const embed = buildTargetHitEmbed(dataForEmbed, ticker, target);
   const content = app
@@ -1302,7 +1330,10 @@ export async function sendStopLossRaisedDiscord(
   const hasSignalWebhook = !!signalData.discord_webhook_url;
   if (!hasSignalWebhook && (!app || !app.sendDiscordMessages)) return;
   const instrumentType = signalData.instrument_type || "Shares";
-  const signalForWebhook = { id: signalId, data: signalData } as unknown as Signal;
+  const signalForWebhook = {
+    id: signalId,
+    data: signalData,
+  } as unknown as Signal;
   const webhookUrl = resolveWebhookUrl(signalForWebhook, app, instrumentType);
   if (!webhookUrl) return;
 
@@ -1356,7 +1387,10 @@ export async function sendStopLossHitDiscord(
   const hasSignalWebhook = !!signalData.discord_webhook_url;
   if (!hasSignalWebhook && (!app || !app.sendDiscordMessages)) return;
   const instrumentType = signalData.instrument_type || "Shares";
-  const signalForWebhook = { id: signalId, data: signalData } as unknown as Signal;
+  const signalForWebhook = {
+    id: signalId,
+    data: signalData,
+  } as unknown as Signal;
   const webhookUrl = resolveWebhookUrl(signalForWebhook, app, instrumentType);
   if (!webhookUrl) return;
 

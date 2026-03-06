@@ -336,7 +336,9 @@ async function buildSignalData(
 
     try {
       const contractResult = await fetchOptionContractPrice(
-        ticker,
+        instrumentType === "LETF Option"
+          ? (LETF_UNDERLYING[(ticker || "").toUpperCase().trim()] || ticker)
+          : ticker,
         expiration,
         Number(strike),
         right,
@@ -348,6 +350,7 @@ async function buildSignalData(
         );
       } else if (contractResult.price !== null) {
         signalDataObj.entry_option_price = contractResult.price;
+        signalDataObj.entry_instrument_price = contractResult.price;
         console.log(
           `[Signal] Fetched option contract price from Polygon: $${contractResult.price} for ${ticker} ${expiration} ${strike} ${direction}`,
         );
@@ -442,6 +445,38 @@ async function buildSignalData(
       `[Signal] Stock-price-based option: set entry_price to stock price $${signalDataObj.entry_price}`,
     );
   }
+
+  if (isUnderlyingBased && instrumentType === "LETF") {
+    try {
+      const letfPrice = await fetchStockPrice(ticker);
+      if (letfPrice != null) {
+        signalDataObj.entry_instrument_price = letfPrice;
+        console.log(
+          `[Signal] Underlying-based LETF: fetched instrument price from Polygon: $${letfPrice} for ${ticker}`,
+        );
+      }
+    } catch (err: any) {
+      console.warn(`[Signal] Failed to fetch LETF price for entry_instrument_price: ${err.message}`);
+    }
+  }
+
+  if (instrumentType === "Options" || instrumentType === "LETF Option") {
+    signalDataObj.entry_instrument_price =
+      signalDataObj.entry_option_price ?? signalDataObj.entry_instrument_price ?? null;
+    signalDataObj.entry_tracking_price = isUnderlyingBased
+      ? (signalDataObj.entry_underlying_price ?? signalDataObj.entry_price ?? null)
+      : (signalDataObj.entry_option_price ?? signalDataObj.entry_price ?? null);
+  } else if (instrumentType === "LETF") {
+    signalDataObj.entry_tracking_price = isUnderlyingBased
+      ? (signalDataObj.entry_underlying_price ?? signalDataObj.entry_price ?? null)
+      : (signalDataObj.entry_price ?? null);
+    signalDataObj.entry_instrument_price =
+      signalDataObj.entry_instrument_price ?? signalDataObj.entry_price ?? null;
+  } else {
+    signalDataObj.entry_tracking_price = signalDataObj.entry_price ?? null;
+    signalDataObj.entry_instrument_price = signalDataObj.entry_price ?? null;
+  }
+  signalDataObj.entry_price = signalDataObj.entry_tracking_price ?? signalDataObj.entry_price;
 
   if (body.tdi_metadata) {
     signalDataObj.tdi_metadata = body.tdi_metadata;
