@@ -702,23 +702,43 @@ export function buildSignalAlertEmbed(
 export function buildTargetHitEmbed(
   data: Record<string, any>,
   ticker: string,
-  target: { key: string; price: number; tpNumber?: number; takeOffPercent?: number; raiseStopLoss?: number },
+  target: {
+    key: string;
+    price: number;
+    tpNumber?: number;
+    takeOffPercent?: number;
+    raiseStopLoss?: number;
+  },
 ): DiscordEmbed {
   const instrumentType = data.instrument_type || "Shares";
   const targetsArr =
     data.targets && typeof data.targets === "object"
-      ? (Object.entries(data.targets) as [string, { price?: number; take_off_percent?: number; raise_stop_loss?: { price?: number } }][])
+      ? (
+          Object.entries(data.targets) as [
+            string,
+            {
+              price?: number;
+              take_off_percent?: number;
+              raise_stop_loss?: { price?: number };
+            },
+          ][]
+        )
           .filter(([, v]) => v?.price != null)
           .sort(([, a], [, b]) => Number(a.price) - Number(b.price))
       : [];
   const currentIdx = targetsArr.findIndex(([k]) => k === target.key);
-  const tpDisplay = target.tpNumber ?? (currentIdx >= 0 ? currentIdx + 1 : target.key.replace(/^tp/i, "") || 1);
+  const tpDisplay =
+    target.tpNumber ??
+    (currentIdx >= 0 ? currentIdx + 1 : target.key.replace(/^tp/i, "") || 1);
   const takeOffPercent =
     target.takeOffPercent ??
     (currentIdx >= 0 && targetsArr[currentIdx]?.[1]?.take_off_percent != null
       ? Number(targetsArr[currentIdx][1].take_off_percent)
       : 50);
-  const nextTarget = currentIdx >= 0 && currentIdx < targetsArr.length - 1 ? targetsArr[currentIdx + 1] : null;
+  const nextTarget =
+    currentIdx >= 0 && currentIdx < targetsArr.length - 1
+      ? targetsArr[currentIdx + 1]
+      : null;
   const remainingPercent = 100 - takeOffPercent;
 
   const entryInstrument = getInstrumentEntryPrice(data, instrumentType);
@@ -785,16 +805,21 @@ export function buildTargetHitEmbed(
   const positionMgmtLines = [
     `\u2705 Reduce position by ${takeOffPercent}% (lock in profit)`,
     ...(nextTarget
-      ? [`\u{1F3AF} Let remaining ${remainingPercent}% ride to ${(nextTarget[0] as string).toUpperCase()} (${fmtPrice(Number(nextTarget[1].price))})`]
+      ? [
+          `\u{1F3AF} Let remaining ${remainingPercent}% ride to ${(nextTarget[0] as string).toUpperCase()} (${fmtPrice(Number(nextTarget[1].price))})`,
+        ]
       : []),
   ];
   const newStopLoss =
     target.raiseStopLoss ??
-    (currentIdx >= 0 && targetsArr[currentIdx]?.[1]?.raise_stop_loss?.price != null
+    (currentIdx >= 0 &&
+    targetsArr[currentIdx]?.[1]?.raise_stop_loss?.price != null
       ? Number(targetsArr[currentIdx][1].raise_stop_loss!.price)
       : null);
   const isBreakEven =
-    newStopLoss != null && entryInstrument != null && Math.abs(newStopLoss - entryInstrument) < 0.01;
+    newStopLoss != null &&
+    entryInstrument != null &&
+    Math.abs(newStopLoss - entryInstrument) < 0.01;
   const riskMgmtValue =
     newStopLoss != null
       ? isBreakEven
