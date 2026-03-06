@@ -5,7 +5,10 @@ import { asyncHandler } from "../lib/async-handler";
 import { getParam } from "../lib/params";
 import { processSignal } from "../services/signal-processor";
 import { executeIbkrClose } from "../services/trade-executor";
-import { recordManualTargetHit } from "../services/trade-monitor";
+import {
+  recordManualTargetHit,
+  recordManualStopLossHit,
+} from "../services/trade-monitor";
 
 import {
   sendTradeClosedManuallyDiscord,
@@ -18,6 +21,39 @@ import {
 
 import type { ConnectedApp } from "@shared/schema";
 import { generateDiscordPreviews, generateAllTemplates } from "../services/discord-preview";
+import {
+  convertStockPriceToInstrument,
+  getInstrumentTypeForConvert,
+} from "../utils/convert-targets";
+
+function instrumentPriceFromUnderlying(
+  data: Record<string, any>,
+  stockPrice: number,
+): number | null {
+  if (!data.underlying_price_based) return null;
+  const stockEntry =
+    data.entry_underlying_price != null
+      ? Number(data.entry_underlying_price)
+      : null;
+  const instrumentEntry =
+    data.entry_option_price != null
+      ? Number(data.entry_option_price)
+      : data.entry_price != null
+        ? Number(data.entry_price)
+        : null;
+  if (stockEntry == null || instrumentEntry == null) return null;
+  const delta = data.delta != null ? Number(data.delta) : null;
+  const leverage = data.leverage != null ? Number(data.leverage) : 0;
+  const instrumentType = getInstrumentTypeForConvert(data.instrument_type);
+  return convertStockPriceToInstrument(
+    stockEntry,
+    instrumentEntry,
+    stockPrice,
+    delta,
+    leverage,
+    instrumentType,
+  );
+}
 
 declare global {
   namespace Express {
@@ -227,7 +263,13 @@ export function registerSignalRoutes(app: Express) {
               .json({ message: `Target ${targetKey} not found` });
           const dataForTargetHit = { ...data };
           if (!dataForTargetHit.current_instrument_price) {
-            dataForTargetHit.current_instrument_price = Number(t.price);
+            const stockPrice = Number(t.price);
+            const instrumentPrice = instrumentPriceFromUnderlying(
+              data,
+              stockPrice,
+            );
+            dataForTargetHit.current_instrument_price =
+              instrumentPrice != null ? instrumentPrice : stockPrice;
           }
           await sendTargetHitDiscordAlert(
             signal,
@@ -275,6 +317,10 @@ export function registerSignalRoutes(app: Express) {
           const currentPrice = data.entry_price
             ? Number(data.entry_price)
             : newSL;
+          const dataForSLRaised = { ...data };
+          const instrumentPriceSL = instrumentPriceFromUnderlying(data, newSL);
+          if (instrumentPriceSL != null)
+            dataForSLRaised.current_instrument_price = instrumentPriceSL;
           await sendStopLossRaisedDiscord(
             signal,
             app,
@@ -282,7 +328,7 @@ export function registerSignalRoutes(app: Express) {
             targetKey,
             currentPrice,
             ticker,
-            data,
+            dataForSLRaised,
           );
           if (updateSignal) {
             const updatedData = { ...data, stop_loss: newSL };
@@ -296,13 +342,20 @@ export function registerSignalRoutes(app: Express) {
             data.stop_loss != null ? Number(data.stop_loss) : null;
           if (stopLoss == null)
             return res.status(400).json({ message: "No stop loss defined" });
+          const dataForSLHit = { ...data };
+          const instrumentPriceSLHit =
+            instrumentPriceFromUnderlying(data, stopLoss);
+          if (instrumentPriceSLHit != null) {
+            dataForSLHit.current_instrument_price = instrumentPriceSLHit;
+            dataForSLHit.instrumentSLFilled = instrumentPriceSLHit;
+          }
           await sendStopLossHitDiscord(
             signal,
             app,
             stopLoss,
             stopLoss,
             ticker,
-            data,
+            dataForSLHit,
           );
           if (updateSignal) {
             const updatedData = {
@@ -310,6 +363,12 @@ export function registerSignalRoutes(app: Express) {
               stop_loss_hit: true,
               stop_loss_hit_at: new Date().toISOString(),
               stop_loss_hit_price: stopLoss,
+              ...(instrumentPriceSLHit != null
+                ? {
+                    current_instrument_price: instrumentPriceSLHit,
+                    instrumentSLFilled: instrumentPriceSLHit,
+                  }
+                : {}),
             };
             await storage.updateSignal(signal.id, {
               data: updatedData,
