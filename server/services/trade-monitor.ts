@@ -67,8 +67,8 @@ function isBullishTrade(data: Record<string, any>): boolean {
   return data.direction === "Long" || data.direction !== "Short";
 }
 
-/** Fetch current instrument price for Discord profit display. Options use underlying symbol for Polygon. */
-async function getCurrentInstrumentPrice(
+/** Fetch current instrument price for Discord profit display. Options use underlying symbol for Polygon. Exported for use in routes when sending Discord. */
+export async function getCurrentInstrumentPrice(
   data: Record<string, any>,
   ticker: string,
 ): Promise<number | null> {

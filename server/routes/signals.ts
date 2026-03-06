@@ -8,6 +8,7 @@ import { executeIbkrClose } from "../services/trade-executor";
 import {
   recordManualTargetHit,
   recordManualStopLossHit,
+  getCurrentInstrumentPrice,
 } from "../services/trade-monitor";
 
 import {
@@ -262,15 +263,17 @@ export function registerSignalRoutes(app: Express) {
               .status(400)
               .json({ message: `Target ${targetKey} not found` });
           const dataForTargetHit = { ...data };
-          if (!dataForTargetHit.current_instrument_price) {
-            const stockPrice = Number(t.price);
-            const instrumentPrice = instrumentPriceFromUnderlying(
-              data,
-              stockPrice,
-            );
-            dataForTargetHit.current_instrument_price =
-              instrumentPrice != null ? instrumentPrice : 0;
-          }
+          const fetchedInstrumentPrice = await getCurrentInstrumentPrice(
+            data,
+            ticker,
+          );
+          const fallbackInstrumentPrice =
+            instrumentPriceFromUnderlying(data, Number(t.price)) ??
+            Number(t.price);
+          dataForTargetHit.current_instrument_price =
+            fetchedInstrumentPrice ?? dataForTargetHit.current_instrument_price ?? fallbackInstrumentPrice;
+          const currentInstrumentPrice =
+            fetchedInstrumentPrice ?? dataForTargetHit.current_instrument_price ?? Number(t.price);
           await sendTargetHitDiscordAlert(
             dataForTargetHit,
             app,
@@ -283,7 +286,7 @@ export function registerSignalRoutes(app: Express) {
                 : undefined,
             },
             Number(t.price),
-            dataForTargetHit.current_instrument_price ?? 0,
+            currentInstrumentPrice,
             signal.id,
           );
           if (updateSignal) {
@@ -327,17 +330,24 @@ export function registerSignalRoutes(app: Express) {
                   ? Number(data.entry_price)
                   : newSL;
           const dataForSLRaised = { ...data };
-          const instrumentPriceSL = instrumentPriceFromUnderlying(data, newSL);
-          if (instrumentPriceSL != null)
-            dataForSLRaised.current_instrument_price = instrumentPriceSL;
+          const fetchedInstrumentPriceSL = await getCurrentInstrumentPrice(
+            data,
+            ticker,
+          );
+          const fallbackSL = instrumentPriceFromUnderlying(data, newSL);
+          dataForSLRaised.current_instrument_price =
+            fetchedInstrumentPriceSL ?? dataForSLRaised.current_instrument_price ?? fallbackSL ?? currentTrackingPrice;
           const currentInstrumentPrice =
-            typeof bodyPayload.currentInstrumentPrice === "number" &&
+            fetchedInstrumentPriceSL ??
+            (typeof bodyPayload.currentInstrumentPrice === "number" &&
             bodyPayload.currentInstrumentPrice > 0
               ? bodyPayload.currentInstrumentPrice
               : typeof bodyPayload.current_instrument_price === "number" &&
                   bodyPayload.current_instrument_price > 0
                 ? bodyPayload.current_instrument_price
-                : dataForSLRaised.current_instrument_price ?? currentTrackingPrice;
+                : null) ??
+            dataForSLRaised.current_instrument_price ??
+            currentTrackingPrice;
           await sendStopLossRaisedDiscord(
             dataForSLRaised,
             app,
@@ -359,17 +369,22 @@ export function registerSignalRoutes(app: Express) {
           if (stopLoss == null)
             return res.status(400).json({ message: "No stop loss defined" });
           const dataForSLHit = { ...data };
-          const instrumentPriceSLHit =
-            instrumentPriceFromUnderlying(data, stopLoss);
-          if (instrumentPriceSLHit != null) {
-            dataForSLHit.current_instrument_price = instrumentPriceSLHit;
-            dataForSLHit.instrumentSLFilled = instrumentPriceSLHit;
+          const fetchedInstrumentPriceSLHit = await getCurrentInstrumentPrice(
+            data,
+            ticker,
+          );
+          const fallbackSLHit = instrumentPriceFromUnderlying(data, stopLoss);
+          const instrumentPriceToStore =
+            fetchedInstrumentPriceSLHit ?? fallbackSLHit ?? null;
+          if (instrumentPriceToStore != null) {
+            dataForSLHit.current_instrument_price = instrumentPriceToStore;
+            dataForSLHit.instrumentSLFilled = instrumentPriceToStore;
           }
           await sendStopLossHitDiscord(
             dataForSLHit,
             app,
             stopLoss,
-            dataForSLHit.current_instrument_price ?? 0,
+            fetchedInstrumentPriceSLHit ?? dataForSLHit.current_instrument_price ?? stopLoss,
             signal.id,
           );
           if (updateSignal) {
@@ -378,10 +393,10 @@ export function registerSignalRoutes(app: Express) {
               stop_loss_hit: true,
               stop_loss_hit_at: new Date().toISOString(),
               stop_loss_hit_price: stopLoss,
-              ...(instrumentPriceSLHit != null
+              ...(instrumentPriceToStore != null
                 ? {
-                    current_instrument_price: instrumentPriceSLHit,
-                    instrumentSLFilled: instrumentPriceSLHit,
+                    current_instrument_price: instrumentPriceToStore,
+                    instrumentSLFilled: instrumentPriceToStore,
                   }
                 : {}),
             };
