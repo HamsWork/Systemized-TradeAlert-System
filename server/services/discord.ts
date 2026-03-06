@@ -361,7 +361,7 @@ function buildOptionsFields(
   if (tradePlanParts.length > 0) {
     fields.push({
       name: isStockBased
-        ? "📝 Trade Plan (Based On Underlying Stock)"
+        ? `📝 Trade Plan (Based On Underlying Stock \"${ticker}\")`
         : "📝 Trade Plan",
       value: tradePlanParts.join("\n"),
       inline: false,
@@ -562,7 +562,7 @@ function buildLetfFields(
     { ...SPACER },
     {
       name: isStockBased
-        ? "📝 Trade Plan (Based on Underlying Stock)"
+        ? `📝 Trade Plan (Based On Underlying Stock \"${underlying}\")`
         : "📝 Trade Plan",
       value: tradePlanValue,
       inline: false,
@@ -685,7 +685,7 @@ function buildLetfOptionsFields(
   if (tradePlanParts.length > 0) {
     fields.push({
       name: isUnderlyingBased
-        ? "📝 Trade Plan (Based On Underlying Stock)"
+        ? `📝 Trade Plan (Based On Underlying Stock \"${underlying}\")`
         : "📝 Trade Plan",
       value: tradePlanParts.join("\n"),
       inline: false,
