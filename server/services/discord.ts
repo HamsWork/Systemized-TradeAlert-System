@@ -1041,8 +1041,24 @@ export function buildTargetHitEmbed(
       ? "Shares"
       : "Options";
   const fields: DiscordField[] = [];
-  fields.push({ ...SPACER });
-  pushInstrumentFields(fields, instrumentType, data);
+  if (instrumentType === "LETF") {
+    const underlying = getUnderlying(data, ticker);
+    const dir = direction === "Short" ? "BEAR" : "BULL";
+    const leverage = getLETFLeverage(ticker);
+    fields.push(
+      {
+        name: `\u{1F4B9} LETF: ${
+          leverage ? `${ticker} (${leverage}x ${dir})` : `${ticker} (${dir})`
+        }`,
+        value: "",
+        inline: true,
+      },
+      { ...SPACER },
+    );
+  } else {
+    fields.push({ ...SPACER });
+    pushInstrumentFields(fields, instrumentType, data);
+  }
 
   const underlying = getUnderlying(data, ticker);
   const description = isLETF
