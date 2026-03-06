@@ -4,6 +4,7 @@ import { storage } from "../storage";
 import { LETF_UNDERLYING } from "../constants/letf";
 import { executeIbkrTrade } from "./trade-executor";
 import { sendSignalDiscordAlert } from "./discord";
+import { getCurrentInstrumentPrice } from "./trade-monitor";
 import {
   fetchPolygonBars,
   fetchOptionContractPrice,
@@ -435,48 +436,24 @@ async function buildSignalData(
   signalDataObj.auto_track = auto_track !== undefined ? auto_track : true;
   signalDataObj.underlying_price_based = isUnderlyingBased;
 
-  if (
-    signalDataObj.trade_plan_type === "stock_price_based" &&
-    (instrumentType === "Options" || instrumentType === "LETF Option") &&
-    signalDataObj.entry_underlying_price != null
-  ) {
-    signalDataObj.entry_price = signalDataObj.entry_underlying_price;
-    console.log(
-      `[Signal] Stock-price-based option: set entry_price to stock price $${signalDataObj.entry_price}`,
-    );
-  }
-
-  if (instrumentType === "LETF") {
+  if (isUnderlyingBased) {
+    signalDataObj.entry_tracking_price = signalDataObj.entry_price ?? null;
     try {
-      const letfPrice = await fetchStockPrice(ticker);
-      if (letfPrice != null) {
-        signalDataObj.entry_instrument_price = letfPrice;
+      const instrumentPrice = await getCurrentInstrumentPrice(signalDataObj, ticker);
+      signalDataObj.entry_instrument_price = instrumentPrice ?? signalDataObj.entry_price ?? null;
+      if (instrumentPrice != null) {
         console.log(
-          `[Signal] LETF: fetched instrument price from Polygon: $${letfPrice} for ${ticker}`,
+          `[Signal] Underlying-based: fetched instrument price $${instrumentPrice} for ${ticker}`,
         );
       }
     } catch (err: any) {
-      console.warn(`[Signal] Failed to fetch LETF price for entry_instrument_price: ${err.message}`);
+      console.warn(`[Signal] Failed to fetch instrument price: ${err.message}`);
+      signalDataObj.entry_instrument_price = signalDataObj.entry_price ?? null;
     }
-  }
-
-  if (instrumentType === "Options" || instrumentType === "LETF Option") {
-    signalDataObj.entry_instrument_price =
-      signalDataObj.entry_option_price ?? signalDataObj.entry_instrument_price ?? null;
-    signalDataObj.entry_tracking_price = isUnderlyingBased
-      ? (signalDataObj.entry_underlying_price ?? signalDataObj.entry_price ?? null)
-      : (signalDataObj.entry_option_price ?? signalDataObj.entry_price ?? null);
-  } else if (instrumentType === "LETF") {
-    signalDataObj.entry_tracking_price = isUnderlyingBased
-      ? (signalDataObj.entry_underlying_price ?? signalDataObj.entry_price ?? null)
-      : (signalDataObj.entry_price ?? null);
-    signalDataObj.entry_instrument_price =
-      signalDataObj.entry_instrument_price ?? signalDataObj.entry_price ?? null;
   } else {
     signalDataObj.entry_tracking_price = signalDataObj.entry_price ?? null;
     signalDataObj.entry_instrument_price = signalDataObj.entry_price ?? null;
   }
-  signalDataObj.entry_price = signalDataObj.entry_tracking_price ?? signalDataObj.entry_price;
 
   if (body.tdi_metadata) {
     signalDataObj.tdi_metadata = body.tdi_metadata;
