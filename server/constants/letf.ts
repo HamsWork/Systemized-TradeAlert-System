@@ -43,3 +43,46 @@ export function getLETFUnderlying(ticker: string | null | undefined): string | u
   if (!ticker || typeof ticker !== "string") return undefined;
   return LETF_UNDERLYING[ticker.toUpperCase().trim()];
 }
+
+// Approximate leverage for common LETFs. Sign indicates bull (>0) vs bear (<0).
+const LETF_LEVERAGE: Record<string, number> = {
+  // Index / sector 3x pairs
+  TQQQ: 3,
+  SQQQ: -3,
+  UPRO: 3,
+  SPXU: -3,
+  SPXL: 3,
+  SPXS: -3,
+  UDOW: 3,
+  SDOW: -3,
+  TNA: 3,
+  TZA: -3,
+  LABU: 3,
+  LABD: -3,
+  HIBL: 3,
+  HIBS: -3,
+  SOXL: 3,
+  SOXS: -3,
+  TECL: 3,
+  TECS: -3,
+  FAS: 3,
+  FAZ: -3,
+  YINN: 3,
+  YANG: -3,
+  NUGT: 2, // some gold miners ETFs are 2x; treat as 2x here
+  DUST: -2,
+  JNUG: 2,
+  JDST: -2,
+  // Single-stock examples
+  NVDL: 2,
+  NVDS: -1.5,
+  TSLL: 2,
+  TSLQ: -1,
+};
+
+export function getLETFLeverage(
+  ticker: string | null | undefined,
+): number | undefined {
+  if (!ticker || typeof ticker !== "string") return undefined;
+  return LETF_LEVERAGE[ticker.toUpperCase().trim()];
+}
