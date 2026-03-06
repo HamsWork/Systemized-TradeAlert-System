@@ -747,10 +747,15 @@ export function buildTargetHitEmbed(
     data.current_instrument_price != null
       ? Number(data.current_instrument_price)
       : null;
+  const isInstrumentPriceBased =
+    instrumentType === "Options" ||
+    instrumentType === "LETF" ||
+    instrumentType === "LETF Option";
   let pctProfit: string | null = null;
   if (entryInstrument != null && entryInstrument > 0) {
-    const priceForPct =
-      currentInstrumentPrice ?? (!underlyingBased ? target.price : null);
+    const priceForPct = isInstrumentPriceBased
+      ? currentInstrumentPrice
+      : (currentInstrumentPrice ?? (!underlyingBased ? target.price : null));
     if (priceForPct != null) {
       const pct = isBullish
         ? ((priceForPct - entryInstrument) / entryInstrument) * 100
@@ -791,7 +796,7 @@ export function buildTargetHitEmbed(
 
     { ...SPACER },
     {
-      name: `\u{1F6A8} Status: ${target.key.toUpperCase()} Reached \u{1F6A8}`,
+      name: `\u{1F6A8} Status: TP${tpDisplay} Reached \u{1F6A8}`,
       value: "\u200b",
       inline: false,
     },
@@ -800,7 +805,7 @@ export function buildTargetHitEmbed(
     `\u2705 Reduce position by ${takeOffPercent}% (lock in profit)`,
     ...(nextTarget
       ? [
-          `\u{1F3AF} Let remaining ${remainingPercent}% ride to ${(nextTarget[0] as string).toUpperCase()} (${fmtPrice(Number(nextTarget[1].price))})`,
+          `\u{1F3AF} Let remaining ${remainingPercent}% ride to TP${currentIdx + 1} (${fmtPrice(Number(nextTarget[1].price))})`,
         ]
       : []),
   ];
