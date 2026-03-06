@@ -1071,12 +1071,14 @@ export function buildStopLossRaisedEmbed(
 
   const entryInstrument = getInstrumentEntryPrice(data, instrumentType);
   const underlyingPriceBased = data.underlying_price_based === true;
+  const isOption = instrumentType === "Options" || instrumentType === "LETF Option";
   const entryUnderlying =
     data.entry_underlying_price != null
       ? Number(data.entry_underlying_price)
       : null;
-  const entryForStop =
-    underlyingPriceBased && entryUnderlying != null
+  const entryForStop = isOption
+    ? entryInstrument
+    : underlyingPriceBased && entryUnderlying != null
       ? entryUnderlying
       : entryInstrument;
   const isBreakEven =
