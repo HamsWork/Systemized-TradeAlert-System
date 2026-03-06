@@ -433,6 +433,7 @@ function buildLetfFields(
   stockPrice: number | null,
 ): DiscordField[] {
   const underlying = getUnderlying(data, ticker);
+  const leverage = getLETFLeverage(ticker);
   const isStockBased =
     data.trade_plan_type === "stock_price_based" ||
     data.underlying_price_based === true;
