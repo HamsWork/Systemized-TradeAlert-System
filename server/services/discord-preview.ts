@@ -110,7 +110,6 @@ interface TemplateGroup {
 function buildPreviewsFromData(
   data: Record<string, any>,
   ticker: string,
-  includeTradeClosed: boolean,
   appName?: string,
 ): DiscordPreviewMessage[] {
   const previews: DiscordPreviewMessage[] = [];
@@ -128,11 +127,11 @@ function buildPreviewsFromData(
     data.targets && typeof data.targets === "object"
       ? (data.targets as Record<
           string,
-          { price?: number; raise_stop_loss?: { price?: number } }
+          { price?: number; take_off_percent?: number; raise_stop_loss?: { price?: number } }
         >)
       : {};
   const targetEntries = Object.entries(targets)
-    .filter(([, val]) => val?.price != null)
+    .filter(([, val]) => val?.price != null && Number(val.take_off_percent) !== 0)
     .sort(([, a], [, b]) => Number(a.price) - Number(b.price));
 
   for (const [key, val] of targetEntries) {
@@ -164,19 +163,17 @@ function buildPreviewsFromData(
     previews.push({
       type: "stop_loss_hit",
       label: "Stop Loss Hit",
-      content: "@everyone",
+      content: "",
       embed: buildStopLossHitEmbed(data, ticker, stopLoss),
     });
   }
 
-  if (includeTradeClosed) {
-    previews.push({
-      type: "trade_closed_manually",
-      label: "Trade Closed",
-      content: "",
-      embed: buildTradeClosedEmbed(data, ticker),
-    });
-  }
+  previews.push({
+    type: "trade_closed_manually",
+    label: "Trade Closed",
+    content: "",
+    embed: buildTradeClosedEmbed(data, ticker),
+  });
 
   return previews;
 }
@@ -192,7 +189,7 @@ export function generateAllTemplates(): TemplateGroup[] {
     ["Crypto", SAMPLE_CRYPTO_DATA],
   ] as [string, Record<string, any>][]) {
     const ticker = sampleData.ticker;
-    const templates = buildPreviewsFromData(sampleData, ticker, true, undefined);
+    const templates = buildPreviewsFromData(sampleData, ticker, undefined);
     groups.push({ instrumentType: label, ticker, templates });
   }
 
@@ -205,5 +202,5 @@ export function generateDiscordPreviews(
   const data = (signal.data || {}) as Record<string, any>;
   const ticker = data.ticker || data.symbol || "UNKNOWN";
   const appName = signal.sourceAppName || undefined;
-  return buildPreviewsFromData(data, ticker, false, appName);
+  return buildPreviewsFromData(data, ticker, appName);
 }
