@@ -753,8 +753,6 @@ export function buildTargetHitEmbed(
     instrumentType === "LETF Option";
   let pctProfit: string | null = null;
   if (entryInstrument != null && entryInstrument > 0) {
-    console.log("entryInstrument", entryInstrument);
-    console.log("currentInstrumentPrice", currentInstrumentPrice);
     
     const priceForPct = isInstrumentPriceBased
       ? currentInstrumentPrice
@@ -874,19 +872,27 @@ export function buildStopLossRaisedEmbed(
       : null;
 
   const entryInstrument = getInstrumentEntryPrice(data, instrumentType);
+  const underlyingPriceBased = data.underlying_price_based === true;
+  const entryUnderlying =
+    data.entry_underlying_price != null
+      ? Number(data.entry_underlying_price)
+      : null;
+  const entryForStop =
+    underlyingPriceBased && entryUnderlying != null
+      ? entryUnderlying
+      : entryInstrument;
   const isBreakEven =
-    entryInstrument != null &&
-    Math.abs(newStopLoss - entryInstrument) < 0.01;
+    entryForStop != null && Math.abs(newStopLoss - entryForStop) < 0.01;
   const direction = data.direction || "Long";
   const isBullish = direction === "Call" || direction === "Long";
   let riskValue: string;
   if (isBreakEven) {
     riskValue = "0% (Risk-Free)";
-  } else if (entryInstrument != null && entryInstrument > 0) {
+  } else if (entryForStop != null && entryForStop > 0) {
     const riskPct =
       isBullish
-        ? ((entryInstrument - newStopLoss) / entryInstrument) * 100
-        : ((newStopLoss - entryInstrument) / entryInstrument) * 100;
+        ? ((entryForStop - newStopLoss) / entryForStop) * 100
+        : ((newStopLoss - entryForStop) / entryForStop) * 100;
     riskValue = `${riskPct.toFixed(1)}%`;
   } else {
     riskValue = "\u2014";
@@ -1212,9 +1218,11 @@ function pushInstrumentFields(
   } else if (instrumentType === "Options" || instrumentType === "LETF Option") {
     const right = direction === "Put" ? "PUT" : "CALL";
     const displayOptionPrice =
-      data.entry_option_price != null
-        ? Number(data.entry_option_price)
-        : entryPrice;
+      data.current_instrument_price != null
+        ? Number(data.current_instrument_price)
+        : data.entry_option_price != null
+          ? Number(data.entry_option_price)
+          : entryPrice;
     fields.push(
       {
         name: "\u274C Expiration",

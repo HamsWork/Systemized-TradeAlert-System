@@ -67,7 +67,7 @@ function isBullishTrade(data: Record<string, any>): boolean {
   return data.direction === "Long" || data.direction !== "Short";
 }
 
-/** When underlying_price_based, fetch current instrument price for Discord profit display. */
+/** Fetch current instrument price for Discord profit display. Options use underlying symbol for Polygon. */
 async function getCurrentInstrumentPrice(
   data: Record<string, any>,
   ticker: string,
@@ -76,8 +76,10 @@ async function getCurrentInstrumentPrice(
   if (instrumentType === "Options" || instrumentType === "LETF Option") {
     if (data.strike == null || !data.expiration || !data.direction) return null;
     const right = data.direction === "Put" ? "P" : "C";
+    const underlying = getUnderlyingTicker(data);
+    if (!underlying) return null;
     const result = await fetchOptionContractPrice(
-      ticker,
+      underlying,
       data.expiration,
       Number(data.strike),
       right,
@@ -167,8 +169,9 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
     ) {
       const right = data.direction === "Put" ? "P" : "C";
       const strikeNum = Number(data.strike);
+      const underlying = getUnderlyingTicker(data);
       const result = await fetchOptionContractPrice(
-        ticker,
+        underlying || ticker,
         data.expiration,
         strikeNum,
         right,
@@ -248,11 +251,16 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
 
       if (target.takeOffPercent > 0) {
         const dataForDiscord = { ...updatedData };
-        if (needsUnderlyingPrice) {
-          const currentInstrumentPrice = await getCurrentInstrumentPrice(
-            data,
-            ticker,
-          );
+        const needsInstrumentPriceForDiscord =
+          instrumentType === "Options" ||
+          instrumentType === "LETF" ||
+          instrumentType === "LETF Option";
+        if (needsInstrumentPriceForDiscord) {
+          const currentInstrumentPrice =
+            !needsUnderlyingPrice &&
+            (instrumentType === "Options" || instrumentType === "LETF Option")
+              ? currentTrackingPrice
+              : await getCurrentInstrumentPrice(data, ticker);
           if (currentInstrumentPrice != null)
             dataForDiscord.current_instrument_price = currentInstrumentPrice;
         }
@@ -325,11 +333,16 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
       updatedData.stop_loss_hit = true;
       updatedData.stop_loss_hit_at = new Date().toISOString();
       updatedData.stop_loss_hit_price = currentTrackingPrice;
-      if (needsUnderlyingPrice) {
-        const currentInstrumentPrice = await getCurrentInstrumentPrice(
-          data,
-          ticker,
-        );
+      const needsInstrumentPriceForDiscord =
+        instrumentType === "Options" ||
+        instrumentType === "LETF" ||
+        instrumentType === "LETF Option";
+      if (needsInstrumentPriceForDiscord) {
+        const currentInstrumentPrice =
+          !needsUnderlyingPrice &&
+          (instrumentType === "Options" || instrumentType === "LETF Option")
+            ? currentTrackingPrice
+            : await getCurrentInstrumentPrice(data, ticker);
         if (currentInstrumentPrice != null)
           updatedData.current_instrument_price = currentInstrumentPrice;
       }
