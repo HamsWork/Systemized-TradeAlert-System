@@ -225,6 +225,10 @@ export function registerSignalRoutes(app: Express) {
             return res
               .status(400)
               .json({ message: `Target ${targetKey} not found` });
+          const dataForTargetHit = { ...data };
+          if (!dataForTargetHit.current_instrument_price) {
+            dataForTargetHit.current_instrument_price = Number(t.price);
+          }
           await sendTargetHitDiscordAlert(
             signal,
             app,
@@ -238,7 +242,7 @@ export function registerSignalRoutes(app: Express) {
             },
             Number(t.price),
             ticker,
-            data,
+            dataForTargetHit,
           );
           if (updateSignal) {
             const updatedData = { ...data };
