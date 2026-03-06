@@ -641,7 +641,7 @@ function buildLetfOptionsFields(
 
   const fields: DiscordField[] = [
     { ...SPACER },
-    { name: "🟢 Ticker", value: underlying, inline: true },
+    { name: "🟢 Ticker", value: ticker, inline: true },
     {
       name: "📊 Stock Price",
       value: stockPrice ? fmtPrice(stockPrice) : "—",
@@ -1502,8 +1502,8 @@ function pushInstrumentFields(
         name: "\u{1F4B9} LETF",
         value:
           leverage && leverage > 0
-            ? `${underlying} (${leverage}x ${dir})`
-            : `${underlying} (${dir})`,
+            ? `${ticker} (${leverage}x ${dir})`
+            : `${ticker} (${dir})`,
         inline: true,
       },
       {
