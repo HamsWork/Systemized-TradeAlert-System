@@ -265,11 +265,13 @@ function buildOptionsFields(
   const tradePlanParts: string[] = [];
   if (data.targets && typeof data.targets === "object") {
     const targetEntries = Object.entries(data.targets).filter(
-      ([, val]) => (val as any)?.price,
+      ([, val]) => (val as any)?.price && Number((val as any).take_off_percent) !== 0,
     );
-    const targetPrices = targetEntries.map(([, val], i) => {
+    let tpNum = 0;
+    const targetPrices = targetEntries.map(([, val]) => {
+      tpNum++;
       const price = Number((val as any).price);
-      if (isStockBased) return `T${i + 1}.${fmtPrice(price)}`;
+      if (isStockBased) return `T${tpNum}.${fmtPrice(price)}`;
       const pct = refPrice ? fmtPct(refPrice, price) : null;
       return pct ? `${fmtPrice(price)} (${pct})` : fmtPrice(price);
     });
@@ -339,7 +341,8 @@ function buildOptionsFields(
       let line = "";
       if (t.take_off_percent) {
         const takeOff = `${t.take_off_percent}%`;
-        const positionLabel = tpIndex === 1 ? "of position" : "of remaining position";
+        const positionLabel =
+          tpIndex === 1 ? "of position" : "of remaining position";
         line = `Take Profit (${tpIndex}): At ${priceLabel(price)} take off ${takeOff} ${positionLabel}`;
         if (t.raise_stop_loss?.price) {
           const rslPrice = Number(t.raise_stop_loss.price);
@@ -438,8 +441,10 @@ function buildLetfFields(
         t.raiseStop != null &&
         entryForPct > 0 &&
         Math.abs(t.raiseStop - entryForPct) < 0.02;
-      const positionLabel = tpIdx === 1 ? "of position" : "of remaining position";
-      const takeOffText = tpIdx === 1 ? `${t.takeOff}%` : `remaining ${t.takeOff}%`;
+      const positionLabel =
+        tpIdx === 1 ? "of position" : "of remaining position";
+      const takeOffText =
+        tpIdx === 1 ? `${t.takeOff}%` : `remaining ${t.takeOff}%`;
       const action = isBreakEven
         ? `take off ${takeOffText} ${positionLabel} and raise stop loss to break even.`
         : t.raiseStop != null
@@ -540,7 +545,7 @@ function buildSharesFields(
   const tradePlanParts: string[] = [];
   if (data.targets && typeof data.targets === "object") {
     const targetPrices = Object.entries(data.targets)
-      .filter(([, val]) => (val as any)?.price)
+      .filter(([, val]) => (val as any)?.price && Number((val as any).take_off_percent) !== 0)
       .map(([, val]) => {
         const price = Number((val as any).price);
         const pct = entryPrice ? fmtPct(entryPrice, price) : null;
@@ -592,7 +597,8 @@ function buildSharesFields(
       const price = Number(t.price);
       const pct = entryPrice ? fmtPct(entryPrice, price) : null;
       const takeOff = t.take_off_percent ? `${t.take_off_percent}%` : "100%";
-      const positionLabel = sharesTpIndex === 1 ? "of position" : "of remaining position";
+      const positionLabel =
+        sharesTpIndex === 1 ? "of position" : "of remaining position";
       let line = `Take Profit (${sharesTpIndex}): At ${pct || fmtPrice(price)} take off ${takeOff} ${positionLabel}`;
       if (t.raise_stop_loss?.price) {
         const rslPrice = Number(t.raise_stop_loss.price);
