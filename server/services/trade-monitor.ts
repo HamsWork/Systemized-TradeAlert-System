@@ -165,7 +165,6 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
       : currentPrice <= target.price;
 
     if (targetHit) {
-      signalHits.add(target.key); // so allTargetsHit check below includes this run
       console.log(
         `[TradeMonitor] TARGET HIT: ${target.key} for ${ticker} @ ${fmtPrice(currentPrice)} (target: ${fmtPrice(target.price)})`,
       );
@@ -236,6 +235,8 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
           })
           .catch(() => {});
       }
+
+      break;
     }
   }
 
@@ -278,7 +279,12 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
     }
   }
 
-  const allTargetsHit = targets.length > 0 && targets.every((t) => signalHits.has(t.key));
+  const freshSignal = await storage.getSignal(signal.id);
+  const freshHits = freshSignal?.data && typeof freshSignal.data === "object"
+    ? (freshSignal.data as Record<string, any>).hit_targets || {}
+    : {};
+  const freshHitKeys = new Set<string>(Object.keys(freshHits));
+  const allTargetsHit = targets.length > 0 && targets.every((t) => freshHitKeys.has(t.key));
   if (allTargetsHit) {
     await storage.updateSignal(signal.id, { status: "completed" });
     console.log(`[TradeMonitor] All targets hit for ${ticker} — signal completed`);
