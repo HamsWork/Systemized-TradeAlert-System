@@ -22,12 +22,17 @@ interface TargetInfo {
 
 function parseTargets(data: Record<string, any>, bullish?: boolean): TargetInfo[] {
   if (!data.targets || typeof data.targets !== "object") return [];
+  let tpNumber = 0;
   return Object.entries(data.targets)
     .filter(([, val]) => (val as any)?.price)
-    .map(([key, val]) => {
+    .map(([key, val], i) => {
       const t = val as any;
+      if (Number(t.take_off_percent) > 0) {
+        tpNumber++;
+      }
       return {
         key,
+        tpNumber,
         price: Number(t.price),
         takeOffPercent: Number(t.take_off_percent) || 100,
         raiseStopLoss: t.raise_stop_loss?.price
@@ -109,7 +114,7 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
   const fromData =
     data.current_price != null ? Number(data.current_price) :
     data.last_price != null ? Number(data.last_price) : null;
-  let currentPrice =
+  let currentTrackingPrice =
     fromOrder ??
     (fromData != null && fromData > 0 ? fromData : null);
 
@@ -121,22 +126,22 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
     const underlyingTicker = getUnderlyingTicker(data);
     const underlyingPrice = await fetchStockPrice(underlyingTicker);
     if (underlyingPrice && underlyingPrice > 0) {
-      currentPrice = underlyingPrice;
+      currentTrackingPrice = underlyingPrice;
     }
-  } else if (!currentPrice || currentPrice <= 0) {
+  } else if (!currentTrackingPrice || currentTrackingPrice <= 0) {
     if ((instrumentType === "Options" || instrumentType === "LETF Option") && data.strike != null && data.expiration && data.direction) {
       const right = data.direction === "Put" ? "P" : "C";
       const strikeNum = Number(data.strike);
       const result = await fetchOptionContractPrice(ticker, data.expiration, strikeNum, right);
-      currentPrice = result.price ?? null;
-    } else if (instrumentType === "Crypto") {
+      currentTrackingPrice = result.price ?? null;
+    } else if (instrumentType === "Crypto") { //TODO
       return;
     } else {
-      currentPrice = await fetchStockPrice(ticker);
+      currentTrackingPrice = await fetchStockPrice(ticker);
     }
   }
 
-  if (!currentPrice || currentPrice <= 0) return;
+  if (!currentTrackingPrice || currentTrackingPrice <= 0) return;
 
   const bullish = isBullishTrade(data);
   const targets = parseTargets(data, bullish);
@@ -153,122 +158,138 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
     app = (await storage.getConnectedApp(signal.sourceAppId)) || null;
   }
 
+  let currentStopLoss = stopLoss;
   for (let i = 0; i < targets.length; i++) {
     const target = targets[i];
     if (signalHits.has(target.key)) continue;
 
-    const prevTarget = i > 0 ? targets[i - 1] : null;
-    if (prevTarget && !signalHits.has(prevTarget.key)) break;
+    const allPreviousHit = targets.slice(0, i).every((t) => signalHits.has(t.key));
+    if (!allPreviousHit) continue;
 
-    const targetHit = bullish
-      ? currentPrice >= target.price
-      : currentPrice <= target.price;
+    const priceReached = bullish
+      ? currentTrackingPrice >= target.price
+      : currentTrackingPrice <= target.price;
+    const targetHit = priceReached;
 
     if (targetHit) {
       signalHits.add(target.key); // so allTargetsHit check below includes this run
       console.log(
-        `[TradeMonitor] TARGET HIT: ${target.key} for ${ticker} @ ${fmtPrice(currentPrice)} (target: ${fmtPrice(target.price)})`,
+        `[TradeMonitor] TARGET HIT: ${target.key} for ${ticker} @ ${fmtPrice(currentTrackingPrice)} (target: ${fmtPrice(target.price)})`,
       );
 
-      if (target.raiseStopLoss) {
-        const updatedData = { ...data };
+      const updatedData = { ...(signal.data as Record<string, any>) };
+      if (!updatedData.hit_targets) updatedData.hit_targets = {};
+      updatedData.hit_targets[target.key] = {
+        hitAt: new Date().toISOString(),
+        price: currentTrackingPrice,
+      };
+      const vsCurrentPrice =
+        bullish
+          ? (target.raiseStopLoss ?? 0) <= currentTrackingPrice
+          : (target.raiseStopLoss ?? 0) >= currentTrackingPrice;
+      const vsOriginalStop =
+        target.raiseStopLoss != null &&
+        currentStopLoss != null &&
+        (bullish
+          ? target.raiseStopLoss >= currentStopLoss
+          : target.raiseStopLoss <= currentStopLoss);
+      const raiseStopLossValid =
+        target.raiseStopLoss != null && vsCurrentPrice && vsOriginalStop;
+      if (target.raiseStopLoss && raiseStopLossValid) {
         updatedData.stop_loss = target.raiseStopLoss;
-        await storage.updateSignal(signal.id, { data: updatedData });
+        currentStopLoss = target.raiseStopLoss;
         console.log(
           `[TradeMonitor] Stop loss raised to ${fmtPrice(target.raiseStopLoss)} for ${ticker}`,
         );
-        await sendStopLossRaisedDiscord(
-          signal,
-          app,
-          target.raiseStopLoss,
-          target.key,
-          currentPrice,
-          ticker,
-          data,
-        );
+      }
+      await storage.updateSignal(signal.id, { data: updatedData });
+
+      if (target.takeOffPercent > 0) {
+        const dataForDiscord = { ...updatedData };
+        if (needsUnderlyingPrice) {
+          const currentInstrumentPrice = await getCurrentInstrumentPrice(data, ticker);
+          if (currentInstrumentPrice != null) dataForDiscord.current_instrument_price = currentInstrumentPrice;
+        }
+        await sendTargetHitDiscordAlert(signal, app, target, currentTrackingPrice, ticker, dataForDiscord);
         storage
           .createActivity({
-            type: "stop_loss_raised",
-            title: `Stop loss raised to ${fmtPrice(target.raiseStopLoss)} for ${ticker}`,
-            description: `Stop loss raised to ${fmtPrice(target.raiseStopLoss)} after ${target.key.toUpperCase()} hit (current price: ${fmtPrice(currentPrice)})`,
+            type: "target_hit",
+            title: `${target.key.toUpperCase()} hit for ${ticker}`,
+            description: `${target.key.toUpperCase()} reached at ${fmtPrice(currentTrackingPrice)} (target: ${fmtPrice(target.price)})`,
             symbol: ticker,
             signalId: signal.id,
             metadata: {
-              newStopLoss: target.raiseStopLoss,
               targetKey: target.key,
-              currentPrice,
+              targetPrice: target.price,
+              currentPrice: currentTrackingPrice,
+              raiseStopLoss: target.raiseStopLoss || null,
               sourceApp: app?.name || null,
             },
           })
           .catch(() => {});
       }
 
-      const updatedData = { ...(signal.data as Record<string, any>) };
-      if (!updatedData.hit_targets) updatedData.hit_targets = {};
-      updatedData.hit_targets[target.key] = {
-        hitAt: new Date().toISOString(),
-        price: currentPrice,
-      };
-      await storage.updateSignal(signal.id, { data: updatedData });
-
-      const dataForDiscord = { ...data };
-      if (needsUnderlyingPrice) {
-        const currentInstrumentPrice = await getCurrentInstrumentPrice(data, ticker);
-        if (currentInstrumentPrice != null) dataForDiscord.current_instrument_price = currentInstrumentPrice;
+      if (target.raiseStopLoss && raiseStopLossValid) {
+        await sendStopLossRaisedDiscord(
+          signal,
+          app,
+          target.raiseStopLoss,
+          target.key,
+          currentTrackingPrice,
+          ticker,
+          updatedData,
+        );
+        storage
+          .createActivity({
+            type: "stop_loss_raised",
+            title: `Stop loss raised to ${fmtPrice(target.raiseStopLoss)} for ${ticker}`,
+            description: `Stop loss raised to ${fmtPrice(target.raiseStopLoss)} after ${target.key.toUpperCase()} hit (current price: ${fmtPrice(currentTrackingPrice)})`,
+            symbol: ticker,
+            signalId: signal.id,
+            metadata: {
+              newStopLoss: target.raiseStopLoss,
+              targetKey: target.key,
+              currentPrice: currentTrackingPrice,
+              sourceApp: app?.name || null,
+            },
+          })
+          .catch(() => {});
       }
-      await sendTargetHitDiscordAlert(signal, app, target, currentPrice, ticker, dataForDiscord);
-
-      storage
-        .createActivity({
-          type: "target_hit",
-          title: `${target.key.toUpperCase()} hit for ${ticker}`,
-          description: `${target.key.toUpperCase()} reached at ${fmtPrice(currentPrice)} (target: ${fmtPrice(target.price)})`,
-          symbol: ticker,
-          signalId: signal.id,
-          metadata: {
-            targetKey: target.key,
-            targetPrice: target.price,
-            currentPrice,
-            raiseStopLoss: target.raiseStopLoss || null,
-            sourceApp: app?.name || null,
-          },
-        })
-        .catch(() => {});
     }
   }
 
   if (stopLoss) {
     const slHit = bullish
-      ? currentPrice <= stopLoss
-      : currentPrice >= stopLoss;
+      ? currentTrackingPrice <= stopLoss
+      : currentTrackingPrice >= stopLoss;
 
     if (slHit && !stopLossAlreadyHit) {
       console.log(
-        `[TradeMonitor] STOP LOSS HIT: ${ticker} @ ${fmtPrice(currentPrice)} (SL: ${fmtPrice(stopLoss)})`,
+        `[TradeMonitor] STOP LOSS HIT: ${ticker} @ ${fmtPrice(currentTrackingPrice)} (SL: ${fmtPrice(stopLoss)})`,
       );
 
       const updatedData = { ...(signal.data as Record<string, any>) };
       updatedData.stop_loss_hit = true;
       updatedData.stop_loss_hit_at = new Date().toISOString();
-      updatedData.stop_loss_hit_price = currentPrice;
+      updatedData.stop_loss_hit_price = currentTrackingPrice;
       if (needsUnderlyingPrice) {
         const currentInstrumentPrice = await getCurrentInstrumentPrice(data, ticker);
         if (currentInstrumentPrice != null) updatedData.current_instrument_price = currentInstrumentPrice;
       }
       await storage.updateSignal(signal.id, { data: updatedData, status: "stopped_out" });
 
-      await sendStopLossHitDiscord(signal, app, stopLoss, currentPrice, ticker, updatedData);
+      await sendStopLossHitDiscord(signal, app, stopLoss, currentTrackingPrice, ticker, updatedData);
 
       storage
         .createActivity({
           type: "stop_loss_hit",
           title: `Stop loss hit for ${ticker}`,
-          description: `Stop loss triggered at ${fmtPrice(currentPrice)} (SL: ${fmtPrice(stopLoss)})`,
+          description: `Stop loss triggered at ${fmtPrice(currentTrackingPrice)} (SL: ${fmtPrice(stopLoss)})`,
           symbol: ticker,
           signalId: signal.id,
           metadata: {
             stopLoss,
-            currentPrice,
+            currentPrice: currentTrackingPrice,
             sourceApp: app?.name || null,
           },
         })
