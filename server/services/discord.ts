@@ -441,10 +441,11 @@ function buildLetfFields(
       ? Number(data.entry_underlying_price)
       : (stockPrice ?? null);
   // LETF instrument entry price (for "Leveraged ETF Entry").
-  // When underlying_price_based is true, we prefer the fetched/current instrument price (set upstream),
-  // otherwise we fall back to the original entry instrument price.
-  const fetchedInstrumentPrice = await getCurrentInstrumentPrice(data, ticker);
-  const letfEntryPrice = data.underlying_price_based === true ? fetchedInstrumentPrice ?? entryPrice ?? 0;
+  // Prefer the stored entry_instrument_price on the signal; fall back to the original entry price.
+  const letfEntryPrice =
+    data.entry_instrument_price != null
+      ? Number(data.entry_instrument_price)
+      : entryPrice ?? 0;
   const stopPrice = data.stop_loss != null ? Number(data.stop_loss) : null;
   const entryForPct = stockPriceAtEntry ?? letfEntryPrice ?? 0;
   const stopPct =
