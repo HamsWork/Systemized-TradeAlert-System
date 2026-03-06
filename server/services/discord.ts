@@ -442,19 +442,28 @@ function buildLetfFields(
       ? "BEAR"
       : "BULL"
     : "?";
+  // Underlying/stock price at entry (for "Stock Price" and for % vs targets/stop)
   const stockPriceAtEntry =
     data.entry_underlying_price != null
       ? Number(data.entry_underlying_price)
       : (stockPrice ?? null);
+  // LETF instrument entry price (for "Leveraged ETF Entry").
 
+  // Prefer the stored entry_instrument_price on the signal; fall back to the original entry price.
   const letfEntryPrice =
     data.entry_instrument_price != null
       ? Number(data.entry_instrument_price)
       : (entryPrice ?? 0);
 
   const stopPrice = data.stop_loss != null ? Number(data.stop_loss) : null;
-  const refPrice = stockPriceAtEntry ?? letfEntryPrice ?? 0;
+  const entryForPct = stockPriceAtEntry ?? letfEntryPrice ?? 0;
+  const stopPct =
+    entryForPct > 0 && stopPrice != null
+      ? (((stopPrice - entryForPct) / entryForPct) * 100).toFixed(1)
+      : "?";
+
   const isBullish = direction !== "Short";
+  const refPrice = entryForPct;
 
   const dir = data.direction || "Long";
   const fields: DiscordField[] = [
@@ -485,7 +494,7 @@ function buildLetfFields(
     );
     const targetPrices = targetEntries.map(([, val]) => {
       const price = Number((val as any).price);
-      if (isStockBased) return `${fmtPrice(price)}`;
+      if (isStockBased) return fmtPrice(price);
       const pct = refPrice ? fmtPct(refPrice, price) : null;
       return pct ? `${fmtPrice(price)} (${pct})` : fmtPrice(price);
     });
@@ -517,11 +526,7 @@ function buildLetfFields(
       let slText = `🛑 Stop Loss: ${fmtPrice(stopPrice)}`;
       allTargets.forEach(([, val]) => {
         if (!(val as any).raise_stop_loss?.price) return;
-        slText = addRsl(
-          Number((val as any).raise_stop_loss?.price),
-          slText,
-          false,
-        );
+        slText = addRsl(Number((val as any).raise_stop_loss?.price), slText, false);
       });
       tradePlanParts.push(slText);
     } else {
@@ -529,11 +534,7 @@ function buildLetfFields(
       let slText = `🛑 Stop Loss: ${fmtPrice(stopPrice)}(${slPct || "?"})`;
       allTargets.forEach(([, val]) => {
         if (!(val as any).raise_stop_loss?.price) return;
-        slText = addRsl(
-          Number((val as any).raise_stop_loss?.price),
-          slText,
-          true,
-        );
+        slText = addRsl(Number((val as any).raise_stop_loss?.price), slText, true);
       });
       tradePlanParts.push(slText);
     }
