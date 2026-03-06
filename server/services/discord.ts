@@ -932,7 +932,7 @@ export function buildSignalAlertEmbed(
     instrumentType === "LETF"
       ? `**\u{1F6A8} ${ticker} Shares Entry**`
       : instrumentType === "LETF Option"
-        ? `**\u{1F6A8} ${ticer} Options Entry**`
+        ? `**\u{1F6A8} ${ticker} Options Entry**`
         : instrumentType === "Crypto"
           ? `**\u{1F6A8} ${ticker} Crypto Alert**`
           : instrumentType === "Shares"
