@@ -2,6 +2,12 @@ import type { Signal, ConnectedApp } from "@shared/schema";
 import { storage } from "../storage";
 import { getLETFUnderlying } from "../constants/letf";
 
+/**
+ * Price terminology (see server/docs/PRICE_TERMINOLOGY.md):
+ * - currentTrackingPrice: price used for target/SL comparison (underlying when underlying_price_based, else instrument).
+ * - currentInstrumentPrice: actual instrument price (option premium, LETF share, or stock) for P&L and display.
+ */
+
 export interface DiscordField {
   name: string;
   value: string;
@@ -753,7 +759,6 @@ export function buildTargetHitEmbed(
     instrumentType === "LETF Option";
   let pctProfit: string | null = null;
   if (entryInstrument != null && entryInstrument > 0) {
-    
     const priceForPct = isInstrumentPriceBased
       ? currentInstrumentPrice
       : (currentInstrumentPrice ?? (!underlyingBased ? target.price : null));
@@ -1133,33 +1138,27 @@ function getNextTargetKeyAndPrice(
  * For LETF, uses the rich format (underlying → LETF, Position Management, Risk Management).
  */
 export async function sendTargetHitDiscordAlert(
-  signal: Signal,
+  signalData: Record<string, any>,
   app: ConnectedApp | null,
   target: TargetHitInfo,
-  currentPrice: number,
-  ticker: string,
-  data: Record<string, any>,
+  currentTrackingPrice: number,
+  currentInstrumentPrice: number | null,
+  signalId: string,
 ): Promise<void> {
-  const signalData = (signal.data || {}) as Record<string, any>;
   const hasSignalWebhook = !!signalData.discord_webhook_url;
   if (!hasSignalWebhook && (!app || !app.sendDiscordMessages)) return;
-  const instrumentType = data.instrument_type || "Shares";
-  const webhookUrl = resolveWebhookUrl(signal, app, instrumentType);
+  const instrumentType = signalData.instrument_type || "Shares";
+  const signalForWebhook = { id: signalId, data: signalData } as unknown as Signal;
+  const webhookUrl = resolveWebhookUrl(signalForWebhook, app, instrumentType);
   if (!webhookUrl) return;
 
-  const entryPrice = data.entry_price ? Number(data.entry_price) : null;
-  const stockPrice = data.entry_underlying_price
-    ? Number(data.entry_underlying_price)
-    : null;
-  const pctProfit =
-    entryPrice && entryPrice > 0
-      ? (((currentPrice - entryPrice) / entryPrice) * 100).toFixed(1)
-      : null;
-  const pnlText = pctProfit ? `+${pctProfit}%` : "\u2014";
-
-  const isLETF = instrumentType === "LETF";
-
-  const embed = buildTargetHitEmbed(data, ticker, target);
+  const ticker = signalData.ticker || "";
+  const dataForEmbed = {
+    ...signalData,
+    current_tracking_price: currentTrackingPrice,
+    current_instrument_price: currentInstrumentPrice ?? signalData.current_instrument_price,
+  };
+  const embed = buildTargetHitEmbed(dataForEmbed, ticker, target);
   const content = app
     ? getContentForInstrument(app, instrumentType)
     : "@everyone";
@@ -1167,13 +1166,17 @@ export async function sendTargetHitDiscordAlert(
 
   await storage
     .createDiscordMessage({
-      signalId: signal.id,
+      signalId,
       webhookUrl,
       channelType: "signal",
       instrumentType,
       status: sent ? "sent" : "error",
       messageType: "target_hit",
-      embedData: { ticker, targetKey: target.key, currentPrice },
+      embedData: {
+        ticker,
+        targetKey: target.key,
+        currentPrice: currentTrackingPrice,
+      },
       sourceAppId: app?.id ?? null,
       sourceAppName: app?.name ?? null,
     })
@@ -1244,26 +1247,42 @@ function pushInstrumentFields(
   }
 }
 
+/** Target info for stop-loss-raised: key (e.g. tp1) and new stop level. */
+export interface StopLossRaisedTarget {
+  key: string;
+  raiseStopLoss: number;
+}
+
 /**
  * Sends a Discord alert when stop loss is raised (e.g. after a target hit).
  */
 export async function sendStopLossRaisedDiscord(
-  signal: Signal,
+  signalData: Record<string, any>,
   app: ConnectedApp | null,
-  newStopLoss: number,
-  targetKey: string,
-  currentPrice: number,
-  ticker: string,
-  data: Record<string, any>,
+  target: StopLossRaisedTarget,
+  currentTrackingPrice: number,
+  currentInstrumentPrice: number | null,
+  signalId: string,
 ): Promise<void> {
-  const signalData = (signal.data || {}) as Record<string, any>;
   const hasSignalWebhook = !!signalData.discord_webhook_url;
   if (!hasSignalWebhook && (!app || !app.sendDiscordMessages)) return;
-  const instrumentType = data.instrument_type || "Shares";
-  const webhookUrl = resolveWebhookUrl(signal, app, instrumentType);
+  const instrumentType = signalData.instrument_type || "Shares";
+  const signalForWebhook = { id: signalId, data: signalData } as unknown as Signal;
+  const webhookUrl = resolveWebhookUrl(signalForWebhook, app, instrumentType);
   if (!webhookUrl) return;
 
-  const embed = buildStopLossRaisedEmbed(data, ticker, targetKey, newStopLoss);
+  const ticker = signalData.ticker || "";
+  const dataForEmbed = {
+    ...signalData,
+    current_instrument_price:
+      currentInstrumentPrice ?? signalData.current_instrument_price,
+  };
+  const embed = buildStopLossRaisedEmbed(
+    dataForEmbed,
+    ticker,
+    target.key,
+    target.raiseStopLoss,
+  );
   const content = app
     ? getContentForInstrument(app, instrumentType)
     : "@everyone";
@@ -1271,13 +1290,18 @@ export async function sendStopLossRaisedDiscord(
 
   await storage
     .createDiscordMessage({
-      signalId: signal.id,
+      signalId,
       webhookUrl,
       channelType: "signal",
       instrumentType,
       status: sent ? "sent" : "error",
       messageType: "stop_loss_raised",
-      embedData: { ticker, targetKey, newStopLoss, currentPrice },
+      embedData: {
+        ticker,
+        targetKey: target.key,
+        newStopLoss: target.raiseStopLoss,
+        currentPrice: currentTrackingPrice,
+      },
       sourceAppId: app?.id ?? null,
       sourceAppName: app?.name ?? null,
     })
@@ -1288,21 +1312,28 @@ export async function sendStopLossRaisedDiscord(
  * Sends a Discord alert when stop loss is hit.
  */
 export async function sendStopLossHitDiscord(
-  signal: Signal,
+  signalData: Record<string, any>,
   app: ConnectedApp | null,
-  stopLoss: number,
-  currentPrice: number,
-  ticker: string,
-  data: Record<string, any>,
+  currentTrackingPrice: number,
+  currentInstrumentPrice: number | null,
+  signalId: string,
 ): Promise<void> {
-  const signalData = (signal.data || {}) as Record<string, any>;
   const hasSignalWebhook = !!signalData.discord_webhook_url;
   if (!hasSignalWebhook && (!app || !app.sendDiscordMessages)) return;
-  const instrumentType = data.instrument_type || "Shares";
-  const webhookUrl = resolveWebhookUrl(signal, app, instrumentType);
+  const instrumentType = signalData.instrument_type || "Shares";
+  const signalForWebhook = { id: signalId, data: signalData } as unknown as Signal;
+  const webhookUrl = resolveWebhookUrl(signalForWebhook, app, instrumentType);
   if (!webhookUrl) return;
 
-  const embed = buildStopLossHitEmbed(data, ticker, stopLoss);
+  const ticker = signalData.ticker || "";
+  const stopLoss =
+    signalData.stop_loss != null ? Number(signalData.stop_loss) : 0;
+  const dataForEmbed = {
+    ...signalData,
+    current_instrument_price:
+      currentInstrumentPrice ?? signalData.current_instrument_price,
+  };
+  const embed = buildStopLossHitEmbed(dataForEmbed, ticker, stopLoss);
   const content = app
     ? getContentForInstrument(app, instrumentType)
     : "@everyone";
@@ -1310,7 +1341,7 @@ export async function sendStopLossHitDiscord(
 
   await storage
     .createDiscordMessage({
-      signalId: signal.id,
+      signalId,
       webhookUrl,
       channelType: "signal",
       instrumentType,

@@ -146,7 +146,7 @@ export function registerTestRoutes(app: Express) {
         const targetKey = body.targetKey ?? body.target_key ?? "tp1";
         const targetPrice = body.targetPrice ?? body.target_price ?? currentPrice;
         await sendTargetHitDiscordAlert(
-          signal,
+          data,
           app,
           {
             key: targetKey,
@@ -155,8 +155,8 @@ export function registerTestRoutes(app: Express) {
             raiseStopLoss: body.raiseStopLoss ?? body.raise_stop_loss ?? entryPrice,
           },
           currentPrice,
-          ticker,
-          data,
+          data.current_instrument_price ?? currentPrice,
+          signal?.id ?? "",
         );
         return res.json({
           ok: true,
@@ -169,13 +169,12 @@ export function registerTestRoutes(app: Express) {
         const newStopLoss = body.newStopLoss ?? body.new_stop_loss ?? entryPrice;
         const targetKey = body.targetKey ?? body.target_key ?? "tp1";
         await sendStopLossRaisedDiscord(
-          signal,
-          app,
-          Number(newStopLoss),
-          targetKey,
-          currentPrice,
-          ticker,
           data,
+          app,
+          { key: targetKey, raiseStopLoss: Number(newStopLoss) },
+          currentPrice,
+          data.current_instrument_price ?? currentPrice,
+          signal?.id ?? "",
         );
         return res.json({
           ok: true,
@@ -187,7 +186,13 @@ export function registerTestRoutes(app: Express) {
       if (type === "stop_loss_hit") {
         const sl = stopLoss ?? data.stop_loss ?? 95;
         const slData = { ...data, stop_loss_hit: true, stop_loss_hit_price: currentPrice, stop_loss_hit_pct: -5.2 };
-        await sendStopLossHitDiscord(signal, app, Number(sl), currentPrice, ticker, slData);
+        await sendStopLossHitDiscord(
+          slData,
+          app,
+          currentPrice,
+          slData.current_instrument_price ?? currentPrice,
+          signal?.id ?? "",
+        );
         return res.json({
           ok: true,
           type: "stop_loss_hit",

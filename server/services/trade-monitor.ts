@@ -158,21 +158,6 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
     return;
   }
 
-  const orders = await storage.getIbkrOrdersBySignal(signal.id);
-  const fromOrder =
-    orders.find((o) => o.status === "filled" && o.orderType === "market")
-      ?.lastPrice ??
-    orders.find((o) => o.lastPrice != null && o.lastPrice > 0)?.lastPrice ??
-    null;
-  const fromData =
-    data.current_price != null
-      ? Number(data.current_price)
-      : data.last_price != null
-        ? Number(data.last_price)
-        : null;
-  let currentTrackingPrice =
-    fromOrder ?? (fromData != null && fromData > 0 ? fromData : null);
-
   const instrumentType = data.instrument_type || "Shares";
   const underlyingPriceBased = data.underlying_price_based === true;
   const needsUnderlyingPrice =
@@ -181,13 +166,15 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
       instrumentType === "LETF" ||
       instrumentType === "LETF Option");
 
+  /** Tracking price: used for target/SL comparison. Instrument price: actual option/LETF/share price for P&L. */
+  let currentTrackingPrice: number | null = null;
+  let currentInstrumentPrice: number | null = null;
+
   if (needsUnderlyingPrice) {
     const underlyingTicker = getUnderlyingTicker(data);
-    const underlyingPrice = await fetchStockPrice(underlyingTicker);
-    if (underlyingPrice && underlyingPrice > 0) {
-      currentTrackingPrice = underlyingPrice;
-    }
-  } else if (!currentTrackingPrice || currentTrackingPrice <= 0) {
+    currentTrackingPrice = await fetchStockPrice(underlyingTicker);
+    currentInstrumentPrice = await getCurrentInstrumentPrice(data, ticker);
+  } else {
     if (
       (instrumentType === "Options" || instrumentType === "LETF Option") &&
       data.strike != null &&
@@ -195,24 +182,24 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
       data.direction
     ) {
       const right = data.direction === "Put" ? "P" : "C";
-      const strikeNum = Number(data.strike);
       const underlying = getUnderlyingTicker(data);
       const result = await fetchOptionContractPrice(
         underlying || ticker,
         data.expiration,
-        strikeNum,
+        Number(data.strike),
         right,
       );
       currentTrackingPrice = result.price ?? null;
     } else if (instrumentType === "Crypto") {
-      //TODO
       return;
     } else {
       currentTrackingPrice = await fetchStockPrice(ticker);
     }
+    currentInstrumentPrice = currentTrackingPrice;
   }
 
   if (!currentTrackingPrice || currentTrackingPrice <= 0) return;
+  if (!currentInstrumentPrice || currentInstrumentPrice <= 0) return;
 
   const bullish = isBullishTrade(data);
   const targets = parseTargets(data, bullish);
@@ -255,19 +242,9 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
       updatedData.hit_targets[target.key] = {
         hitAt: new Date().toISOString(),
         price: currentTrackingPrice,
+        instrumentPrice: currentInstrumentPrice,
       };
-      const currentInstrumentPriceAtHit =
-        await getCurrentInstrumentPriceForSave(
-          data,
-          ticker,
-          instrumentType,
-          needsUnderlyingPrice,
-          currentTrackingPrice,
-        );
-      if (currentInstrumentPriceAtHit != null) {
-        updatedData[instrumentFilledFieldName(target.key)] =
-          currentInstrumentPriceAtHit;
-      }
+      
       const vsCurrentPrice = bullish
         ? (target.raiseStopLoss ?? 0) <= currentTrackingPrice
         : (target.raiseStopLoss ?? 0) >= currentTrackingPrice;
@@ -290,15 +267,15 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
 
       if (target.takeOffPercent > 0) {
         const dataForDiscord = { ...updatedData };
-        if (currentInstrumentPriceAtHit != null)
-          dataForDiscord.current_instrument_price = currentInstrumentPriceAtHit;
+        if (currentInstrumentPrice != null)
+          dataForDiscord.current_instrument_price = currentInstrumentPrice;
         await sendTargetHitDiscordAlert(
-          signal,
+          dataForDiscord,
           app,
           target,
           currentTrackingPrice,
-          ticker,
-          dataForDiscord,
+          currentInstrumentPrice,
+          signal.id,
         );
         storage
           .createActivity({
@@ -310,7 +287,8 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
             metadata: {
               targetKey: target.key,
               targetPrice: target.price,
-              currentPrice: currentTrackingPrice,
+              currentTrackingPrice: currentTrackingPrice,
+              currentInstrumentPrice: currentInstrumentPrice,
               raiseStopLoss: target.raiseStopLoss || null,
               sourceApp: app?.name || null,
             },
@@ -319,14 +297,16 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
       }
 
       if (target.raiseStopLoss && raiseStopLossValid) {
+        const dataForSLRaised = { ...updatedData };
+        if (currentInstrumentPrice != null)
+          dataForSLRaised.current_instrument_price = currentInstrumentPrice;
         await sendStopLossRaisedDiscord(
-          signal,
+          dataForSLRaised,
           app,
-          target.raiseStopLoss,
-          target.key,
+          { key: target.key, raiseStopLoss: target.raiseStopLoss },
           currentTrackingPrice,
-          ticker,
-          updatedData,
+          currentInstrumentPrice,
+          signal.id,
         );
         storage
           .createActivity({
@@ -360,31 +340,19 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
       const updatedData = { ...(signal.data as Record<string, any>) };
       updatedData.stop_loss_hit = true;
       updatedData.stop_loss_hit_at = new Date().toISOString();
-      updatedData.stop_loss_hit_price = currentTrackingPrice;
-      const currentInstrumentPriceAtSL =
-        await getCurrentInstrumentPriceForSave(
-          data,
-          ticker,
-          instrumentType,
-          needsUnderlyingPrice,
-          currentTrackingPrice,
-        );
-      if (currentInstrumentPriceAtSL != null) {
-        updatedData.instrumentSLFilled = currentInstrumentPriceAtSL;
-        updatedData.current_instrument_price = currentInstrumentPriceAtSL;
-      }
+      updatedData.stop_loss_hit_tracking_price = currentTrackingPrice;
+      updatedData.stop_loss_hit_instrument_price = currentInstrumentPrice;
       await storage.updateSignal(signal.id, {
         data: updatedData,
         status: "stopped_out",
       });
 
       await sendStopLossHitDiscord(
-        signal,
-        app,
-        stopLoss,
-        currentTrackingPrice,
-        ticker,
         updatedData,
+        app,
+        currentTrackingPrice,
+        currentInstrumentPrice,
+        signal.id,
       );
 
       storage
@@ -509,13 +477,12 @@ export async function recordManualTargetHit(
 
   if (target.raiseStopLoss) {
     await sendStopLossRaisedDiscord(
-      updated,
-      app,
-      target.raiseStopLoss,
-      targetKey,
-      priceAtHit,
-      ticker,
       updatedData,
+      app,
+      { key: targetKey, raiseStopLoss: target.raiseStopLoss },
+      priceAtHit,
+      updatedData.current_instrument_price ?? priceAtHit,
+      updated.id,
     );
     await storage
       .createActivity({
@@ -542,12 +509,12 @@ export async function recordManualTargetHit(
     raiseStopLoss: target.raiseStopLoss,
   };
   await sendTargetHitDiscordAlert(
-    updated,
+    updatedData,
     app,
     targetForDiscord,
     priceAtHit,
-    ticker,
-    updatedData,
+    updatedData.current_instrument_price ?? priceAtHit,
+    updated.id,
   );
 
   await storage
@@ -657,12 +624,11 @@ export async function recordManualStopLossHit(
   );
 
   await sendStopLossHitDiscord(
-    updated,
-    app,
-    stopLoss,
-    priceAtHit,
-    ticker,
     updatedData,
+    app,
+    priceAtHit,
+    updatedData.current_instrument_price ?? priceAtHit,
+    signal.id,
   );
 
   await storage
