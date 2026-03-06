@@ -136,7 +136,7 @@ function DiscordChannelFields({ form, label, webhookName, contentName, testIdPre
           <FormItem>
             <FormLabel className="text-xs">Message Content</FormLabel>
             <FormControl>
-              <Input placeholder="@everyone" {...field} value={field.value ?? "@everyone"} data-testid={`input-${prefix}discord-content-${slug}`} />
+              <Textarea placeholder="@everyone" rows={2} className="resize-y min-h-[2.5rem]" {...field} value={field.value ?? "@everyone"} data-testid={`input-${prefix}discord-content-${slug}`} />
             </FormControl>
             <FormMessage />
           </FormItem>
