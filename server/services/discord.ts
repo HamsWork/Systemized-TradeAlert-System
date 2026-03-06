@@ -1251,7 +1251,10 @@ function pushInstrumentFields(
   data: Record<string, any>,
 ): void {
   const entryPrice = data.entry_price != null ? Number(data.entry_price) : null;
-  const entryInstrumentPrice = data.entry_instrument_price != null ? Number(data.entry_instrument_price) : null;
+  const entryInstrumentPrice =
+    data.entry_instrument_price != null
+      ? Number(data.entry_instrument_price)
+      : null;
   const stockPrice =
     data.entry_underlying_price != null
       ? Number(data.entry_underlying_price)
@@ -1274,7 +1277,10 @@ function pushInstrumentFields(
       },
       {
         name: "\u{1F4B5} LETF Entry",
-        value: entryInstrumentPrice != null ? fmtPrice(entryInstrumentPrice) : "Pending",
+        value:
+          entryInstrumentPrice != null
+            ? fmtPrice(entryInstrumentPrice)
+            : fmtPrice(entryPrice),
         inline: true,
       },
       {
