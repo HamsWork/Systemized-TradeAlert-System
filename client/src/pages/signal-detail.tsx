@@ -1039,7 +1039,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
   if (data.targets && typeof data.targets === "object") {
     for (const [key, val] of Object.entries(data.targets)) {
       const t = val as any;
-      if (t && t.price) {
+      if (t && t.price && Number(t.take_off_percent) !== 0) {
         const hit = hitTargetsData?.[key];
         targets.push({
           key,
