@@ -363,8 +363,8 @@ function getSignalStatusInfo(signal: Signal) {
   const targets = data.targets as Record<string, any> | undefined;
   const stopLoss = data.stop_loss != null ? Number(data.stop_loss) : null;
 
-  const targetKeys = targets ? Object.keys(targets).sort() : [];
-  const hitKeys = hitTargets ? Object.keys(hitTargets) : [];
+  const targetKeys = targets ? Object.keys(targets).filter(k => Number((targets[k] as any)?.take_off_percent) !== 0).sort() : [];
+  const hitKeys = hitTargets ? Object.keys(hitTargets).filter(k => targets && Number((targets[k] as any)?.take_off_percent) !== 0) : [];
   const totalTargets = targetKeys.length;
   const hitCount = hitKeys.length;
   const isStoppedOut = signal.status === "stopped_out";

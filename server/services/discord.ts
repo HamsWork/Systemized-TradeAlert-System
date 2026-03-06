@@ -330,14 +330,17 @@ function buildOptionsFields(
       isStockBased
         ? fmtPrice(p)
         : (refPrice ? fmtPct(refPrice, p) : null) || fmtPrice(p);
-    entries.forEach(([, val], i) => {
+    let tpIndex = 0;
+    entries.forEach(([, val]) => {
       const t = val as any;
+      if (Number(t.take_off_percent) === 0) return;
+      tpIndex++;
       const price = Number(t.price);
       let line = "";
       if (t.take_off_percent) {
-        const takeOff = t.take_off_percent ? `${t.take_off_percent}%` : "100%";
-        const positionLabel = i === 0 ? "of position" : "of remaining position";
-        line = `Take Profit (${i + 1}): At ${priceLabel(price)} take off ${takeOff} ${positionLabel}`;
+        const takeOff = `${t.take_off_percent}%`;
+        const positionLabel = tpIndex === 1 ? "of position" : "of remaining position";
+        line = `Take Profit (${tpIndex}): At ${priceLabel(price)} take off ${takeOff} ${positionLabel}`;
         if (t.raise_stop_loss?.price) {
           const rslPrice = Number(t.raise_stop_loss.price);
           const isBreakEven = refPrice && Math.abs(rslPrice - refPrice) < 0.01;
@@ -348,7 +351,7 @@ function buildOptionsFields(
           line += ".";
         }
       } else {
-        line = `Take Profit (${i + 1}): At ${priceLabel(price)}`;
+        line = `Take Profit (${tpIndex}): At ${priceLabel(price)}`;
         if (t.raise_stop_loss?.price) {
           const rslPrice = Number(t.raise_stop_loss.price);
           const isBreakEven = refPrice && Math.abs(rslPrice - refPrice) < 0.01;
@@ -423,24 +426,27 @@ function buildLetfFields(
       })
       .sort((a, b) => a.price - b.price);
 
-    entries.forEach((t, i) => {
+    const visibleEntries = entries.filter((t) => Number(t.takeOff) !== 0);
+    entries.forEach((t) => {
+      if (Number(t.takeOff) === 0) return;
       const pct = entryForPct > 0 ? fmtPct(entryForPct, t.price) : "?";
       targetsStrParts.push(
         isStockBased ? fmtPrice(t.price) : `${fmtPrice(t.price)} (${pct})`,
       );
+      const tpIdx = targetsStrParts.length;
       const isBreakEven =
         t.raiseStop != null &&
         entryForPct > 0 &&
         Math.abs(t.raiseStop - entryForPct) < 0.02;
-      const positionLabel = i === 0 ? "of position" : "of remaining position";
-      const takeOffText = i === 0 ? `${t.takeOff}%` : `remaining ${t.takeOff}%`;
+      const positionLabel = tpIdx === 1 ? "of position" : "of remaining position";
+      const takeOffText = tpIdx === 1 ? `${t.takeOff}%` : `remaining ${t.takeOff}%`;
       const action = isBreakEven
         ? `take off ${takeOffText} ${positionLabel} and raise stop loss to break even.`
         : t.raiseStop != null
           ? `take off ${takeOffText} ${positionLabel} and raise stop loss to ${fmtPrice(t.raiseStop)}.`
           : `take off ${takeOffText} ${positionLabel}.`;
       const label =
-        entries.length > 1 ? `Take Profit (${i + 1})` : "Take Profit";
+        visibleEntries.length > 1 ? `Take Profit (${tpIdx})` : "Take Profit";
       const atLabel = isStockBased ? fmtPrice(t.price) : pct;
       tpPlanLines.push(`${label}: At ${atLabel} ${action}`);
     });
@@ -578,13 +584,16 @@ function buildSharesFields(
     const entries = Object.entries(data.targets).filter(
       ([, val]) => (val as any)?.price,
     );
-    entries.forEach(([, val], i) => {
+    let sharesTpIndex = 0;
+    entries.forEach(([, val]) => {
       const t = val as any;
+      if (Number(t.take_off_percent) === 0) return;
+      sharesTpIndex++;
       const price = Number(t.price);
       const pct = entryPrice ? fmtPct(entryPrice, price) : null;
       const takeOff = t.take_off_percent ? `${t.take_off_percent}%` : "100%";
-      const positionLabel = i === 0 ? "of position" : "of remaining position";
-      let line = `Take Profit (${i + 1}): At ${pct || fmtPrice(price)} take off ${takeOff} ${positionLabel}`;
+      const positionLabel = sharesTpIndex === 1 ? "of position" : "of remaining position";
+      let line = `Take Profit (${sharesTpIndex}): At ${pct || fmtPrice(price)} take off ${takeOff} ${positionLabel}`;
       if (t.raise_stop_loss?.price) {
         const rslPrice = Number(t.raise_stop_loss.price);
         const isBreakEven =
