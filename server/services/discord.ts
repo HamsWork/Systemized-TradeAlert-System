@@ -1184,8 +1184,9 @@ export function buildStopLossHitEmbed(
     data.current_instrument_price != null
       ? Number(data.current_instrument_price)
       : null;
-  const stopLossHitPrice =
-    data.stop_loss_hit_price != null
+  const stopLossHitPrice = isOption && currentInstrumentPrice != null
+    ? currentInstrumentPrice
+    : data.stop_loss_hit_price != null
       ? Number(data.stop_loss_hit_price)
       : stopLoss;
   let stopLossHitPct: string | null = null;
