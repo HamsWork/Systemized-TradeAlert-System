@@ -29,7 +29,7 @@ function parseTargets(data: Record<string, any>, bullish?: boolean): TargetInfo[
       return {
         key,
         price: Number(t.price),
-        takeOffPercent: Number(t.take_off_percent) || 100,
+        takeOffPercent: t.take_off_percent != null ? Number(t.take_off_percent) : 100,
         raiseStopLoss: t.raise_stop_loss?.price
           ? Number(t.raise_stop_loss.price)
           : undefined,
@@ -211,29 +211,31 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
       };
       await storage.updateSignal(signal.id, { data: updatedData });
 
-      const dataForDiscord = { ...data };
-      if (needsUnderlyingPrice) {
-        const currentInstrumentPrice = await getCurrentInstrumentPrice(data, ticker);
-        if (currentInstrumentPrice != null) dataForDiscord.current_instrument_price = currentInstrumentPrice;
-      }
-      await sendTargetHitDiscordAlert(signal, app, target, currentPrice, ticker, dataForDiscord);
+      if (target.takeOffPercent !== 0) {
+        const dataForDiscord = { ...data };
+        if (needsUnderlyingPrice) {
+          const currentInstrumentPrice = await getCurrentInstrumentPrice(data, ticker);
+          if (currentInstrumentPrice != null) dataForDiscord.current_instrument_price = currentInstrumentPrice;
+        }
+        await sendTargetHitDiscordAlert(signal, app, target, currentPrice, ticker, dataForDiscord);
 
-      storage
-        .createActivity({
-          type: "target_hit",
-          title: `${target.key.toUpperCase()} hit for ${ticker}`,
-          description: `${target.key.toUpperCase()} reached at ${fmtPrice(currentPrice)} (target: ${fmtPrice(target.price)})`,
-          symbol: ticker,
-          signalId: signal.id,
-          metadata: {
-            targetKey: target.key,
-            targetPrice: target.price,
-            currentPrice,
-            raiseStopLoss: target.raiseStopLoss || null,
-            sourceApp: app?.name || null,
-          },
-        })
-        .catch(() => {});
+        storage
+          .createActivity({
+            type: "target_hit",
+            title: `${target.key.toUpperCase()} hit for ${ticker}`,
+            description: `${target.key.toUpperCase()} reached at ${fmtPrice(currentPrice)} (target: ${fmtPrice(target.price)})`,
+            symbol: ticker,
+            signalId: signal.id,
+            metadata: {
+              targetKey: target.key,
+              targetPrice: target.price,
+              currentPrice,
+              raiseStopLoss: target.raiseStopLoss || null,
+              sourceApp: app?.name || null,
+            },
+          })
+          .catch(() => {});
+      }
     }
   }
 

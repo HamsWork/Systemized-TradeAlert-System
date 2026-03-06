@@ -265,13 +265,11 @@ function buildOptionsFields(
   const tradePlanParts: string[] = [];
   if (data.targets && typeof data.targets === "object") {
     const targetEntries = Object.entries(data.targets).filter(
-      ([, val]) => (val as any)?.price && Number((val as any).take_off_percent) !== 0,
+      ([, val]) => (val as any)?.price,
     );
-    let tpNum = 0;
-    const targetPrices = targetEntries.map(([, val]) => {
-      tpNum++;
+    const targetPrices = targetEntries.map(([, val], i) => {
       const price = Number((val as any).price);
-      if (isStockBased) return `T${tpNum}.${fmtPrice(price)}`;
+      if (isStockBased) return `T${i + 1}.${fmtPrice(price)}`;
       const pct = refPrice ? fmtPct(refPrice, price) : null;
       return pct ? `${fmtPrice(price)} (${pct})` : fmtPrice(price);
     });
@@ -545,7 +543,7 @@ function buildSharesFields(
   const tradePlanParts: string[] = [];
   if (data.targets && typeof data.targets === "object") {
     const targetPrices = Object.entries(data.targets)
-      .filter(([, val]) => (val as any)?.price && Number((val as any).take_off_percent) !== 0)
+      .filter(([, val]) => (val as any)?.price)
       .map(([, val]) => {
         const price = Number((val as any).price);
         const pct = entryPrice ? fmtPct(entryPrice, price) : null;
