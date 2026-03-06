@@ -269,9 +269,9 @@ function buildOptionsFields(
     );
     const targetPrices = targetEntries.map(([, val], i) => {
       const price = Number((val as any).price);
-      if (isStockBased) return fmtPrice(price);
+      if (isStockBased) return `T.${i + 1}.${fmtPrice(price)}`;
       const pct = refPrice ? fmtPct(refPrice, price) : null;
-      return pct ? `T${i + 1}.${fmtPrice(price)} (${pct})` : fmtPrice(price);
+      return pct ? `${fmtPrice(price)} (${pct})` : fmtPrice(price);
     });
     if (targetPrices.length > 0) {
       tradePlanParts.push(`🎯 Targets: ${targetPrices.join(", ")}`);
