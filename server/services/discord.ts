@@ -140,20 +140,24 @@ function getContentForInstrument(
   app: ConnectedApp,
   instrumentType: string,
 ): string {
-  switch (instrumentType) {
-    case "Options":
-      return app.discordContentOptions || "@everyone";
-    case "Shares":
-      return app.discordContentShares || "@everyone";
-    case "LETF":
-      return app.discordContentLetf || "@everyone";
-    case "LETF Option":
-      return app.discordContentLetfOption || "@everyone";
-    case "Crypto":
-      return app.discordContentCrypto || "@everyone";
-    default:
-      return "@everyone";
-  }
+  const raw = (() => {
+    switch (instrumentType) {
+      case "Options":
+        return app.discordContentOptions;
+      case "Shares":
+        return app.discordContentShares;
+      case "LETF":
+        return app.discordContentLetf;
+      case "LETF Option":
+        return app.discordContentLetfOption;
+      case "Crypto":
+        return app.discordContentCrypto;
+      default:
+        return "";
+    }
+  })();
+  const trimmed = typeof raw === "string" ? raw.trim() : "";
+  return trimmed || "";
 }
 
 function getWebhookForInstrument(
@@ -705,20 +709,26 @@ export function buildTargetHitEmbed(
   target: { key: string; price: number; tpNumber?: number; takeOffPercent?: number; raiseStopLoss?: number },
 ): DiscordEmbed {
   const instrumentType = data.instrument_type || "Shares";
-  const targetsArr =
+  const direction = data.direction || "Long";
+  const isBullish = direction === "Call" || direction === "Long";
+  const takeProfitArr =
     data.targets && typeof data.targets === "object"
       ? (Object.entries(data.targets) as [string, { price?: number; take_off_percent?: number; raise_stop_loss?: { price?: number } }][])
-          .filter(([, v]) => v?.price != null)
-          .sort(([, a], [, b]) => Number(a.price) - Number(b.price))
+          .filter(([, v]) => v?.price != null && (v?.take_off_percent ?? 0) > 0)
+          .sort(([, a], [, b]) =>
+            isBullish
+              ? Number(a.price) - Number(b.price)
+              : Number(b.price) - Number(a.price),
+          )
       : [];
-  const currentIdx = targetsArr.findIndex(([k]) => k === target.key);
+  const currentIdx = takeProfitArr.findIndex(([k]) => k === target.key);
   const tpDisplay = target.tpNumber ?? (currentIdx >= 0 ? currentIdx + 1 : target.key.replace(/^tp/i, "") || 1);
   const takeOffPercent =
     target.takeOffPercent ??
-    (currentIdx >= 0 && targetsArr[currentIdx]?.[1]?.take_off_percent != null
-      ? Number(targetsArr[currentIdx][1].take_off_percent)
+    (currentIdx >= 0 && takeProfitArr[currentIdx]?.[1]?.take_off_percent != null
+      ? Number(takeProfitArr[currentIdx][1].take_off_percent)
       : 50);
-  const nextTarget = currentIdx >= 0 && currentIdx < targetsArr.length - 1 ? targetsArr[currentIdx + 1] : null;
+  const nextTarget = currentIdx >= 0 && currentIdx < takeProfitArr.length - 1 ? takeProfitArr[currentIdx + 1] : null;
   const remainingPercent = 100 - takeOffPercent;
 
   const entryInstrument = getInstrumentEntryPrice(data, instrumentType);
@@ -727,8 +737,6 @@ export function buildTargetHitEmbed(
     instrumentType === "Options" || instrumentType === "LETF Option";
   const underlyingBased =
     data.underlying_price_based === true || (isOption && isStockBased);
-  const direction = data.direction || "Long";
-  const isBullish = direction === "Call" || direction === "Long";
   const currentInstrumentPrice =
     data.current_instrument_price != null
       ? Number(data.current_instrument_price)
@@ -790,8 +798,8 @@ export function buildTargetHitEmbed(
   ];
   const newStopLoss =
     target.raiseStopLoss ??
-    (currentIdx >= 0 && targetsArr[currentIdx]?.[1]?.raise_stop_loss?.price != null
-      ? Number(targetsArr[currentIdx][1].raise_stop_loss!.price)
+    (currentIdx >= 0 && takeProfitArr[currentIdx]?.[1]?.raise_stop_loss?.price != null
+      ? Number(takeProfitArr[currentIdx][1].raise_stop_loss!.price)
       : null);
   const isBreakEven =
     newStopLoss != null && entryInstrument != null && Math.abs(newStopLoss - entryInstrument) < 0.01;
@@ -803,11 +811,7 @@ export function buildTargetHitEmbed(
       : "No stop adjustment on this target.";
   fields.push({
     name: "\u{1F50D} Position Management",
-    value: `\u2705 Reduce position by 50% (lock in profit)${
-      tp2
-        ? `\n\u{1F3AF} Let remaining 50% ride to TP2 (${fmtPrice(Number(tp2[1].price))})`
-        : ""
-    }`,
+    value: positionMgmtLines.join("\n"),
     inline: false,
   });
   fields.push({ ...SPACER });
@@ -838,8 +842,56 @@ export function buildStopLossRaisedEmbed(
     : isCrypto
       ? `**\u{1F6E1}\uFE0F ${ticker} Crypto Stop Loss Raised**`
       : `**\u{1F6E1}\uFE0F ${ticker} ${isSharesSymbol} Stop Loss Raised**`;
-  const fields: DiscordField[] = [];
+  const targetsArr =
+    data.targets && typeof data.targets === "object"
+      ? (Object.entries(data.targets) as [string, { price?: number }][])
+          .filter(([, v]) => v?.price)
+          .sort(([, a], [, b]) => Number(a.price) - Number(b.price))
+      : [];
+  const currentIdx = targetsArr.findIndex(([k]) => k === targetKey);
+  const nextTarget =
+    currentIdx >= 0 && currentIdx < targetsArr.length - 1
+      ? targetsArr[currentIdx + 1]
+      : null;
+
   const entryInstrument = getInstrumentEntryPrice(data, instrumentType);
+  const isBreakEven =
+    entryInstrument != null &&
+    Math.abs(newStopLoss - entryInstrument) < 0.01;
+  const direction = data.direction || "Long";
+  const isBullish = direction === "Call" || direction === "Long";
+  let riskValue: string;
+  if (isBreakEven) {
+    riskValue = "0% (Risk-Free)";
+  } else if (entryInstrument != null && entryInstrument > 0) {
+    const riskPct =
+      isBullish
+        ? ((entryInstrument - newStopLoss) / entryInstrument) * 100
+        : ((newStopLoss - entryInstrument) / entryInstrument) * 100;
+    riskValue = `${riskPct.toFixed(1)}%`;
+  } else {
+    riskValue = "\u2014";
+  }
+
+  const newStopLabel = isBreakEven
+    ? `${fmtPrice(newStopLoss)} (Break Even)`
+    : fmtPrice(newStopLoss);
+  const statusLabel = isBreakEven
+    ? "\u{1F6A8} Status: Stop Loss Raised to Break Even \u{1F6A8}"
+    : "\u{1F6A8} Status: Stop Loss Raised \u{1F6A8}";
+  const riskMgmtLines = [
+    isBreakEven
+      ? `Stop loss raised to ${fmtPrice(newStopLoss)} (break even).\nTrade is now risk-free on remaining position.`
+      : `Stop loss raised to ${fmtPrice(newStopLoss)} on remaining position.`,
+  ];
+  if (nextTarget) {
+    riskMgmtLines.push(
+      `\u{1F3AF} Next target: ${nextTarget[0].toUpperCase()} at ${fmtPrice(Number(nextTarget[1].price))}`,
+    );
+  }
+
+  const fields: DiscordField[] = [];
+  fields.push({ ...SPACER });
   pushInstrumentFields(fields, data.instrument_type || "Shares", data);
   fields.push(
     {
@@ -849,31 +901,20 @@ export function buildStopLossRaisedEmbed(
     },
     {
       name: "\u{1F6E1}\uFE0F New Stop",
-      value: `${fmtPrice(newStopLoss)} (Break Even)`,
+      value: newStopLabel,
       inline: true,
     },
-    { name: "\u{1F4B8} Risk", value: "0% (Risk-Free)", inline: true },
+    { name: "\u{1F4B8} Risk", value: riskValue, inline: true },
     { ...SPACER },
     {
-      name: "\u{1F6A8} Status: Stop Loss Raised to Break Even \u{1F6A8}",
-      value: "",
+      name: statusLabel,
+      value: "\u200b",
       inline: false,
     },
   );
-  const targetsArr =
-    data.targets && typeof data.targets === "object"
-      ? (Object.entries(data.targets) as [string, { price?: number }][])
-          .filter(([, v]) => v?.price)
-          .sort(([, a], [, b]) => Number(a.price) - Number(b.price))
-      : [];
-  const tp2 = targetsArr[1];
   fields.push({
     name: "\u{1F6E1}\uFE0F Risk Management",
-    value: `Stop loss raised to ${fmtPrice(newStopLoss)} (break even).\nTrade is now risk-free on remaining position.${
-      tp2
-        ? `\n\u{1F3AF} Remaining target: TP2 at ${fmtPrice(Number(tp2[1].price))}`
-        : ""
-    }`,
+    value: riskMgmtLines.join("\n"),
     inline: false,
   });
   return { description, color: ORANGE, fields, footer: { text: DISCLAIMER } };
@@ -927,6 +968,7 @@ export function buildStopLossHitEmbed(
     }
   }
   const fields: DiscordField[] = [];
+  fields.push({ ...SPACER });
   pushInstrumentFields(fields, instrumentType, data);
   fields.push(
     {
