@@ -629,6 +629,7 @@ function buildLetfOptionsFields(
     );
     const targetPrices = targetEntries.map(([, val]) => {
       const price = Number((val as any).price);
+      if (isUnderlyingBased) return fmtPrice(price);
       const pct = refPrice ? fmtPct(refPrice, price) : null;
       return pct ? `${fmtPrice(price)} (${pct})` : fmtPrice(price);
     });
@@ -648,20 +649,33 @@ function buildLetfOptionsFields(
           : Number((b as any).price) - Number((a as any).price),
       );
     let currentStop = sl;
-    const addRsl = (rsl: number, slText: string): string => {
-      const valid = isBullish ? rsl >= currentStop : rsl <= currentStop;
-      if (!valid) return slText;
-      currentStop = rsl;
-      const rslPct = refPrice ? fmtPct(refPrice, rsl) : null;
-      return `${slText}, ${fmtPrice(rsl)}(${rslPct || "?"})`;
-    };
-    const slPct = refPrice ? fmtPct(refPrice, sl) : null;
-    let slText = `🛑 Stop Loss: ${fmtPrice(sl)}(${slPct || "?"})`;
-    allTargets.forEach(([, val]) => {
-      if (!(val as any).raise_stop_loss?.price) return;
-      slText = addRsl(Number((val as any).raise_stop_loss?.price), slText);
-    });
-    tradePlanParts.push(slText);
+    if (isUnderlyingBased) {
+      let slText = `🛑 Stop Loss: ${fmtPrice(sl)}`;
+      allTargets.forEach(([, val]) => {
+        if (!(val as any).raise_stop_loss?.price) return;
+        const rsl = Number((val as any).raise_stop_loss?.price);
+        const valid = isBullish ? rsl >= currentStop : rsl <= currentStop;
+        if (!valid) return;
+        currentStop = rsl;
+        slText += `, ${fmtPrice(rsl)}`;
+      });
+      tradePlanParts.push(slText);
+    } else {
+      const addRsl = (rsl: number, slText: string): string => {
+        const valid = isBullish ? rsl >= currentStop : rsl <= currentStop;
+        if (!valid) return slText;
+        currentStop = rsl;
+        const rslPct = refPrice ? fmtPct(refPrice, rsl) : null;
+        return `${slText}, ${fmtPrice(rsl)}(${rslPct || "?"})`;
+      };
+      const slPct = refPrice ? fmtPct(refPrice, sl) : null;
+      let slText = `🛑 Stop Loss: ${fmtPrice(sl)}(${slPct || "?"})`;
+      allTargets.forEach(([, val]) => {
+        if (!(val as any).raise_stop_loss?.price) return;
+        slText = addRsl(Number((val as any).raise_stop_loss?.price), slText);
+      });
+      tradePlanParts.push(slText);
+    }
   }
 
   if (data.time_stop) {
@@ -689,14 +703,17 @@ function buildLetfOptionsFields(
       if (Number(t.take_off_percent) === 0) return;
       tpIndex++;
       const price = Number(t.price);
-      const pct = refPrice ? fmtPct(refPrice, price) : null;
+      const atLabel = isUnderlyingBased
+        ? fmtPrice(price)
+        : (refPrice ? fmtPct(refPrice, price) : null) || fmtPrice(price);
       const takeOff = t.take_off_percent ? `${t.take_off_percent}%` : "100%";
       const positionLabel =
         tpIndex === 1 ? "of position" : "of remaining position";
-      let line = `Take Profit (${tpIndex}): At ${pct || fmtPrice(price)} take off ${takeOff} ${positionLabel}`;
+      let line = `Take Profit (${tpIndex}): At ${atLabel} take off ${takeOff} ${positionLabel}`;
       if (t.raise_stop_loss?.price) {
         const rslPrice = Number(t.raise_stop_loss.price);
-        const isBreakEven = refPrice && Math.abs(rslPrice - refPrice) < 0.01;
+        const entryRef = isUnderlyingBased ? (stockPrice || refPrice) : refPrice;
+        const isBreakEven = entryRef && Math.abs(rslPrice - entryRef) < 0.01;
         line += isBreakEven
           ? " and raise stop loss to break even."
           : ` and raise stop loss to ${fmtPrice(rslPrice)}.`;
