@@ -1500,10 +1500,9 @@ function pushInstrumentFields(
     fields.push(
       {
         name: "\u{1F4B9} LETF",
-        value:
-          leverage && leverage > 0
-            ? `${ticker} (${leverage}x ${dir})`
-            : `${ticker} (${dir})`,
+        value: leverage
+          ? `${ticker} (${leverage}x ${dir})`
+          : `${ticker} (${dir})`,
         inline: true,
       },
       {
@@ -1527,10 +1526,9 @@ function pushInstrumentFields(
     fields.push(
       {
         name: "\u{1F4B9} Leveraged ETF",
-        value:
-          leverage && leverage > 0
-            ? `${ticker} (${leverage}x ${dirText})`
-            : `${ticker} (${dirText})`,
+        value: leverage
+          ? `${ticker} (${leverage}x ${dirText})`
+          : `${ticker} (${dirText})`,
         inline: true,
       },
       {
