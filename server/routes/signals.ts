@@ -31,7 +31,10 @@ function instrumentPriceFromUnderlying(
   data: Record<string, any>,
   stockPrice: number,
 ): number | null {
-  if (!data.underlying_price_based) return null;
+  const instType = data.instrument_type || "Shares";
+  const isOptionInst = instType === "Options" || instType === "LETF Option";
+  const isStockBased = data.trade_plan_type === "stock_price_based";
+  if (!data.underlying_price_based && !(isOptionInst && isStockBased)) return null;
   const stockEntry =
     data.entry_underlying_price != null
       ? Number(data.entry_underlying_price)
