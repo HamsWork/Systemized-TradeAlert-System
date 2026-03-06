@@ -1431,7 +1431,31 @@ function pushInstrumentFields(
         inline: true,
       },
     );
-  } else if (instrumentType === "Options" || instrumentType === "LETF Option") {
+  } else if (instrumentType === "LETF Option") {
+    const right = direction === "Put" ? "PUT" : "CALL";
+    const dirText = direction === "Put" ? "BEAR" : "BULL";
+    const leverage = getLETFLeverage(ticker);
+    fields.push(
+      {
+        name: "\u{1F4B9} Leveraged ETF",
+        value:
+          leverage && leverage > 0
+            ? `${ticker} (${leverage}x ${dirText})`
+            : `${ticker} (${dirText})`,
+        inline: true,
+      },
+      {
+        name: "\u274C Expiration",
+        value: `${data.expiration ?? "\u2014"}`,
+        inline: true,
+      },
+      {
+        name: "\u270D\uFE0F Strike",
+        value: `${data.strike ?? "\u2014"} ${right}`,
+        inline: true,
+      },
+    );
+  } else if (instrumentType === "Options") {
     const right = direction === "Put" ? "PUT" : "CALL";
     const displayOptionPrice =
       data.current_instrument_price != null
