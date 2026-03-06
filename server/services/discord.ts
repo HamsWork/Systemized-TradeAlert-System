@@ -753,6 +753,9 @@ export function buildTargetHitEmbed(
     instrumentType === "LETF Option";
   let pctProfit: string | null = null;
   if (entryInstrument != null && entryInstrument > 0) {
+    console.log("entryInstrument", entryInstrument);
+    console.log("currentInstrumentPrice", currentInstrumentPrice);
+    
     const priceForPct = isInstrumentPriceBased
       ? currentInstrumentPrice
       : (currentInstrumentPrice ?? (!underlyingBased ? target.price : null));
@@ -770,6 +773,7 @@ export function buildTargetHitEmbed(
       ? "Shares"
       : "Options";
   const fields: DiscordField[] = [];
+  fields.push({ ...SPACER });
   pushInstrumentFields(fields, instrumentType, data);
 
   const description = isLETF
@@ -805,7 +809,7 @@ export function buildTargetHitEmbed(
     `\u2705 Reduce position by ${takeOffPercent}% (lock in profit)`,
     ...(nextTarget
       ? [
-          `\u{1F3AF} Let remaining ${remainingPercent}% ride to TP${currentIdx + 1} (${fmtPrice(Number(nextTarget[1].price))})`,
+          `\u{1F3AF} Let remaining ${remainingPercent}% ride to TP${Number(tpDisplay) + 1} (${fmtPrice(Number(nextTarget[1].price))})`,
         ]
       : []),
   ];
