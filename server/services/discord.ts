@@ -574,6 +574,145 @@ function buildLetfFields(
   return fields;
 }
 
+function buildLetfOptionsFields(
+  data: Record<string, any>,
+  ticker: string,
+  direction: string,
+  optionPrice: number | null,
+  stockPrice: number | null,
+): DiscordField[] {
+  const underlying = getUnderlying(data, ticker);
+  const leverage = getLETFLeverage(ticker);
+  const right = direction === "Put" ? "PUT" : "CALL";
+  const dirText = direction === "Put" ? "BEAR" : "BULL";
+  const displayOptionPrice =
+    data.entry_option_price != null
+      ? Number(data.entry_option_price)
+      : optionPrice;
+  const refPrice = displayOptionPrice || optionPrice;
+
+  const fields: DiscordField[] = [
+    { ...SPACER },
+    { name: "🟢 Ticker", value: underlying, inline: true },
+    {
+      name: "📊 Stock Price",
+      value: stockPrice ? fmtPrice(stockPrice) : "—",
+      inline: true,
+    },
+    {
+      name: "💹 Leveraged ETF",
+      value: `${ticker} (${leverage}x ${dirText})`,
+      inline: true,
+    },
+    { ...SPACER },
+    { name: "❌ Expiration", value: data.expiration || "—", inline: true },
+    {
+      name: "✍️ Strike",
+      value: `${data.strike || "—"} ${right}`,
+      inline: true,
+    },
+    {
+      name: "💵 Option Price",
+      value: displayOptionPrice ? fmtPrice(displayOptionPrice) : "—",
+      inline: true,
+    },
+    { ...SPACER },
+  ];
+
+  const tradePlanParts: string[] = [];
+  if (data.targets && typeof data.targets === "object") {
+    const targetEntries = Object.entries(data.targets).filter(
+      ([, val]) => (val as any)?.price,
+    );
+    const targetPrices = targetEntries.map(([, val]) => {
+      const price = Number((val as any).price);
+      const pct = refPrice ? fmtPct(refPrice, price) : null;
+      return pct ? `${fmtPrice(price)} (${pct})` : fmtPrice(price);
+    });
+    if (targetPrices.length > 0) {
+      tradePlanParts.push(`🎯 Targets: ${targetPrices.join(", ")}`);
+    }
+  }
+
+  if (data.stop_loss != null) {
+    const sl = Number(data.stop_loss);
+    const isBullish = direction === "Call";
+    const allTargets = Object.entries(data.targets || {})
+      .filter(([, val]) => (val as any)?.price)
+      .sort(([, a], [, b]) =>
+        isBullish
+          ? Number((a as any).price) - Number((b as any).price)
+          : Number((b as any).price) - Number((a as any).price),
+      );
+    let currentStop = sl;
+    const addRsl = (rsl: number, slText: string): string => {
+      const valid = isBullish ? rsl >= currentStop : rsl <= currentStop;
+      if (!valid) return slText;
+      currentStop = rsl;
+      const rslPct = refPrice ? fmtPct(refPrice, rsl) : null;
+      return `${slText}, ${fmtPrice(rsl)}(${rslPct || "?"})`;
+    };
+    const slPct = refPrice ? fmtPct(refPrice, sl) : null;
+    let slText = `🛑 Stop Loss: ${fmtPrice(sl)}(${slPct || "?"})`;
+    allTargets.forEach(([, val]) => {
+      if (!(val as any).raise_stop_loss?.price) return;
+      slText = addRsl(Number((val as any).raise_stop_loss?.price), slText);
+    });
+    tradePlanParts.push(slText);
+  }
+
+  if (data.time_stop) {
+    tradePlanParts.push(`🌐 Time Stop: ${data.time_stop}`);
+  }
+
+  if (tradePlanParts.length > 0) {
+    fields.push({
+      name: "📝 Trade Plan",
+      value: tradePlanParts.join("\n"),
+      inline: false,
+    });
+  }
+
+  if (data.targets && typeof data.targets === "object") {
+    const tpLines: string[] = [];
+    const entries = Object.entries(data.targets).filter(
+      ([, val]) => (val as any)?.price,
+    );
+    let tpIndex = 0;
+    entries.forEach(([, val]) => {
+      const t = val as any;
+      if (Number(t.take_off_percent) === 0) return;
+      tpIndex++;
+      const price = Number(t.price);
+      const pct = refPrice ? fmtPct(refPrice, price) : null;
+      const takeOff = t.take_off_percent ? `${t.take_off_percent}%` : "100%";
+      const positionLabel =
+        tpIndex === 1 ? "of position" : "of remaining position";
+      let line = `Take Profit (${tpIndex}): At ${pct || fmtPrice(price)} take off ${takeOff} ${positionLabel}`;
+      if (t.raise_stop_loss?.price) {
+        const rslPrice = Number(t.raise_stop_loss.price);
+        const isBreakEven = refPrice && Math.abs(rslPrice - refPrice) < 0.01;
+        line += isBreakEven
+          ? " and raise stop loss to break even."
+          : ` and raise stop loss to ${fmtPrice(rslPrice)}.`;
+      } else {
+        line += ".";
+      }
+      tpLines.push(line);
+    });
+    if (tpLines.length > 0) {
+      fields.push({ ...SPACER });
+      fields.push({
+        name: "💰 Take Profit Plan",
+        value: tpLines.join("\n"),
+        inline: false,
+      });
+    }
+  }
+
+  return fields;
+}
+
 function buildSharesFields(
   data: Record<string, any>,
   ticker: string,
@@ -684,7 +823,10 @@ function buildEmbedFields(
   entryPrice: number | null,
   stockPrice: number | null,
 ): DiscordField[] {
-  if (instrumentType === "Options" || instrumentType === "LETF Option") {
+  if (instrumentType === "LETF Option") {
+    return buildLetfOptionsFields(data, ticker, direction, entryPrice, stockPrice);
+  }
+  if (instrumentType === "Options") {
     return buildOptionsFields(data, ticker, direction, entryPrice, stockPrice);
   }
   if (instrumentType === "LETF") {
