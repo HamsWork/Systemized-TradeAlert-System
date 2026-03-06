@@ -92,6 +92,33 @@ async function getCurrentInstrumentPrice(
   return null;
 }
 
+/** Current instrument price at this moment: tracking price when it is instrument, else fetched. Used to save instrumentXxxFilled. */
+async function getCurrentInstrumentPriceForSave(
+  data: Record<string, any>,
+  ticker: string,
+  instrumentType: string,
+  needsUnderlyingPrice: boolean,
+  currentTrackingPrice: number | null,
+): Promise<number | null> {
+  if (instrumentType === "Shares" || instrumentType === "Crypto") {
+    return currentTrackingPrice;
+  }
+  if (instrumentType === "Options" || instrumentType === "LETF Option") {
+    return !needsUnderlyingPrice && currentTrackingPrice != null
+      ? currentTrackingPrice
+      : await getCurrentInstrumentPrice(data, ticker);
+  }
+  if (instrumentType === "LETF") {
+    return getCurrentInstrumentPrice(data, ticker);
+  }
+  return currentTrackingPrice;
+}
+
+function instrumentFilledFieldName(targetKey: string): string {
+  const cap = targetKey.charAt(0).toUpperCase() + targetKey.slice(1);
+  return `instrument${cap}Filled`;
+}
+
 const MONITOR_INTERVAL = 10000;
 let monitorInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -229,6 +256,18 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
         hitAt: new Date().toISOString(),
         price: currentTrackingPrice,
       };
+      const currentInstrumentPriceAtHit =
+        await getCurrentInstrumentPriceForSave(
+          data,
+          ticker,
+          instrumentType,
+          needsUnderlyingPrice,
+          currentTrackingPrice,
+        );
+      if (currentInstrumentPriceAtHit != null) {
+        updatedData[instrumentFilledFieldName(target.key)] =
+          currentInstrumentPriceAtHit;
+      }
       const vsCurrentPrice = bullish
         ? (target.raiseStopLoss ?? 0) <= currentTrackingPrice
         : (target.raiseStopLoss ?? 0) >= currentTrackingPrice;
@@ -251,19 +290,8 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
 
       if (target.takeOffPercent > 0) {
         const dataForDiscord = { ...updatedData };
-        const needsInstrumentPriceForDiscord =
-          instrumentType === "Options" ||
-          instrumentType === "LETF" ||
-          instrumentType === "LETF Option";
-        if (needsInstrumentPriceForDiscord) {
-          const currentInstrumentPrice =
-            !needsUnderlyingPrice &&
-            (instrumentType === "Options" || instrumentType === "LETF Option")
-              ? currentTrackingPrice
-              : await getCurrentInstrumentPrice(data, ticker);
-          if (currentInstrumentPrice != null)
-            dataForDiscord.current_instrument_price = currentInstrumentPrice;
-        }
+        if (currentInstrumentPriceAtHit != null)
+          dataForDiscord.current_instrument_price = currentInstrumentPriceAtHit;
         await sendTargetHitDiscordAlert(
           signal,
           app,
@@ -333,18 +361,17 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
       updatedData.stop_loss_hit = true;
       updatedData.stop_loss_hit_at = new Date().toISOString();
       updatedData.stop_loss_hit_price = currentTrackingPrice;
-      const needsInstrumentPriceForDiscord =
-        instrumentType === "Options" ||
-        instrumentType === "LETF" ||
-        instrumentType === "LETF Option";
-      if (needsInstrumentPriceForDiscord) {
-        const currentInstrumentPrice =
-          !needsUnderlyingPrice &&
-          (instrumentType === "Options" || instrumentType === "LETF Option")
-            ? currentTrackingPrice
-            : await getCurrentInstrumentPrice(data, ticker);
-        if (currentInstrumentPrice != null)
-          updatedData.current_instrument_price = currentInstrumentPrice;
+      const currentInstrumentPriceAtSL =
+        await getCurrentInstrumentPriceForSave(
+          data,
+          ticker,
+          instrumentType,
+          needsUnderlyingPrice,
+          currentTrackingPrice,
+        );
+      if (currentInstrumentPriceAtSL != null) {
+        updatedData.instrumentSLFilled = currentInstrumentPriceAtSL;
+        updatedData.current_instrument_price = currentInstrumentPriceAtSL;
       }
       await storage.updateSignal(signal.id, {
         data: updatedData,
