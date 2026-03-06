@@ -555,7 +555,7 @@ function buildLetfFields(
   if (tradePlanParts.length > 0) {
     fields.push({
       name: isStockBased
-        ? `📝 Trade Plan (Based on ${underlying})`
+        ? `📝 Trade Plan (Based on ${underlying} levels)`
         : "📝 Trade Plan",
       value: tradePlanParts.join("\n"),
       inline: false,
