@@ -692,7 +692,7 @@ export function buildSignalAlertEmbed(
 export function buildTargetHitEmbed(
   data: Record<string, any>,
   ticker: string,
-  target: { key: string; price: number },
+  target: { key: string; price: number; tpNumber: number },
 ): DiscordEmbed {
   const instrumentType = data.instrument_type || "Shares";
   const entryInstrument = getInstrumentEntryPrice(data, instrumentType);
@@ -701,29 +701,22 @@ export function buildTargetHitEmbed(
     instrumentType === "Options" || instrumentType === "LETF Option";
   const underlyingBased =
     data.underlying_price_based === true || (isOption && isStockBased);
+  const direction = data.direction || "Long";
+  const isBullish = direction === "Call" || direction === "Long";
   const currentInstrumentPrice =
     data.current_instrument_price != null
       ? Number(data.current_instrument_price)
       : null;
   let pctProfit: string | null = null;
-  if (
-    currentInstrumentPrice != null &&
-    entryInstrument != null &&
-    entryInstrument > 0
-  ) {
-    pctProfit = (
-      ((currentInstrumentPrice - entryInstrument) / entryInstrument) *
-      100
-    ).toFixed(1);
-  } else if (
-    !underlyingBased &&
-    entryInstrument != null &&
-    entryInstrument > 0
-  ) {
-    pctProfit = (
-      ((target.price - entryInstrument) / entryInstrument) *
-      100
-    ).toFixed(1);
+  if (entryInstrument != null && entryInstrument > 0) {
+    const priceForPct =
+      currentInstrumentPrice ?? (!underlyingBased ? target.price : null);
+    if (priceForPct != null) {
+      const pct = isBullish
+        ? ((priceForPct - entryInstrument) / entryInstrument) * 100
+        : ((entryInstrument - priceForPct) / entryInstrument) * 100;
+      pctProfit = pct.toFixed(1);
+    }
   }
   const isLETF = instrumentType === "LETF" || instrumentType === "LETF Option";
   const isCrypto = instrumentType === "Crypto";
@@ -733,11 +726,12 @@ export function buildTargetHitEmbed(
       : "Options";
   const fields: DiscordField[] = [];
   pushInstrumentFields(fields, instrumentType, data);
+
   const description = isLETF
-    ? `**\u{1F3AF} ${ticker} ${isSharesSymbol} Take Profit ${target.key.toUpperCase()} HIT**`
+    ? `**\u{1F3AF} ${ticker} ${isSharesSymbol} Take Profit ${target.tpNumber} HIT**`
     : isCrypto
-      ? `**\u{1F3AF} ${ticker} Crypto Take Profit ${target.key.toUpperCase()} HIT**`
-      : `**\u{1F3AF} ${ticker} ${isSharesSymbol} Take Profit ${target.key.toUpperCase()} HIT**`;
+      ? `**\u{1F3AF} ${ticker} Crypto Take Profit ${target.tpNumber} HIT**`
+      : `**\u{1F3AF} ${ticker} ${isSharesSymbol} Take Profit ${target.tpNumber} HIT**`;
   fields.push(
     {
       name: "\u2705 Entry",
@@ -745,7 +739,7 @@ export function buildTargetHitEmbed(
       inline: true,
     },
     {
-      name: "\u{1F3AF} TP Hit",
+      name: `\u{1F3AF} TP${target.tpNumber} Hit`,
       value: `${fmtPrice(target.price)}`,
       inline: true,
     },
@@ -754,6 +748,7 @@ export function buildTargetHitEmbed(
       value: `${pctProfit != null ? `${pctProfit}%` : "\u2014"}`,
       inline: true,
     },
+
     { ...SPACER },
     {
       name: `\u{1F6A8} Status: ${target.key.toUpperCase()} Reached \u{1F6A8}`,
@@ -870,6 +865,8 @@ export function buildStopLossHitEmbed(
       : `**\u{1F6D1} ${ticker} ${isSharesSymbol} Stop Loss Hit**`;
   const underlyingBased =
     data.underlying_price_based === true || (isOption && isStockBased);
+  const direction = data.direction || "Long";
+  const isBullish = direction === "Call" || direction === "Long";
   const entryInstrument = getInstrumentEntryPrice(data, instrumentType);
   const currentInstrumentPrice =
     data.current_instrument_price != null
@@ -882,24 +879,15 @@ export function buildStopLossHitEmbed(
   let stopLossHitPct: string | null = null;
   if (data.stop_loss_hit_pct != null) {
     stopLossHitPct = String(data.stop_loss_hit_pct);
-  } else if (
-    currentInstrumentPrice != null &&
-    entryInstrument != null &&
-    entryInstrument > 0
-  ) {
-    stopLossHitPct = (
-      ((currentInstrumentPrice - entryInstrument) / entryInstrument) *
-      100
-    ).toFixed(1);
-  } else if (
-    !underlyingBased &&
-    entryInstrument != null &&
-    entryInstrument > 0
-  ) {
-    stopLossHitPct = (
-      ((stopLossHitPrice - entryInstrument) / entryInstrument) *
-      100
-    ).toFixed(1);
+  } else if (entryInstrument != null && entryInstrument > 0) {
+    const priceForPct =
+      currentInstrumentPrice ?? (!underlyingBased ? stopLossHitPrice : null);
+    if (priceForPct != null) {
+      const pct = isBullish
+        ? ((priceForPct - entryInstrument) / entryInstrument) * 100
+        : ((entryInstrument - priceForPct) / entryInstrument) * 100;
+      stopLossHitPct = pct.toFixed(1);
+    }
   }
   const fields: DiscordField[] = [];
   pushInstrumentFields(fields, instrumentType, data);
@@ -950,6 +938,7 @@ export function buildTradeClosedEmbed(
   const emoji = pnl != null && pnl > 0 ? "\u{1F4B0}" : "\u{1F4C9}";
   const isLETF = instrumentType === "LETF" || instrumentType === "LETF Option";
   const isCrypto = instrumentType === "Crypto";
+
   const isSharesSymbol =
     instrumentType === "LETF" || instrumentType === "Shares"
       ? "Shares"
@@ -959,6 +948,8 @@ export function buildTradeClosedEmbed(
     : isCrypto
       ? `**${emoji} ${ticker} Crypto Closed Manually**`
       : `**${emoji} ${ticker} ${isSharesSymbol} Closed Manually**`;
+  const direction = data.direction || "Long";
+  const isBullish = direction === "Call" || direction === "Long";
   const entryInstrument = getInstrumentEntryPrice(data, instrumentType);
   const exitPrice = data.exit_price != null ? Number(data.exit_price) : null;
   let pnlPct: string | null =
@@ -969,9 +960,10 @@ export function buildTradeClosedEmbed(
     entryInstrument > 0 &&
     exitPrice != null
   ) {
-    pnlPct = (((exitPrice - entryInstrument) / entryInstrument) * 100).toFixed(
-      1,
-    );
+    const pct = isBullish
+      ? ((exitPrice - entryInstrument) / entryInstrument) * 100
+      : ((entryInstrument - exitPrice) / entryInstrument) * 100;
+    pnlPct = pct.toFixed(1);
   }
   const rMultiple = data.r_multiple != null ? Number(data.r_multiple) : null;
   const fields: DiscordField[] = [];
