@@ -269,7 +269,7 @@ function buildOptionsFields(
     );
     const targetPrices = targetEntries.map(([, val], i) => {
       const price = Number((val as any).price);
-      if (isStockBased) return `T${i + 1}.${fmtPrice(price)}`;
+      if (isStockBased) return `${fmtPrice(price)}`;
       const pct = refPrice ? fmtPct(refPrice, price) : null;
       return pct ? `${fmtPrice(price)} (${pct})` : fmtPrice(price);
     });
@@ -280,28 +280,38 @@ function buildOptionsFields(
 
   if (data.stop_loss != null) {
     const sl = Number(data.stop_loss);
+    const isBullish = direction === "Call";
+    const allTargets = Object.entries(data.targets || {})
+      .filter(([, val]) => (val as any)?.price)
+      .sort(([, a], [, b]) =>
+        isBullish
+          ? Number((a as any).price) - Number((b as any).price)
+          : Number((b as any).price) - Number((a as any).price),
+      );
+    let currentStop = sl;
+    const addRsl = (rsl: number, slText: string, withPct: boolean): string => {
+      const valid = isBullish ? rsl >= currentStop : rsl <= currentStop;
+      if (!valid) return slText;
+      currentStop = rsl;
+      if (withPct) {
+        const rslPct = refPrice ? fmtPct(refPrice, rsl) : null;
+        return `${slText}, ${fmtPrice(rsl)}(${rslPct || "?"})`;
+      }
+      return `${slText}, ${fmtPrice(rsl)}`;
+    };
     if (isStockBased) {
       let slText = `🛑 Stop Loss: ${fmtPrice(sl)}`;
-      const allTargets = Object.entries(data.targets || {}).filter(
-        ([, val]) => (val as any)?.price,
-      );
       allTargets.forEach(([, val]) => {
         if (!(val as any).raise_stop_loss?.price) return;
-        const rsl = Number((val as any).raise_stop_loss?.price);
-        slText += `, ${fmtPrice(rsl)}`;
+        slText = addRsl(Number((val as any).raise_stop_loss?.price), slText, false);
       });
       tradePlanParts.push(slText);
     } else {
       const slPct = refPrice ? fmtPct(refPrice, sl) : null;
       let slText = `🛑 Stop Loss: ${fmtPrice(sl)}(${slPct || "?"})`;
-      const allTargets = Object.entries(data.targets || {}).filter(
-        ([, val]) => (val as any)?.price,
-      );
       allTargets.forEach(([, val]) => {
         if (!(val as any).raise_stop_loss?.price) return;
-        const rsl = Number((val as any).raise_stop_loss?.price);
-        const rslPct = refPrice ? fmtPct(refPrice, rsl) : null;
-        slText += `, ${fmtPrice(rsl)}(${rslPct || "?"})`;
+        slText = addRsl(Number((val as any).raise_stop_loss?.price), slText, true);
       });
       tradePlanParts.push(slText);
     }
@@ -744,10 +754,10 @@ export function buildTargetHitEmbed(
   pushInstrumentFields(fields, instrumentType, data);
 
   const description = isLETF
-    ? `**\u{1F3AF} ${ticker} ${isSharesSymbol} Take Profit ${target.tpNumber} HIT**`
+    ? `**\u{1F3AF} ${ticker} ${isSharesSymbol} Take Profit ${tpDisplay} HIT**`
     : isCrypto
-      ? `**\u{1F3AF} ${ticker} Crypto Take Profit ${target.tpNumber} HIT**`
-      : `**\u{1F3AF} ${ticker} ${isSharesSymbol} Take Profit ${target.tpNumber} HIT**`;
+      ? `**\u{1F3AF} ${ticker} Crypto Take Profit ${tpDisplay} HIT**`
+      : `**\u{1F3AF} ${ticker} ${isSharesSymbol} Take Profit ${tpDisplay} HIT**`;
   fields.push(
     {
       name: "\u2705 Entry",
@@ -755,7 +765,7 @@ export function buildTargetHitEmbed(
       inline: true,
     },
     {
-      name: `\u{1F3AF} TP${target.tpNumber} Hit`,
+      name: `\u{1F3AF} TP${tpDisplay} Hit`,
       value: `${fmtPrice(target.price)}`,
       inline: true,
     },

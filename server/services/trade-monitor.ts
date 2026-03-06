@@ -27,6 +27,7 @@ interface TargetInfo {
   price: number;
   takeOffPercent: number;
   raiseStopLoss?: number;
+  tpNumber?: number;
 }
 
 function parseTargets(
@@ -34,17 +35,12 @@ function parseTargets(
   bullish?: boolean,
 ): TargetInfo[] {
   if (!data.targets || typeof data.targets !== "object") return [];
-  let tpNumber = 0;
-  return Object.entries(data.targets)
+  const entries = Object.entries(data.targets)
     .filter(([, val]) => (val as any)?.price)
-    .map(([key, val], i) => {
+    .map(([key, val]) => {
       const t = val as any;
-      if (Number(t.take_off_percent) > 0) {
-        tpNumber++;
-      }
       return {
         key,
-        tpNumber,
         price: Number(t.price),
         takeOffPercent:
           t.take_off_percent != null ? Number(t.take_off_percent) : 100,
@@ -56,6 +52,11 @@ function parseTargets(
     .sort((a, b) =>
       bullish === false ? b.price - a.price : a.price - b.price,
     );
+  let index = 0;
+  return entries.map((t) => ({
+    ...t,
+    tpNumber: t.takeOffPercent > 0 ? ++index : undefined,
+  }));
 }
 
 function isBullishTrade(data: Record<string, any>): boolean {
