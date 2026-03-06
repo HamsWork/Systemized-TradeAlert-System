@@ -456,7 +456,7 @@ function ActivityRow({ entry }: { entry: ActivityLogEntry }) {
   );
 }
 
-function OptionChartTabs({ symbol, strike, expiration, optionType, entryPrice, tpLevels, slLevels, direction, tradePlanType, underlyingPriceBased }: {
+function OptionChartTabs({ symbol, strike, expiration, optionType, entryPrice, tpLevels, slLevels, direction, tradePlanType, underlyingPriceBased, underlyingSymbol }: {
   symbol: string;
   strike?: string;
   expiration?: string;
@@ -467,8 +467,10 @@ function OptionChartTabs({ symbol, strike, expiration, optionType, entryPrice, t
   direction?: string;
   tradePlanType?: string;
   underlyingPriceBased?: boolean;
+  underlyingSymbol?: string;
 }) {
   const showTargetsOnUnderlying = underlyingPriceBased === true || tradePlanType === "stock_price_based";
+  const underlyingTicker = underlyingSymbol || symbol;
   const [activeTab, setActiveTab] = useState<"option" | "underlying">(showTargetsOnUnderlying ? "underlying" : "option");
 
   const optionLabel = strike && expiration ? `${symbol} $${strike} ${expiration}` : symbol;
@@ -498,10 +500,10 @@ function OptionChartTabs({ symbol, strike, expiration, optionType, entryPrice, t
           data-testid="tab-underlying-chart"
         >
           <BarChart3 className="inline-block h-3 w-3 mr-1.5 -mt-0.5" />
-          Underlying ({symbol})
+          Underlying ({underlyingTicker})
         </button>
         <span className="text-[10px] text-muted-foreground ml-auto font-mono">
-          {activeTab === "option" ? optionLabel : symbol}
+          {activeTab === "option" ? optionLabel : underlyingTicker}
         </span>
       </div>
       {activeTab === "option" ? (
@@ -520,7 +522,7 @@ function OptionChartTabs({ symbol, strike, expiration, optionType, entryPrice, t
       ) : (
         <TradeChart
           key="underlying-stock"
-          symbol={symbol}
+          symbol={underlyingTicker}
           entryPrice={showTargetsOnUnderlying ? entryPrice : undefined}
           tpLevels={showTargetsOnUnderlying ? tpLevels : []}
           slLevels={showTargetsOnUnderlying ? slLevels : []}
@@ -1120,6 +1122,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                     direction={direction}
                     tradePlanType={tradePlanType}
                     underlyingPriceBased={data.underlying_price_based === true}
+                    underlyingSymbol={data.underlying_symbol}
                   />
                 ) : instrumentType === "LETF" ? (
                   <LetfChartTabs

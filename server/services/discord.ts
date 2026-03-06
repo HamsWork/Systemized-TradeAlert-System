@@ -591,8 +591,8 @@ function buildLetfOptionsFields(
       ? Number(data.entry_option_price)
       : optionPrice;
   const refPrice = isUnderlyingBased
-    ? (stockPrice || displayOptionPrice || optionPrice)
-    : (displayOptionPrice || optionPrice);
+    ? stockPrice || displayOptionPrice || optionPrice
+    : displayOptionPrice || optionPrice;
 
   const fields: DiscordField[] = [
     { ...SPACER },
@@ -712,7 +712,7 @@ function buildLetfOptionsFields(
       let line = `Take Profit (${tpIndex}): At ${atLabel} take off ${takeOff} ${positionLabel}`;
       if (t.raise_stop_loss?.price) {
         const rslPrice = Number(t.raise_stop_loss.price);
-        const entryRef = isUnderlyingBased ? (stockPrice || refPrice) : refPrice;
+        const entryRef = isUnderlyingBased ? stockPrice || refPrice : refPrice;
         const isBreakEven = entryRef && Math.abs(rslPrice - entryRef) < 0.01;
         line += isBreakEven
           ? " and raise stop loss to break even."
@@ -846,7 +846,13 @@ function buildEmbedFields(
   stockPrice: number | null,
 ): DiscordField[] {
   if (instrumentType === "LETF Option") {
-    return buildLetfOptionsFields(data, ticker, direction, entryPrice, stockPrice);
+    return buildLetfOptionsFields(
+      data,
+      ticker,
+      direction,
+      entryPrice,
+      stockPrice,
+    );
   }
   if (instrumentType === "Options") {
     return buildOptionsFields(data, ticker, direction, entryPrice, stockPrice);
@@ -1098,7 +1104,8 @@ export function buildStopLossRaisedEmbed(
 
   const entryInstrument = getInstrumentEntryPrice(data, instrumentType);
   const underlyingPriceBased = data.underlying_price_based === true;
-  const isOption = instrumentType === "Options" || instrumentType === "LETF Option";
+  const isOption =
+    instrumentType === "Options" || instrumentType === "LETF Option";
   const entryUnderlying =
     data.entry_underlying_price != null
       ? Number(data.entry_underlying_price)
@@ -1113,16 +1120,17 @@ export function buildStopLossRaisedEmbed(
   const direction = data.direction || "Long";
   const isBullish = direction === "Call" || direction === "Long";
   let riskValue: string;
-  if (isBreakEven) {
-    riskValue = "0% (Risk-Free)";
-  } else if (entryForStop != null && entryForStop > 0) {
-    const riskPct = isBullish
-      ? ((entryForStop - newStopLoss) / entryForStop) * 100
-      : ((newStopLoss - entryForStop) / entryForStop) * 100;
-    riskValue = `${riskPct.toFixed(1)}%`;
-  } else {
-    riskValue = "\u2014";
-  }
+  riskValue = "0% (Risk-Free)";
+  // if (isBreakEven) {
+  //   riskValue = "0% (Risk-Free)";
+  // } else if (entryForStop != null && entryForStop > 0) {
+  //   const riskPct = isBullish
+  //     ? ((entryForStop - newStopLoss) / entryForStop) * 100
+  //     : ((newStopLoss - entryForStop) / entryForStop) * 100;
+  //   riskValue = `${riskPct.toFixed(1)}%`;
+  // } else {
+  //   riskValue = "\u2014";
+  // }
 
   const newStopLabel = isBreakEven
     ? `${fmtPrice(newStopLoss)} (Break Even)`
@@ -1201,11 +1209,12 @@ export function buildStopLossHitEmbed(
     data.current_instrument_price != null
       ? Number(data.current_instrument_price)
       : null;
-  const stopLossHitPrice = isOption && currentInstrumentPrice != null
-    ? currentInstrumentPrice
-    : data.stop_loss_hit_price != null
-      ? Number(data.stop_loss_hit_price)
-      : stopLoss;
+  const stopLossHitPrice =
+    isOption && currentInstrumentPrice != null
+      ? currentInstrumentPrice
+      : data.stop_loss_hit_price != null
+        ? Number(data.stop_loss_hit_price)
+        : stopLoss;
   let stopLossHitPct: string | null = null;
   if (data.stop_loss_hit_pct != null) {
     stopLossHitPct = String(data.stop_loss_hit_pct);
