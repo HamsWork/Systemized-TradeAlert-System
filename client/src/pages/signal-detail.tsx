@@ -543,7 +543,8 @@ function LetfChartTabs({ symbol, entryPrice, tpLevels, slLevels, direction, unde
   underlyingSymbol?: string;
 }) {
   const underlying = underlyingSymbol || null;
-  const [activeTab, setActiveTab] = useState<"letf" | "underlying">(underlyingPriceBased ? "underlying" : "letf");
+  const showTargetsOnUnderlying = true;
+  const [activeTab, setActiveTab] = useState<"letf" | "underlying">(underlying ? "underlying" : "letf");
 
   if (!underlying) {
     return (
@@ -594,18 +595,18 @@ function LetfChartTabs({ symbol, entryPrice, tpLevels, slLevels, direction, unde
           key="letf-chart"
           symbol={symbol}
           instrumentType="LETF"
-          entryPrice={underlyingPriceBased ? undefined : entryPrice}
-          tpLevels={underlyingPriceBased ? [] : tpLevels}
-          slLevels={underlyingPriceBased ? [] : slLevels}
+          entryPrice={showTargetsOnUnderlying ? undefined : entryPrice}
+          tpLevels={showTargetsOnUnderlying ? [] : tpLevels}
+          slLevels={showTargetsOnUnderlying ? [] : slLevels}
           direction={direction}
         />
       ) : (
         <TradeChart
           key="letf-underlying"
           symbol={underlying}
-          entryPrice={underlyingPriceBased ? entryPrice : undefined}
-          tpLevels={underlyingPriceBased ? tpLevels : []}
-          slLevels={underlyingPriceBased ? slLevels : []}
+          entryPrice={entryPrice}
+          tpLevels={tpLevels}
+          slLevels={slLevels}
           direction={direction}
         />
       )}
