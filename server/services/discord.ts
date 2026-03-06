@@ -269,7 +269,7 @@ function buildOptionsFields(
     );
     const targetPrices = targetEntries.map(([, val], i) => {
       const price = Number((val as any).price);
-      if (isStockBased) return `T.${i + 1}.${fmtPrice(price)}`;
+      if (isStockBased) return `T${i + 1}.${fmtPrice(price)}`;
       const pct = refPrice ? fmtPct(refPrice, price) : null;
       return pct ? `${fmtPrice(price)} (${pct})` : fmtPrice(price);
     });
