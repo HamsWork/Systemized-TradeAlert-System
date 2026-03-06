@@ -1,7 +1,7 @@
 import type { Signal, ConnectedApp } from "@shared/schema";
 import { storage } from "../storage";
 import { getLETFUnderlying, getLETFLeverage } from "../constants/letf";
-import { getCurrentInstrumentPrice } from "./trade-monitor";
+
 
 /**
  * Price terminology (see server/docs/PRICE_TERMINOLOGY.md):
@@ -443,8 +443,7 @@ function buildLetfFields(
   // LETF instrument entry price (for "Leveraged ETF Entry").
   // When underlying_price_based is true, we prefer the fetched/current instrument price (set upstream),
   // otherwise we fall back to the original entry instrument price.
-  const fetchedInstrumentPrice = await getCurrentInstrumentPrice(data, ticker);
-  const letfEntryPrice = data.underlying_price_based === true ? fetchedInstrumentPrice ?? entryPrice ?? 0;
+  const letfEntryPrice = entryPrice ?? 0;
   const stopPrice = data.stop_loss != null ? Number(data.stop_loss) : null;
   const entryForPct = stockPriceAtEntry ?? letfEntryPrice ?? 0;
   const stopPct =
