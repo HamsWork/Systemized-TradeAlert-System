@@ -981,6 +981,11 @@ export function buildTargetHitEmbed(
     : isCrypto
       ? `**\u{1F3AF} ${ticker} Crypto Take Profit ${tpDisplay} HIT**`
       : `**\u{1F3AF} ${ticker} ${isSharesSymbol} Take Profit ${tpDisplay} HIT**`;
+  const tpHitPrice =
+    (instrumentType === "LETF Option" || instrumentType === "Options") &&
+    currentInstrumentPrice != null
+      ? currentInstrumentPrice
+      : target.price;
   fields.push(
     {
       name: "\u2705 Entry",
@@ -989,7 +994,7 @@ export function buildTargetHitEmbed(
     },
     {
       name: `\u{1F3AF} TP${tpDisplay} Hit`,
-      value: `${fmtPrice(target.price)}`,
+      value: `${fmtPrice(tpHitPrice)}`,
       inline: true,
     },
     {
