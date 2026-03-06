@@ -361,7 +361,7 @@ function buildOptionsFields(
   if (tradePlanParts.length > 0) {
     fields.push({
       name: isStockBased
-        ? `📝 Trade Plan (Based on ${ticker})`
+        ? `📝 Trade Plan (Based on ${ticker} levels)`
         : "📝 Trade Plan",
       value: tradePlanParts.join("\n"),
       inline: false,
@@ -462,13 +462,78 @@ function buildLetfFields(
       ? (((stopPrice - entryForPct) / entryForPct) * 100).toFixed(1)
       : "?";
 
-  const isBullish = direction !== "Short";
-  const refPrice = entryForPct;
+  const targetsStrParts: string[] = [];
+  let tpPlanLines: string[] = [];
+  if (data.targets && typeof data.targets === "object") {
+    const entries = Object.entries(data.targets)
+      .filter(([, val]) => (val as any)?.price)
+      .map(([key, val]) => {
+        const t = val as any;
+        return {
+          key,
+          price: Number(t.price),
+          takeOff: t.take_off_percent ?? 50,
+          raiseStop: t.raise_stop_loss?.price
+            ? Number(t.raise_stop_loss.price)
+            : null,
+        };
+      })
+      .sort((a, b) => a.price - b.price);
+
+    const visibleEntries = entries.filter((t) => Number(t.takeOff) !== 0);
+    entries.forEach((t) => {
+      if (Number(t.takeOff) === 0) return;
+      const pct = entryForPct > 0 ? fmtPct(entryForPct, t.price) : "?";
+      targetsStrParts.push(
+        isStockBased ? fmtPrice(t.price) : `${fmtPrice(t.price)} (${pct})`,
+      );
+      const tpIdx = targetsStrParts.length;
+      const isBreakEven =
+        t.raiseStop != null &&
+        entryForPct > 0 &&
+        Math.abs(t.raiseStop - entryForPct) < 0.02;
+      const positionLabel =
+        tpIdx === 1 ? "of position" : "of remaining position";
+      const takeOffText =
+        tpIdx === 1 ? `${t.takeOff}%` : `remaining ${t.takeOff}%`;
+      const action = isBreakEven
+        ? `take off ${takeOffText} ${positionLabel} and raise stop loss to break even.`
+        : t.raiseStop != null
+          ? `take off ${takeOffText} ${positionLabel} and raise stop loss to ${fmtPrice(t.raiseStop)}.`
+          : `take off ${takeOffText} ${positionLabel}.`;
+      const label =
+        visibleEntries.length > 1 ? `Take Profit (${tpIdx})` : "Take Profit";
+      const atLabel = isStockBased ? fmtPrice(t.price) : pct;
+      tpPlanLines.push(`${label}: At ${atLabel} ${action}`);
+    });
+  }
+
+  const targetsStr =
+    targetsStrParts.length > 0 ? targetsStrParts.join(", ") : "—";
+  const tradePlanValue =
+    targetsStr !== "—" && stopPrice != null
+      ? isStockBased
+        ? `🎯 Targets: ${targetsStr}\n🛑 Stop Loss: ${fmtPrice(stopPrice)}`
+        : `🎯 Targets: ${targetsStr}\n🛑 Stop Loss: ${fmtPrice(stopPrice)} (${stopPct}%)`
+      : stopPrice != null
+        ? isStockBased
+          ? `🛑 Stop Loss: ${fmtPrice(stopPrice)}`
+          : `🛑 Stop Loss: ${fmtPrice(stopPrice)} (${stopPct}%)`
+        : "—";
+  const tpPlanText = tpPlanLines.length > 0 ? tpPlanLines.join("\n") : "—";
 
   const dir = data.direction || "Long";
   const fields: DiscordField[] = [
     { ...SPACER },
-    { name: "🟢 Ticker", value: underlying, inline: true },
+    { name: "🟢 Ticker", value: ticker, inline: true },
+    // {
+    //   name: "📊 Stock Price",
+    //   value:
+    //     stockPriceAtEntry != null
+    //       ? `$ ${Number(stockPriceAtEntry).toFixed(2)}`
+    //       : "—",
+    //   inline: true,
+    // },
     { name: "📈 Direction", value: dir, inline: true },
     { ...SPACER },
     {
@@ -484,129 +549,27 @@ function buildLetfFields(
           : "Pending",
       inline: true,
     },
+    {
+      name: "🛑 Stop",
+      value:
+        stopPrice != null
+          ? isStockBased
+            ? fmtPrice(stopPrice)
+            : `${fmtPrice(stopPrice)} (${stopPct}%)`
+          : "—",
+      inline: true,
+    },
     { ...SPACER },
-  ];
-
-  const tradePlanParts: string[] = [];
-  if (data.targets && typeof data.targets === "object") {
-    const targetEntries = Object.entries(data.targets).filter(
-      ([, val]) => (val as any)?.price,
-    );
-    const targetPrices = targetEntries.map(([, val]) => {
-      const price = Number((val as any).price);
-      if (isStockBased) return fmtPrice(price);
-      const pct = refPrice ? fmtPct(refPrice, price) : null;
-      return pct ? `${fmtPrice(price)} (${pct})` : fmtPrice(price);
-    });
-    if (targetPrices.length > 0) {
-      tradePlanParts.push(`🎯 Targets: ${targetPrices.join(", ")}`);
-    }
-  }
-
-  if (stopPrice != null) {
-    const allTargets = Object.entries(data.targets || {})
-      .filter(([, val]) => (val as any)?.price)
-      .sort(([, a], [, b]) =>
-        isBullish
-          ? Number((a as any).price) - Number((b as any).price)
-          : Number((b as any).price) - Number((a as any).price),
-      );
-    let currentStop = stopPrice;
-    const addRsl = (rsl: number, slText: string, withPct: boolean): string => {
-      const valid = isBullish ? rsl >= currentStop : rsl <= currentStop;
-      if (!valid) return slText;
-      currentStop = rsl;
-      if (withPct) {
-        const rslPct = refPrice ? fmtPct(refPrice, rsl) : null;
-        return `${slText}, ${fmtPrice(rsl)}(${rslPct || "?"})`;
-      }
-      return `${slText}, ${fmtPrice(rsl)}`;
-    };
-    if (isStockBased) {
-      let slText = `🛑 Stop Loss: ${fmtPrice(stopPrice)}`;
-      allTargets.forEach(([, val]) => {
-        if (!(val as any).raise_stop_loss?.price) return;
-        slText = addRsl(Number((val as any).raise_stop_loss?.price), slText, false);
-      });
-      tradePlanParts.push(slText);
-    } else {
-      const slPct = refPrice ? fmtPct(refPrice, stopPrice) : null;
-      let slText = `🛑 Stop Loss: ${fmtPrice(stopPrice)}(${slPct || "?"})`;
-      allTargets.forEach(([, val]) => {
-        if (!(val as any).raise_stop_loss?.price) return;
-        slText = addRsl(Number((val as any).raise_stop_loss?.price), slText, true);
-      });
-      tradePlanParts.push(slText);
-    }
-  }
-
-  if (data.time_stop) {
-    tradePlanParts.push(`🌐 Time Stop: ${data.time_stop}`);
-  }
-
-  if (tradePlanParts.length > 0) {
-    fields.push({
+    {
       name: isStockBased
-        ? `📝 Trade Plan (Based on ${underlying})`
+        ? `📝 Trade Plan (Based on ${underlying} levels)`
         : "📝 Trade Plan",
-      value: tradePlanParts.join("\n"),
+      value: tradePlanValue,
       inline: false,
-    });
-  }
-
-  if (data.targets && typeof data.targets === "object") {
-    const tpLines: string[] = [];
-    const entries = Object.entries(data.targets).filter(
-      ([, val]) => (val as any)?.price,
-    );
-    const priceLabel = (p: number) =>
-      isStockBased
-        ? fmtPrice(p)
-        : (refPrice ? fmtPct(refPrice, p) : null) || fmtPrice(p);
-    let tpIndex = 0;
-    entries.forEach(([, val]) => {
-      const t = val as any;
-      if (Number(t.take_off_percent) === 0) return;
-      tpIndex++;
-      const price = Number(t.price);
-      let line = "";
-      if (t.take_off_percent) {
-        const takeOff = `${t.take_off_percent}%`;
-        const positionLabel =
-          tpIndex === 1 ? "of position" : "of remaining position";
-        line = `Take Profit (${tpIndex}): At ${priceLabel(price)} take off ${takeOff} ${positionLabel}`;
-        if (t.raise_stop_loss?.price) {
-          const rslPrice = Number(t.raise_stop_loss.price);
-          const isBreakEven = refPrice && Math.abs(rslPrice - refPrice) < 0.01;
-          line += isBreakEven
-            ? " and raise stop loss to break even."
-            : ` and raise stop loss to ${fmtPrice(rslPrice)}.`;
-        } else {
-          line += ".";
-        }
-      } else {
-        line = `Take Profit (${tpIndex}): At ${priceLabel(price)}`;
-        if (t.raise_stop_loss?.price) {
-          const rslPrice = Number(t.raise_stop_loss.price);
-          const isBreakEven = refPrice && Math.abs(rslPrice - refPrice) < 0.01;
-          line += isBreakEven
-            ? " raise stop loss to break even."
-            : ` raise stop loss to ${fmtPrice(rslPrice)}.`;
-        } else {
-          line += ".";
-        }
-      }
-      tpLines.push(line);
-    });
-    if (tpLines.length > 0) {
-      fields.push({ ...SPACER });
-      fields.push({
-        name: "💰 Take Profit Plan",
-        value: tpLines.join("\n"),
-        inline: false,
-      });
-    }
-  }
+    },
+    { ...SPACER },
+    { name: "💰 Take Profit Plan", value: tpPlanText, inline: false },
+  ];
 
   return fields;
 }
@@ -722,7 +685,7 @@ function buildLetfOptionsFields(
   if (tradePlanParts.length > 0) {
     fields.push({
       name: isUnderlyingBased
-        ? `📝 Trade Plan (Based on ${underlying})`
+        ? `📝 Trade Plan (Based on ${underlying} levels)`
         : "📝 Trade Plan",
       value: tradePlanParts.join("\n"),
       inline: false,
