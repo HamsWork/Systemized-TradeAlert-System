@@ -585,11 +585,14 @@ function buildLetfOptionsFields(
   const leverage = getLETFLeverage(ticker);
   const right = direction === "Put" ? "PUT" : "CALL";
   const dirText = direction === "Put" ? "BEAR" : "BULL";
+  const isUnderlyingBased = data.underlying_price_based === true;
   const displayOptionPrice =
     data.entry_option_price != null
       ? Number(data.entry_option_price)
       : optionPrice;
-  const refPrice = displayOptionPrice || optionPrice;
+  const refPrice = isUnderlyingBased
+    ? (stockPrice || displayOptionPrice || optionPrice)
+    : (displayOptionPrice || optionPrice);
 
   const fields: DiscordField[] = [
     { ...SPACER },
@@ -667,7 +670,9 @@ function buildLetfOptionsFields(
 
   if (tradePlanParts.length > 0) {
     fields.push({
-      name: "📝 Trade Plan",
+      name: isUnderlyingBased
+        ? "📝 Trade Plan (Based On Underlying Stock)"
+        : "📝 Trade Plan",
       value: tradePlanParts.join("\n"),
       inline: false,
     });
