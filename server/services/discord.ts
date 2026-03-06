@@ -529,7 +529,7 @@ function buildLetfFields(
     { ...SPACER },
     {
       name: "📹 LETF",
-      value: `${ticker} (${dirText})`,
+      value: `${ticker} (${leverage}x ${dirText})`,
       inline: true,
     },
     {
@@ -1224,6 +1224,7 @@ function pushInstrumentFields(
   data: Record<string, any>,
 ): void {
   const entryPrice = data.entry_price != null ? Number(data.entry_price) : null;
+  const entryInstrumentPrice = data.entry_instrument_price != null ? Number(data.entry_instrument_price) : null;
   const stockPrice =
     data.entry_underlying_price != null
       ? Number(data.entry_underlying_price)
@@ -1240,13 +1241,13 @@ function pushInstrumentFields(
         name: "\u{1F4B9} LETF",
         value:
           leverage && leverage > 0
-            ? `${underlying} ${leverage}x (${dir})`
+            ? `${underlying} (${leverage}x ${dir})`
             : `${underlying} (${dir})`,
         inline: true,
       },
       {
         name: "\u{1F4B5} LETF Entry",
-        value: entryPrice != null ? fmtPrice(entryPrice) : "Pending",
+        value: entryInstrumentPrice != null ? fmtPrice(entryInstrumentPrice) : "Pending",
         inline: true,
       },
       {
