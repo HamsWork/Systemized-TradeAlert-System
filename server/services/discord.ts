@@ -214,6 +214,26 @@ function fmtPct(base: number | null, target: number): string {
   return `${(((target - base) / base) * 100).toFixed(1)}%`;
 }
 
+/**
+ * Profit % for Discord: Options/LETF Option = instrument return (current - entry)/entry.
+ * Shares/LETF/Crypto = directional: Long/Call → (current - entry)/entry, Short/Put → (entry - current)/entry.
+ */
+function profitPctFromInstrument(
+  entry: number,
+  current: number,
+  instrumentType: string,
+  direction: string,
+): number {
+  const isOption =
+    instrumentType === "Options" || instrumentType === "LETF Option";
+  if (isOption)
+    return ((current - entry) / entry) * 100; // option P&L: we're long the option, profit when option price rises
+  const isBullish = direction === "Call" || direction === "Long";
+  return isBullish
+    ? ((current - entry) / entry) * 100
+    : ((entry - current) / entry) * 100;
+}
+
 function getUnderlying(data: Record<string, any>, ticker: string): string {
   return data.underlying_symbol || getLETFUnderlying(ticker) || ticker;
 }
@@ -419,9 +439,8 @@ function buildLetfFields(
     data.entry_underlying_price != null
       ? Number(data.entry_underlying_price)
       : (stockPrice ?? null);
-  // LETF instrument entry price (for "Leveraged ETF Entry")
-  const letfEntryPrice =
-    data.entry_price != null ? Number(data.entry_price) : (entryPrice ?? 0);
+  // LETF instrument entry price (for "Leveraged ETF Entry") – always use instrument entry, never underlying.
+  const letfEntryPrice = entryPrice;
   const stopPrice = data.stop_loss != null ? Number(data.stop_loss) : null;
   const entryForPct = stockPriceAtEntry ?? letfEntryPrice ?? 0;
   const stopPct =
@@ -763,9 +782,12 @@ export function buildTargetHitEmbed(
       ? currentInstrumentPrice
       : (currentInstrumentPrice ?? (!underlyingBased ? target.price : null));
     if (priceForPct != null) {
-      const pct = isBullish
-        ? ((priceForPct - entryInstrument) / entryInstrument) * 100
-        : ((entryInstrument - priceForPct) / entryInstrument) * 100;
+      const pct = profitPctFromInstrument(
+        entryInstrument,
+        priceForPct,
+        instrumentType,
+        direction,
+      );
       pctProfit = pct.toFixed(1);
     }
   }
@@ -991,9 +1013,12 @@ export function buildStopLossHitEmbed(
     const priceForPct =
       currentInstrumentPrice ?? (!underlyingBased ? stopLossHitPrice : null);
     if (priceForPct != null) {
-      const pct = isBullish
-        ? ((priceForPct - entryInstrument) / entryInstrument) * 100
-        : ((entryInstrument - priceForPct) / entryInstrument) * 100;
+      const pct = profitPctFromInstrument(
+        entryInstrument,
+        priceForPct,
+        instrumentType,
+        direction,
+      );
       stopLossHitPct = pct.toFixed(1);
     }
   }
@@ -1069,9 +1094,12 @@ export function buildTradeClosedEmbed(
     entryInstrument > 0 &&
     exitPrice != null
   ) {
-    const pct = isBullish
-      ? ((exitPrice - entryInstrument) / entryInstrument) * 100
-      : ((entryInstrument - exitPrice) / entryInstrument) * 100;
+    const pct = profitPctFromInstrument(
+      entryInstrument,
+      exitPrice,
+      instrumentType,
+      direction,
+    );
     pnlPct = pct.toFixed(1);
   }
   const rMultiple = data.r_multiple != null ? Number(data.r_multiple) : null;
@@ -1201,10 +1229,17 @@ function pushInstrumentFields(
   if (instrumentType === "LETF") {
     const underlying = getUnderlying(data, ticker);
     const dir = direction === "Short" ? "BEAR" : "BULL";
+    const leverage =
+      data.leverage != null && !isNaN(Number(data.leverage))
+        ? Number(data.leverage)
+        : null;
     fields.push(
       {
         name: "\u{1F4B9} LETF",
-        value: `${ticker} (${dir})`,
+        value:
+          leverage && leverage > 0
+            ? `${underlying} ${leverage}x (${dir})`
+            : `${underlying} (${dir})`,
         inline: true,
       },
       {

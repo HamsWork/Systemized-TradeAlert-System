@@ -64,7 +64,7 @@ function isBullishTrade(data: Record<string, any>): boolean {
   if (instrumentType === "Options" || instrumentType === "LETF Option") {
     return data.direction === "Call";
   }
-  return data.direction === "Long" || data.direction !== "Short";
+  return data.direction === "Long";
 }
 
 /** Fetch current instrument price for Discord profit display. Options use underlying symbol for Polygon. Exported for use in routes when sending Discord. */
