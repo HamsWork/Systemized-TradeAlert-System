@@ -803,11 +803,7 @@ export function buildTargetHitEmbed(
       : "No stop adjustment on this target.";
   fields.push({
     name: "\u{1F50D} Position Management",
-    value: `\u2705 Reduce position by 50% (lock in profit)${
-      tp2
-        ? `\n\u{1F3AF} Let remaining 50% ride to TP2 (${fmtPrice(Number(tp2[1].price))})`
-        : ""
-    }`,
+    value: positionMgmtLines.join("\n"),
     inline: false,
   });
   fields.push({ ...SPACER });
