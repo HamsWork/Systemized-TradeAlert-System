@@ -1045,9 +1045,8 @@ export function buildTargetHitEmbed(
   pushInstrumentFields(fields, instrumentType, data);
 
   const underlying = getUnderlying(data, ticker);
-  const displayTicker = isLETF ? underlying : ticker;
   const description = isLETF
-    ? `**\u{1F3AF} ${displayTicker} ${isSharesSymbol} Take Profit ${tpDisplay} HIT**`
+    ? `**\u{1F3AF} ${ticker} ${isSharesSymbol} Take Profit ${tpDisplay} HIT**`
     : isCrypto
       ? `**\u{1F3AF} ${ticker} Crypto Take Profit ${tpDisplay} HIT**`
       : `**\u{1F3AF} ${ticker} ${isSharesSymbol} Take Profit ${tpDisplay} HIT**`;
@@ -1133,9 +1132,8 @@ export function buildStopLossRaisedEmbed(
       ? "Shares"
       : "Options";
   const underlying = getUnderlying(data, ticker);
-  const displayTicker = isLETF ? underlying : ticker;
   const description = isLETF
-    ? `**\u{1F6E1}\uFE0F ${displayTicker} ${isSharesSymbol} Stop Loss Raised**`
+    ? `**\u{1F6E1}\uFE0F ${ticker} ${isSharesSymbol} Stop Loss Raised**`
     : isCrypto
       ? `**\u{1F6E1}\uFE0F ${ticker} Crypto Stop Loss Raised**`
       : `**\u{1F6E1}\uFE0F ${ticker} ${isSharesSymbol} Stop Loss Raised**`;
@@ -1245,9 +1243,8 @@ export function buildStopLossHitEmbed(
       ? "Shares"
       : "Options";
   const underlying = getUnderlying(data, ticker);
-  const displayTicker = isLETF ? underlying : ticker;
   const description = isLETF
-    ? `**\u{1F6D1} ${displayTicker} ${isSharesSymbol} Stop Loss Hit**`
+    ? `**\u{1F6D1} ${ticker} ${isSharesSymbol} Stop Loss Hit**`
     : isCrypto
       ? `**\u{1F6D1} ${ticker} Crypto Stop Loss Hit**`
       : `**\u{1F6D1} ${ticker} ${isSharesSymbol} Stop Loss Hit**`;
