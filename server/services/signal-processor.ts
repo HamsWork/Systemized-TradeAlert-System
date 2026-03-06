@@ -446,13 +446,13 @@ async function buildSignalData(
     );
   }
 
-  if (isUnderlyingBased && instrumentType === "LETF") {
+  if (instrumentType === "LETF") {
     try {
       const letfPrice = await fetchStockPrice(ticker);
       if (letfPrice != null) {
         signalDataObj.entry_instrument_price = letfPrice;
         console.log(
-          `[Signal] Underlying-based LETF: fetched instrument price from Polygon: $${letfPrice} for ${ticker}`,
+          `[Signal] LETF: fetched instrument price from Polygon: $${letfPrice} for ${ticker}`,
         );
       }
     } catch (err: any) {
