@@ -922,9 +922,9 @@ export function buildSignalAlertEmbed(
   const underlying = getUnderlying(data, ticker);
   const heading = appendAppName(
     instrumentType === "LETF"
-      ? `**\u{1F6A8} ${ticker} Shares Entry**`
+      ? `**\u{1F6A8} ${underlying} Trade Alert**`
       : instrumentType === "LETF Option"
-        ? `**\u{1F6A8} ${ticker} Options Entry**`
+        ? `**\u{1F6A8} ${underlying} Trade Alert**`
         : instrumentType === "Crypto"
           ? `**\u{1F6A8} ${ticker} Crypto Alert**`
           : instrumentType === "Shares"
@@ -1036,8 +1036,10 @@ export function buildTargetHitEmbed(
   fields.push({ ...SPACER });
   pushInstrumentFields(fields, instrumentType, data);
 
+  const underlying = getUnderlying(data, ticker);
+  const displayTicker = isLETF ? underlying : ticker;
   const description = isLETF
-    ? `**\u{1F3AF} ${ticker} ${isSharesSymbol} Take Profit ${tpDisplay} HIT**`
+    ? `**\u{1F3AF} ${displayTicker} ${isSharesSymbol} Take Profit ${tpDisplay} HIT**`
     : isCrypto
       ? `**\u{1F3AF} ${ticker} Crypto Take Profit ${tpDisplay} HIT**`
       : `**\u{1F3AF} ${ticker} ${isSharesSymbol} Take Profit ${tpDisplay} HIT**`;
@@ -1122,8 +1124,10 @@ export function buildStopLossRaisedEmbed(
     instrumentType === "LETF" || instrumentType === "Shares"
       ? "Shares"
       : "Options";
+  const underlying = getUnderlying(data, ticker);
+  const displayTicker = isLETF ? underlying : ticker;
   const description = isLETF
-    ? `**\u{1F6E1}\uFE0F ${ticker} ${isSharesSymbol} Stop Loss Raised**`
+    ? `**\u{1F6E1}\uFE0F ${displayTicker} ${isSharesSymbol} Stop Loss Raised**`
     : isCrypto
       ? `**\u{1F6E1}\uFE0F ${ticker} Crypto Stop Loss Raised**`
       : `**\u{1F6E1}\uFE0F ${ticker} ${isSharesSymbol} Stop Loss Raised**`;
@@ -1232,8 +1236,10 @@ export function buildStopLossHitEmbed(
     instrumentType === "LETF" || instrumentType === "Shares"
       ? "Shares"
       : "Options";
+  const underlying = getUnderlying(data, ticker);
+  const displayTicker = isLETF ? underlying : ticker;
   const description = isLETF
-    ? `**\u{1F6D1} ${ticker} ${isSharesSymbol} Stop Loss Hit**`
+    ? `**\u{1F6D1} ${displayTicker} ${isSharesSymbol} Stop Loss Hit**`
     : isCrypto
       ? `**\u{1F6D1} ${ticker} Crypto Stop Loss Hit**`
       : `**\u{1F6D1} ${ticker} ${isSharesSymbol} Stop Loss Hit**`;
@@ -1323,8 +1329,10 @@ export function buildTradeClosedEmbed(
     instrumentType === "LETF" || instrumentType === "Shares"
       ? "Shares"
       : "Options";
+  const underlying = getUnderlying(data, ticker);
+  const displayTicker = isLETF ? underlying : ticker;
   const description = isLETF
-    ? `**${emoji} ${ticker} ${isSharesSymbol} Closed Manually**`
+    ? `**${emoji} ${displayTicker} ${isSharesSymbol} Closed Manually**`
     : isCrypto
       ? `**${emoji} ${ticker} Crypto Closed Manually**`
       : `**${emoji} ${ticker} ${isSharesSymbol} Closed Manually**`;
