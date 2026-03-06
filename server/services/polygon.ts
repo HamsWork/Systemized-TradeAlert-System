@@ -1,4 +1,5 @@
 const POLYGON_BASE = "https://api.polygon.io";
+const MASSIVE_API_BASE = "https://api.massive.com";
 
 interface PolygonBar {
   o: number;
@@ -304,8 +305,21 @@ export async function fetchOptionContractPrice(
   strike: number,
   right: string,
 ): Promise<{ exists: boolean; price: number | null }> {
-  const ticker = buildOptionsTicker(symbol, expiration, right, strike);
-  const price = await fetchLastPrice(ticker);
+  const optionTicker = buildOptionsTicker(symbol, expiration, right, strike);
+
+  const url = `${MASSIVE_API_BASE}/v3/options/contracts/${optionTicker}`;
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    console.warn(`[Polygon] Failed to fetch option contract data for ${optionTicker}: ${response.statusText}`);
+    return { exists: false, price: null };
+  }
+  const data = await response.json();
+  const result = data.result;
+
+  const bid = result.last_quote?.bid;
+  const ask = result.last_quote?.ask;
+  const price = bid && ask ? (bid + ask) / 2 : null;
   return { exists: price !== null, price };
 }
 

@@ -17,7 +17,8 @@ export const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
   max: 10,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
+  // Neon serverless can cold-start in 10–30s; 5s was too short
+  connectionTimeoutMillis: 20000,
   keepAlive: true,
 });
 

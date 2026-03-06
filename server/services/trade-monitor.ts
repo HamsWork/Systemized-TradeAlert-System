@@ -72,23 +72,23 @@ export async function getCurrentInstrumentPrice(
   data: Record<string, any>,
   ticker: string,
 ): Promise<number | null> {
-  const instrumentType = data.instrument_type || "Shares";
+  if (ticker == null) return null;
+  const instrumentType = data.instrument_type;
   if (instrumentType === "Options" || instrumentType === "LETF Option") {
-    if (data.strike == null || !data.expiration || !data.direction) return null;
-    const right = data.direction === "Put" ? "P" : "C";
-    const underlying = getUnderlyingTicker(data);
-    if (!underlying) return null;
+    if (data.strike == null || !data.expiration || !data.direction || data.right == null) return null;
+    
     const result = await fetchOptionContractPrice(
-      underlying,
+      ticker,
       data.expiration,
       Number(data.strike),
-      right,
+      data.right,
     );
     return result.price ?? null;
   }
-  if (instrumentType === "LETF") {
-    return fetchStockPrice(ticker);
+  if (instrumentType === "LETF" || instrumentType === "Shares") {
+    return await fetchStockPrice(ticker);
   }
+  
   return null;
 }
 

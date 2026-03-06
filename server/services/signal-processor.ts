@@ -1,7 +1,7 @@
 import type { Signal, ConnectedApp } from "@shared/schema";
 import { insertSignalSchema } from "@shared/schema";
 import { storage } from "../storage";
-import { LETF_UNDERLYING } from "../constants/letf";
+import { getLETFUnderlying, LETF_UNDERLYING } from "../constants/letf";
 import { executeIbkrTrade } from "./trade-executor";
 import { sendSignalDiscordAlert } from "./discord";
 import { getCurrentInstrumentPrice } from "./trade-monitor";
@@ -328,147 +328,71 @@ async function buildSignalData(
   if (instrumentType === "Options" || instrumentType === "LETF Option") {
     signalDataObj.expiration = expiration;
     signalDataObj.strike = strike;
-
-    if (entryPrice) {
-      signalDataObj.entry_option_price = Number(entryPrice);
-    }
-
-    const right = direction === "Put" ? "P" : "C";
-
-    try {
-      const contractResult = await fetchOptionContractPrice(
-        instrumentType === "LETF Option"
-          ? (LETF_UNDERLYING[(ticker || "").toUpperCase().trim()] || ticker)
-          : ticker,
-        expiration,
-        Number(strike),
-        right,
-      );
-
-      if (!contractResult.exists) {
-        errors.push(
-          `Option contract not found: ${ticker} ${expiration} ${strike} ${direction}`,
-        );
-      } else if (contractResult.price !== null) {
-        signalDataObj.entry_option_price = contractResult.price;
-        signalDataObj.entry_instrument_price = contractResult.price;
-        console.log(
-          `[Signal] Fetched option contract price from Polygon: $${contractResult.price} for ${ticker} ${expiration} ${strike} ${direction}`,
-        );
-        if (!signalDataObj.entry_price) {
-          signalDataObj.entry_price = contractResult.price;
-          console.log(
-            `[Signal] Auto-filled entryPrice from option price: $${contractResult.price}`,
-          );
-        }
-      }
-    } catch (err: any) {
-      console.warn(`[Signal] Failed to verify option contract: ${err.message}`);
-    }
+    signalDataObj.right = direction === "Put" ? "P" : "C";
   }
 
-  try {
-    if (instrumentType === "Options") {
-      const stockPrice = await fetchStockPrice(ticker);
-      if (stockPrice !== null) {
-        signalDataObj.entry_underlying_price = stockPrice;
-        console.log(
-          `[Signal] Fetched underlying stock price from Polygon: $${stockPrice} for ${ticker}`,
-        );
-      }
-    } else if (instrumentType === "LETF Option") {
-      const letfPrice = await fetchStockPrice(ticker);
-      if (letfPrice !== null) {
-        signalDataObj.entry_underlying_price = letfPrice;
-        console.log(
-          `[Signal] Fetched LETF price from Polygon: $${letfPrice} for ${ticker}`,
-        );
-      }
-    } else if (instrumentType === "LETF") {
-      const underlyingSymbol =
-        LETF_UNDERLYING[(ticker || "").toUpperCase().trim()];
-      if (underlyingSymbol) {
-        const underlyingPrice = await fetchStockPrice(underlyingSymbol);
-        if (underlyingPrice !== null) {
-          signalDataObj.entry_underlying_price = underlyingPrice;
-          console.log(
-            `[Signal] Fetched underlying index price from Polygon: $${underlyingPrice} for ${ticker} (${underlyingSymbol})`,
-          );
-        }
-      }
-    } else if (instrumentType === "Crypto") {
-      console.log(
-        `[Signal] Crypto signal — skipping Polygon price fetch for ${ticker}`,
-      );
-    } else {
-      const stockPrice = await fetchStockPrice(ticker);
-      if (stockPrice !== null) {
-        signalDataObj.entry_underlying_price = stockPrice;
-        console.log(
-          `[Signal] Fetched stock price from Polygon: $${stockPrice} for ${ticker}`,
-        );
-      }
-    }
-  } catch (err: any) {
-    console.warn(`[Signal] Failed to fetch underlying price: ${err.message}`);
+  if (instrumentType === "LETF" || instrumentType === "LETF Option") {
+    signalDataObj.letfTicker = ticker;
+    signalDataObj.underlying_ticker = getLETFUnderlying(ticker);
+    signalDataObj.leverage = getLETFLeverage(ticker);
   }
 
+  
+
+  const bullish = direction === "Call" || direction === "Long";
   if (targets && typeof targets === "object") {
     signalDataObj.targets = targets;
+
+    const tpLevels = targets.filter((t: any) => t.take_off_percent > 0)
+      .sort((a: any, b: any) => 
+          underlying_price_based 
+        ? bullish ? a.price - b.price : b.price - a.price
+        : direction === "Short" ? b.price - a.price : a.price - b.price
+      )
+      .map((t: object, index: number) => {
+        return {
+          tpNumber: index + 1,
+          price: Number(t.price),
+          take_off_percent: Number(t.take_off_percent),
+          raise_stop_loss: Number(t.raise_stop_loss?.price) ?? null,
+        };
+    });
+    signalDataObj.tpLevels = tpLevels;
   }
 
   if (stop_loss !== undefined && stop_loss !== null) {
     signalDataObj.stop_loss = stop_loss;
+    signalDataObj.current_stop_loss = stop_loss;
   }
 
   if (time_stop) {
     signalDataObj.time_stop = time_stop;
   }
 
-  const isUnderlyingBased = underlying_price_based === true;
-  signalDataObj.trade_plan_type =
-    trade_plan_type ??
-    (isUnderlyingBased
-      ? "stock_price_based"
-      : instrumentType === "Options" || instrumentType === "LETF Option"
-        ? "option_price_based"
-        : "stock_price_based");
+
   signalDataObj.auto_track = auto_track !== undefined ? auto_track : true;
-  signalDataObj.underlying_price_based = isUnderlyingBased;
+  
+  const underlyingPriceBased = underlying_price_based !== undefined ? underlying_price_based : false;
+  signalDataObj.underlying_price_based = underlyingPriceBased;
 
-  if (isUnderlyingBased) {
-    signalDataObj.entry_tracking_price = signalDataObj.entry_price ?? null;
-    try {
-      const instrumentPrice = await getCurrentInstrumentPrice(signalDataObj, ticker);
-      signalDataObj.entry_instrument_price = instrumentPrice ?? signalDataObj.entry_price ?? null;
-      if (instrumentPrice != null) {
-        console.log(
-          `[Signal] Underlying-based: fetched instrument price $${instrumentPrice} for ${ticker}`,
-        );
-      }
-    } catch (err: any) {
-      console.warn(`[Signal] Failed to fetch instrument price: ${err.message}`);
-      signalDataObj.entry_instrument_price = signalDataObj.entry_price ?? null;
+  if (underlying_price_based === true) {
+    const intrumentPrice = await getCurrentInstrumentPrice(body, ticker);
+    if (intrumentPrice == null || intrumentPrice <= 0) {
+      errors.push("Instrument price Error");
+    } else {
+      signalDataObj.entry_instrument_price = intrumentPrice;
     }
+    signalDataObj.entry_tracking_price = entryPrice;
+    signalDataObj.entry_underlying_price = entryPrice;
   } else {
-    signalDataObj.entry_tracking_price = signalDataObj.entry_price ?? null;
-    signalDataObj.entry_instrument_price = signalDataObj.entry_price ?? null;
-  }
-
-  if (body.tdi_metadata) {
-    signalDataObj.tdi_metadata = body.tdi_metadata;
-  }
-
-  if (body.underlying_symbol) {
-    signalDataObj.underlying_symbol = body.underlying_symbol;
-  } else if (instrumentType === "LETF" || instrumentType === "LETF Option") {
-    const underlyingSymbol =
-      LETF_UNDERLYING[(ticker || "").toUpperCase().trim()];
-    if (underlyingSymbol) {
-      signalDataObj.underlying_symbol = underlyingSymbol;
+    const underlyingPrice = await fetchStockPrice(signalDataObj.underlying_ticker);
+    if (underlyingPrice == null || underlyingPrice <= 0) {
+      errors.push("Underlying price Error");
+    } else {
+      signalDataObj.entry_underlying_price = underlyingPrice;
     }
-  } else if (instrumentType === "Options") {
-    signalDataObj.underlying_symbol = ticker;
+    signalDataObj.entry_tracking_price = entryPrice;
+    signalDataObj.entry_instrument_price = entryPrice;
   }
 
   return { data: signalDataObj, errors };
