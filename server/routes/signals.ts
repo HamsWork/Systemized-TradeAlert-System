@@ -13,7 +13,7 @@ import {
 
 import {
   sendTradeClosedManuallyDiscord,
-  sendSignalDiscordAlert,
+  sendEntryDicordAlert,
   sendTargetHitDiscordAlert,
   sendStopLossHitDiscord,
   sendStopLossRaisedDiscord,
@@ -255,7 +255,7 @@ export function registerSignalRoutes(app: Express) {
       };
       switch (messageType) {
         case "signal_alert":
-          result = await sendSignalDiscordAlert(signal, app);
+          result = await sendEntryDicordAlert(signal, app);
           break;
         case "target_hit": {
           const targetKey = req.body.targetKey || "tp1";

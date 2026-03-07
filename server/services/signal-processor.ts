@@ -1,9 +1,9 @@
 import type { Signal, ConnectedApp } from "@shared/schema";
 import { insertSignalSchema } from "@shared/schema";
 import { storage } from "../storage";
-import { getLETFUnderlying, LETF_UNDERLYING } from "../constants/letf";
+import { getLETFLeverage, getLETFUnderlying, LETF_UNDERLYING } from "../constants/letf";
 import { executeIbkrTrade } from "./trade-executor";
-import { sendSignalDiscordAlert } from "./discord";
+import { sendEntryDicordAlert } from "./discord";
 import { getCurrentInstrumentPrice } from "./trade-monitor";
 import {
   fetchPolygonBars,
@@ -335,29 +335,19 @@ async function buildSignalData(
     signalDataObj.letfTicker = ticker;
     signalDataObj.underlying_ticker = getLETFUnderlying(ticker);
     signalDataObj.leverage = getLETFLeverage(ticker);
+
+    const dirText = direction === "Short" || direction === "Put" ? "BEAR" : "BULL";
+
+    signalDataObj.leverage_direction = dirText;
+    
   }
 
   
 
   const bullish = direction === "Call" || direction === "Long";
+  
   if (targets && typeof targets === "object") {
     signalDataObj.targets = targets;
-
-    const tpLevels = targets.filter((t: any) => t.take_off_percent > 0)
-      .sort((a: any, b: any) => 
-          underlying_price_based 
-        ? bullish ? a.price - b.price : b.price - a.price
-        : direction === "Short" ? b.price - a.price : a.price - b.price
-      )
-      .map((t: object, index: number) => {
-        return {
-          tpNumber: index + 1,
-          price: Number(t.price),
-          take_off_percent: Number(t.take_off_percent),
-          raise_stop_loss: Number(t.raise_stop_loss?.price) ?? null,
-        };
-    });
-    signalDataObj.tpLevels = tpLevels;
   }
 
   if (stop_loss !== undefined && stop_loss !== null) {
@@ -394,6 +384,18 @@ async function buildSignalData(
     signalDataObj.entry_tracking_price = entryPrice;
     signalDataObj.entry_instrument_price = entryPrice;
   }
+
+  if (instrumentType === "LETF Option") {
+    signalDataObj.entry_letf_price = await fetchStockPrice(signalDataObj.ticker)
+  }
+
+  signalDataObj.hit_targets = {};
+  signalDataObj.current_target_number = 0;
+  signalDataObj.current_tp_number = 0;
+  signalDataObj.remain_quantity = 100;
+
+  signalDataObj.status = "submitted";
+  
 
   return { data: signalDataObj, errors };
 }
@@ -530,7 +532,7 @@ export async function processSignal(
   console.log(
     `[Signal] Sending discord alert to ${discordChannelWebhook} for ${ticker}`,
   );
-  const discordResult = await sendSignalDiscordAlert(
+  const discordResult = await sendEntryDicordAlert(
     signal,
     app,
     discordChannelWebhook,

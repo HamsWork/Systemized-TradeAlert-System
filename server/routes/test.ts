@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { storage } from "../storage";
 import {
-  sendSignalDiscordAlert,
+  sendEntryDicordAlert,
   sendTargetHitDiscordAlert,
   sendStopLossRaisedDiscord,
   sendStopLossHitDiscord,
@@ -134,7 +134,7 @@ export function registerTestRoutes(app: Express) {
       };
 
       if (type === "signal_alert") {
-        const result = await sendSignalDiscordAlert(signal, app);
+        const result = await sendEntryDicordAlert(signal, app);
         return res.json({
           ok: result.sent,
           type: "signal_alert",

@@ -1,6 +1,6 @@
 import type { Signal } from "@shared/schema";
 import {
-  buildSignalAlertEmbed,
+  buildEntryAlertEmbed,
   buildTargetHitEmbed,
   buildStopLossRaisedEmbed,
   buildStopLossHitEmbed,
@@ -120,7 +120,7 @@ function buildPreviewsFromData(
     type: "signal_alert",
     label: "Entry Signal",
     content: "@everyone",
-    embed: buildSignalAlertEmbed(data, ticker, expendName),
+    embed: buildEntryAlertEmbed(data, ticker, expendName),
   });
 
   const targets =
