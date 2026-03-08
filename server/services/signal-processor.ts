@@ -92,11 +92,12 @@ function transformTdiSignal(body: Record<string, any>): Record<string, any> {
     direction = direction === "Long" ? "Call" : "Put";
   }
 
-  const ticker =
+  const tickerRaw =
     body.instrument_ticker || body.instrument_symbol || body.symbol;
+  const ticker = tickerRaw != null && typeof tickerRaw === "string" ? tickerRaw.toUpperCase() : "";
 
   const result: Record<string, any> = {
-    ticker: ticker.toUpperCase(),
+    ticker,
     instrumentType,
     direction,
   };
@@ -339,7 +340,8 @@ async function buildSignalData(
     const dirText = direction === "Short" || direction === "Put" ? "BEAR" : "BULL";
 
     signalDataObj.leverage_direction = dirText;
-    
+  } else {
+    signalDataObj.underlying_ticker = ticker;
   }
 
   
@@ -376,11 +378,16 @@ async function buildSignalData(
     signalDataObj.entry_tracking_price = entryPrice;
     signalDataObj.entry_underlying_price = entryPrice;
   } else {
-    const underlyingPrice = await fetchStockPrice(signalDataObj.underlying_ticker);
-    if (underlyingPrice == null || underlyingPrice <= 0) {
-      errors.push("Underlying price Error");
+    const symbolForPrice = signalDataObj.underlying_ticker ?? ticker;
+    if (!symbolForPrice || typeof symbolForPrice !== "string") {
+      errors.push("Ticker is required for Shares");
     } else {
-      signalDataObj.entry_underlying_price = underlyingPrice;
+      const underlyingPrice = await fetchStockPrice(symbolForPrice);
+      if (underlyingPrice == null || underlyingPrice <= 0) {
+        errors.push("Underlying price Error");
+      } else {
+        signalDataObj.entry_underlying_price = underlyingPrice;
+      }
     }
     signalDataObj.entry_tracking_price = entryPrice;
     signalDataObj.entry_instrument_price = entryPrice;

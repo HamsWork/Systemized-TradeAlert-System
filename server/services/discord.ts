@@ -583,7 +583,7 @@ export function buildTargetHitEmbed(
   fields.push(
     {
       name: "\u{1F4B8} Profit",
-      value: `${profitPct != null ? `${profitPct}%` : "\u2014"}`,
+      value: `${profitPct != null ? `${profitPct.toFixed(1)}%` : "\u2014"}`,
       inline: true,
     },
     { ...SPACER },
@@ -729,7 +729,7 @@ export function buildStopLossHitEmbed(
     },
     {
       name: "\u{1F4B8} Result",
-      value: signalData.stop_loss_percent != null ? `${signalData.stop_loss_percent}%` : "\u2014",
+      value: signalData.stop_loss_percent != null ? `${signalData.stop_loss_percent.toFixed(1)}%` : "\u2014",
       inline: true,
     },
     { ...SPACER },
