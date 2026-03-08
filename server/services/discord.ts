@@ -260,92 +260,85 @@ function getInstrumentEntryPrice(
 function buildOptionsFields(
   signalData: Record<string, any>,
 ): DiscordField[] {
+  const ticker = signalData.ticker || "UNKNOWN";
+  const direction = signalData.direction || "Call";
+  const stockPrice = signalData.entry_underlying_price;
+  const optionPrice = signalData.entry_instrument_price;
   const fields: DiscordField[] = [];
   fields.push({ ...SPACER });
-  fields.push({ name: "🟢 Ticker", value: signalData.ticker, inline: true });
-
-  const stockPrice = signalData.entry_underlying_price;
-  fields.push({ name: "📊 Stock Price", value: stockPrice ? fmtPrice(stockPrice) : "—", inline: true });
-  
+  fields.push({ name: "\u{1F7E2} Ticker", value: ticker, inline: true });
+  fields.push({ name: "\u{1F4CA} Stock Price", value: stockPrice ? fmtPrice(stockPrice) : "\u2014", inline: true });
   fields.push({ ...SPACER });
-  fields.push({ name: "❌ Expiration", value: signalData.expiration || "—", inline: true });
-  fields.push({ name: "✍️ Strike", value: `${signalData.strike || "—"} ${signalData.direction.toUpperCase()}`, inline: true });
-
-  const optionPrice = signalData.entry_instrument_price;
-  fields.push({ name: "💵 Option Price", value: optionPrice ? fmtPrice(optionPrice) : "—", inline: true });
+  fields.push({ name: "\u274C Expiration", value: signalData.expiration || "\u2014", inline: true });
+  fields.push({ name: "\u270D\uFE0F Strike", value: `${signalData.strike || "\u2014"} ${direction.toUpperCase()}`, inline: true });
+  fields.push({ name: "\u{1F4B5} Option Price", value: optionPrice ? fmtPrice(optionPrice) : "\u2014", inline: true });
   fields.push({ ...SPACER });
   return fields;
-
 }
 
 function buildLetfFields(
   signalData: Record<string, any>,
 ): DiscordField[] {
-    const fields: DiscordField[] = [
+  const ticker = signalData.ticker || "UNKNOWN";
+  const underlying = getUnderlying(signalData, ticker);
+  const leverage = getLETFLeverage(ticker);
+  const dir = signalData.direction || "Long";
+  const dirText = dir === "Short" ? "BEAR" : "BULL";
+  const letfEntry = signalData.entry_instrument_price != null
+    ? `$ ${Number(signalData.entry_instrument_price).toFixed(2)}`
+    : "Pending";
+  const fields: DiscordField[] = [
     { ...SPACER },
-    { name: "🟢 Ticker", value: signalData.ticker, inline: true },
-    { name: "📈 Direction", value: signalData.direction, inline: true },
+    { name: "\u{1F7E2} Ticker", value: underlying, inline: true },
+    { name: "\u{1F4C8} Direction", value: dir, inline: true },
     { ...SPACER },
     {
-      name: "📹 LETF",
-      value: `${signalData.ticker} (${signalData.leverage}x ${signalData.leverage_direction})`,
+      name: "\u{1F4F9} LETF",
+      value: `${ticker} (${leverage}x ${dirText})`,
       inline: true,
     },
     {
-      name: "💰 LETF Entry",
-      value:
-        signalData.entry_instrument_price != null
-          ? Number(signalData.entry_instrument_price)
-          : "Pending",
+      name: "\u{1F4B0} LETF Entry",
+      value: letfEntry,
       inline: true,
     },
     { ...SPACER },
   ];
-
-
   return fields;
 }
 
 function buildLetfOptionsFields(
   signalData: Record<string, any>,
 ): DiscordField[] {
-  const ticker = signalData.ticker;
-  const direction = signalData.direction;
-  const optionPrice = signalData.entry_option_price;
-  const stockPrice = signalData.entry_underlying_price;
+  const ticker = signalData.ticker || "UNKNOWN";
+  const direction = signalData.direction || "Call";
   const underlying = getUnderlying(signalData, ticker);
   const leverage = getLETFLeverage(ticker);
-  const right = direction === "Put" ? "PUT" : "CALL";
   const dirText = direction === "Put" ? "BEAR" : "BULL";
-  const isUnderlyingBased = signalData.underlying_price_based === true;
-  const displayOptionPrice =
-    signalData.entry_instrument_price != null
-      ? Number(signalData.entry_instrument_price)
-      : optionPrice;
 
   const fields: DiscordField[] = [
     { ...SPACER },
-    { name: "🟢 Ticker", value: signalData.ticker, inline: true },
+    { name: "\u{1F7E2} Ticker", value: underlying, inline: true },
     {
-      name: "📊 LETF Price",
-      value: signalData.entry_letf_price ? fmtPrice(signalData.entry_letf_price) : "—",
+      name: "\u{1F4CA} LETF Price",
+      value: signalData.entry_letf_price ? fmtPrice(signalData.entry_letf_price) : "\u2014",
       inline: true,
     },
     {
-      name: "💹 Leveraged ETF",
-      value: `${signalData.ticker} (${signalData.leverage}x ${signalData.leverage_direction})`,
+      name: "\u{1F4B9} Leveraged ETF",
+      value: `${ticker} (${leverage}x ${dirText})`,
       inline: true,
     },
     { ...SPACER },
-    { name: "❌ Expiration", value: signalData.expiration || "—", inline: true },
+    { name: "\u274C Expiration", value: signalData.expiration || "\u2014", inline: true },
     {
-      name: "✍️ Strike",
-      value: `${signalData.strike || "—"} ${signalData.direction.toUpperCase()}`,
+      name: "\u270D\uFE0F Strike",
+      value: `${signalData.strike || "\u2014"} ${direction.toUpperCase()}`,
       inline: true,
     },
     {
-      name: "💵 Option Price",
-      value: signalData.entry_instrument_price ? fmtPrice(signalData.entry_instrument_price) : "—",
+      name: "\u{1F4B5} Option Price",
+      value: signalData.entry_instrument_price ? fmtPrice(signalData.entry_instrument_price) : "\u2014",
       inline: true,
     },
     { ...SPACER },
@@ -360,13 +353,13 @@ function buildSharesFields(
   const dir = signalData.direction || "Long";
   const fields: DiscordField[] = [
     { ...SPACER },
-    { name: "🟢 Ticker", value: signalData.ticker, inline: true },
+    { name: "\u{1F7E2} Ticker", value: signalData.ticker || "UNKNOWN", inline: true },
     {
-      name: "📊 Stock Price",
-      value: signalData.entry_tracking_price ? fmtPrice(signalData.entry_tracking_price) : "—",
+      name: "\u{1F4CA} Stock Price",
+      value: signalData.entry_tracking_price ? fmtPrice(signalData.entry_tracking_price) : "\u2014",
       inline: true,
     },
-    { name: "📈 Direction", value: dir, inline: true },
+    { name: "\u{1F4C8} Direction", value: dir, inline: true },
     { ...SPACER },
   ];
 
@@ -905,13 +898,16 @@ function pushInstrumentFields(
   fields: DiscordField[],
   signalData: Record<string, any>,
 ): void {
+  const ticker = signalData.ticker || "UNKNOWN";
+  const direction = signalData.direction || "Long";
+  const underlying = getUnderlying(signalData, ticker);
+  const leverage = getLETFLeverage(ticker);
+  const dirText = direction === "Short" || direction === "Put" ? "BEAR" : "BULL";
   if (signalData.instrument_type === "LETF") {
     fields.push(
       {
         name: "\u{1F4B9} LETF",
-        value: signalData.leverage
-          ? `${signalData.ticker} (${signalData.leverage}x ${signalData.leverage_direction})`
-          : `${signalData.ticker} (${signalData.leverage_direction})`,
+        value: `${ticker} (${leverage}x ${dirText})`,
         inline: true,
       },
       {
@@ -920,21 +916,17 @@ function pushInstrumentFields(
         inline: true,
       },
       {
-        name: "\u{1F4CA} Stock Price",
-        value: stockPrice != null ? fmtPrice(stockPrice) : "\u2014",
+        name: "\u{1F4CA} Underlying Price",
+        value: signalData.entry_underlying_price != null ? fmtPrice(signalData.entry_underlying_price) : "\u2014",
         inline: true,
       },
     );
   } else if (signalData.instrument_type === "LETF Option") {
     const right = direction === "Put" ? "PUT" : "CALL";
-    const dirText = direction === "Put" ? "BEAR" : "BULL";
-    const leverage = getLETFLeverage(ticker);
     fields.push(
       {
         name: "\u{1F4B9} Leveraged ETF",
-        value: signalData.leverage
-          ? `${signalData.ticker} (${signalData.leverage}x ${signalData.leverage_direction})`
-          : `${signalData.ticker} (${signalData.leverage_direction})`,
+        value: `${ticker} (${leverage}x ${dirText})`,
         inline: true,
       },
       {
@@ -944,7 +936,7 @@ function pushInstrumentFields(
       },
       {
         name: "\u270D\uFE0F Strike",
-        value: `${signalData.strike ?? "\u2014"} ${signalData.right}`,
+        value: `${signalData.strike ?? "\u2014"} ${right}`,
         inline: true,
       },
     );
@@ -957,7 +949,7 @@ function pushInstrumentFields(
       },
       {
         name: "\u270D\uFE0F Strike",
-        value: `${signalData.strike ?? "\u2014"} ${signalData.right}`,
+        value: `${signalData.strike ?? "\u2014"} ${(signalData.direction || "Call").toUpperCase()}`,
         inline: true,
       },
       {
