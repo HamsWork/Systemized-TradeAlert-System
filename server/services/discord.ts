@@ -578,7 +578,8 @@ export function buildTargetHitEmbed(
       inline: true,
     }
   );
-  const profitPct = signalData.hit_targets[`target_${signalData.current_target_number}`]?.profitPct;
+  const profitPct = signalData.hit_targets[`tp${signalData.current_target_number}`]?.profitPct;
+  
   fields.push(
     {
       name: "\u{1F4B8} Profit",
@@ -659,10 +660,12 @@ export function buildStopLossRaisedEmbed(
       ? `Stop loss raised to ${fmtPrice(signalData.current_stop_loss)} (break even).\nTrade is now risk-free on remaining position.`
       : `Stop loss raised to ${fmtPrice(signalData.current_stop_loss)} on remaining position.`,
   ];
-  const nextTarget = signalData.targets[`tp${signalData.current_target_number + 1}`];
-  if (nextTarget) {
+  const nextTargetKey = `tp${signalData.current_target_number + 1}`;
+  const nextTarget = signalData.targets?.[nextTargetKey];
+  if (nextTarget?.price != null) {
+    const label = (nextTarget.key ?? nextTargetKey).toString().toUpperCase();
     riskMgmtLines.push(
-      `\u{1F3AF} Next target: ${nextTarget.key.toUpperCase()} at ${fmtPrice(Number(nextTarget.price))}`,
+      `\u{1F3AF} Next target: ${label} at ${fmtPrice(Number(nextTarget.price))}`,
     );
   }
 
@@ -726,7 +729,7 @@ export function buildStopLossHitEmbed(
     },
     {
       name: "\u{1F4B8} Result",
-      value: signalData.stop_loss_percent ? `${signalData.stop_loss_percent}%` : "\u2014",
+      value: signalData.stop_loss_percent != null ? `${signalData.stop_loss_percent}%` : "\u2014",
       inline: true,
     },
     { ...SPACER },
@@ -1008,8 +1011,6 @@ export async function sendStopLossRaisedDiscord(
 export async function sendStopLossHitDiscord(
   signalData: Record<string, any>,
   app: ConnectedApp | null,
-  currentTrackingPrice: number,
-  currentInstrumentPrice: number | null,
   signalId: string,
 ): Promise<void> {
   const discordWebhookUrl = getDiscordWebhookUrl(signalData, app);

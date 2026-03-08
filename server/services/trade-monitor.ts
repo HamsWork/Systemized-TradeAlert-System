@@ -151,8 +151,9 @@ function isAutoTrackEnabled(data: Record<string, any>): boolean {
 }
 
 async function checkSignalTargets(signal: Signal): Promise<void> {
+  if (signal.status !== "active") return;
   const signalData = signal.data as Record<string, any>;
-  if(signal.sourceAppId == null) return;
+  if (signal.sourceAppId == null) return;
   const app = (await storage.getConnectedApp(signal.sourceAppId)) || null;
   if (!app) return;
 
@@ -196,7 +197,8 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
       signalData.next_target_number = nextTargetIndex + 1;
       signalData.remain_quantity -= takeOffQty;
 
-      if (signalData.remain_quantity <= 0) {
+      const allTargetsHit = nextTargetIndex + 1 >= tpLevels.length;
+      if (signalData.remain_quantity <= 0 || allTargetsHit) {
         signalData.status = "completed";
       }
 
@@ -228,7 +230,7 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
 
             signalData.stop_loss_is_break_even = Math.abs(slValue - signalData.entry_tracking_price) < 0.01;
             signalData.risk_value = signalData.stop_loss_is_break_even ? "0% (Risk-Free)" : 
-              profitPctFromInstrument(signalData.entry_tracking_price, slValue, signalData.instrument_type, signalData.direction).toFixed(1);
+              `${profitPctFromInstrument(signalData.entry_tracking_price, slValue, signalData.instrument_type, signalData.direction).toFixed(1)}%`;
             await sendStopLossRaisedDiscord(signalData, app, signal.id);
             storage.createActivity({
               type: "stop_loss_raised",
@@ -244,7 +246,8 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
           }
         }
       }
-      await storage.updateSignal(signal.id, { data: signalData });
+      const completed = signalData.status === "completed";
+      await storage.updateSignal(signal.id, { data: signalData, ...(completed ? { status: "completed" } : {}) });
     }
   }
 
@@ -266,8 +269,8 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
         symbol: signalData.ticker,
         signalId: signal.id,
       }).catch(() => {});
+      await storage.updateSignal(signal.id, { data: signalData, status: "stopped_out" });
     }
-    await storage.updateSignal(signal.id, { data: signalData });
   }
   
 }
