@@ -277,19 +277,16 @@ export function registerSignalRoutes(app: Express) {
             fetchedInstrumentPrice ?? dataForTargetHit.current_instrument_price ?? fallbackInstrumentPrice;
           const currentInstrumentPrice =
             fetchedInstrumentPrice ?? dataForTargetHit.current_instrument_price ?? Number(t.price);
+          dataForTargetHit.current_tp_key = targetKey;
+          dataForTargetHit.current_tp_number = targetKey.replace(/^tp/i, "") || "1";
+          dataForTargetHit.current_tp_price = Number(t.price);
+          dataForTargetHit.current_tp_take_off_percent = Number(t.take_off_percent) || 50;
+          if (t.raise_stop_loss?.price) {
+            dataForTargetHit.current_tp_raise_stop_loss = Number(t.raise_stop_loss.price);
+          }
           await sendTargetHitDiscordAlert(
             dataForTargetHit,
             app,
-            {
-              key: targetKey,
-              price: Number(t.price),
-              takeOffPercent: Number(t.take_off_percent) || 50,
-              raiseStopLoss: t.raise_stop_loss?.price
-                ? Number(t.raise_stop_loss.price)
-                : undefined,
-            },
-            Number(t.price),
-            currentInstrumentPrice,
             signal.id,
           );
           if (updateSignal) {
@@ -351,12 +348,11 @@ export function registerSignalRoutes(app: Express) {
                 : null) ??
             dataForSLRaised.current_instrument_price ??
             currentTrackingPrice;
+          dataForSLRaised.new_stop_loss = newSL;
+          dataForSLRaised.sl_raised_target_key = targetKey;
           await sendStopLossRaisedDiscord(
             dataForSLRaised,
             app,
-            { key: targetKey, raiseStopLoss: newSL },
-            currentTrackingPrice,
-            currentInstrumentPrice,
             signal.id,
           );
           if (updateSignal) {
