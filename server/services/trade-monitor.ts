@@ -161,9 +161,12 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
     ? signalData.direction === "Long" || signalData.direction === "Call"
     : signalData.direction !== "Short";
 
-  const currentInstrumentPrice = await getCurrentInstrumentPrice(signalData, signalData.ticker);
+  const ticker = signalData.ticker;
+  if (!ticker) return;
+  const currentInstrumentPrice = await getCurrentInstrumentPrice(signalData, ticker);
+  const underlyingTicker = signalData.underlying_symbol || signalData.underlying_ticker || ticker;
   const currentTrackingPrice = signalData.underlying_price_based 
-    ? await fetchStockPrice(signalData.underlying_ticker)
+    ? await fetchStockPrice(underlyingTicker)
     : currentInstrumentPrice;
   
   
