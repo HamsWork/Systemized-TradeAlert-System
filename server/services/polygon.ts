@@ -306,8 +306,8 @@ export async function fetchOptionContractPrice(
   right: string,
 ): Promise<{ exists: boolean; price: number | null }> {
   const optionTicker = buildOptionsTicker(symbol, expiration, right, strike);
-
-  const url = `${MASSIVE_API_BASE}/v3/options/contracts/${optionTicker}`;
+  const apiKey = process.env.POLYGON_API_KEY;
+  const url = `${MASSIVE_API_BASE}/v3/snapshot/options/${symbol}/${encodeURIComponent(optionTicker)}?apiKey=${apiKey}`;
 
   const response = await fetch(url);
   if (!response.ok) {
@@ -315,7 +315,7 @@ export async function fetchOptionContractPrice(
     return { exists: false, price: null };
   }
   const data = await response.json();
-  const result = data.result;
+  const result = data.results;
 
   const bid = result.last_quote?.bid;
   const ask = result.last_quote?.ask;

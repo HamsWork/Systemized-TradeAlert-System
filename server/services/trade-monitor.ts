@@ -77,7 +77,6 @@ export async function getCurrentInstrumentPrice(
   const instrumentType = data.instrument_type;
   if (instrumentType === "Options" || instrumentType === "LETF Option") {
     if (data.strike == null || !data.expiration || !data.direction || data.right == null) return null;
-    
     const result = await fetchOptionContractPrice(
       ticker,
       data.expiration,
@@ -174,61 +173,64 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
   signalData.current_tracking_price = currentTrackingPrice;
   signalData.current_instrument_price = currentInstrumentPrice;
 
-  if (signalData.targets && typeof signalData.targets === "object" && signalData.next_target_number < signalData.targets.length) {
-    const nextTarget = signalData.tpLevels?.[signalData.next_target_number];
-    if (nextTarget) {
-      const nextTargetHit = isBullish ? currentTrackingPrice >= nextTarget.price : currentTrackingPrice <= nextTarget.price;
-      if (nextTargetHit) {
-        signalData.current_target_number++;
-        const takeOffPct = nextTarget.takeOffPercent ?? (nextTarget as any).take_off_percent ?? 100;
-        const takeOffQty = signalData.remain_quantity * (takeOffPct / 100);
-        const target_key = `target_${signalData.current_target_number}`;
-        signalData.hit_targets[target_key] = {
-          hitAt: new Date().toISOString(),
-          trackingPrice: currentTrackingPrice,
-          instrumentPrice: currentInstrumentPrice,
-          profitPct: profitPctFromInstrument(signalData.entry_instrument_price, currentInstrumentPrice, signalData.instrument_type, signalData.direction),
-          take_off_quantity: takeOffQty
-        };
-        signalData.current_target_number++;
-        if (signalData.next_target_number != null) signalData.next_target_number++;
+  const tpLevels = parseTargets(signalData, isBullish);
+  const nextTargetIndex = signalData.next_target_number ?? 0;
+  if (tpLevels.length > 0 && nextTargetIndex < tpLevels.length) {
+    const nextTarget = tpLevels[nextTargetIndex];
+    const nextTargetHit = isBullish ? currentTrackingPrice >= nextTarget.price : currentTrackingPrice <= nextTarget.price;
+    if (nextTargetHit) {
+      const takeOffPct = nextTarget.takeOffPercent ?? 100;
+      const takeOffQty = signalData.remain_quantity * (takeOffPct / 100);
+      const targetKey = nextTarget.key ?? `tp${nextTargetIndex + 1}`;
+      signalData.hit_targets[targetKey] = {
+        hitAt: new Date().toISOString(),
+        trackingPrice: currentTrackingPrice,
+        instrumentPrice: currentInstrumentPrice,
+        profitPct: profitPctFromInstrument(signalData.entry_instrument_price, currentInstrumentPrice, signalData.instrument_type, signalData.direction),
+        take_off_quantity: takeOffQty
+      };
+      signalData.current_target_number = nextTargetIndex + 1;
+      signalData.next_target_number = nextTargetIndex + 1;
+      signalData.remain_quantity -= takeOffQty;
 
-        signalData.remain_quantity -= takeOffQty;
+      if (signalData.remain_quantity <= 0) {
+        signalData.status = "completed";
+      }
 
-        if (signalData.remain_quantity <= 0) {
-          signalData.status = "completed";
-        }
+      if (takeOffPct > 0) {
+        signalData.current_tp_number = (signalData.current_tp_number ?? 0) + 1;
+        await sendTargetHitDiscordAlert(signalData, app, signal.id);
+      }
 
-        if (takeOffPct > 0) {
-          signalData.current_tp_number++;
-          await sendTargetHitDiscordAlert(signalData, app, signal.id);
-        }
+      const keyLabel = (targetKey ?? "").toUpperCase();
+      storage.createActivity({
+        type: "target_hit",
+        title: `${keyLabel} hit for ${signalData.ticker}`,
+        description: `${keyLabel} reached at ${fmtPrice(currentTrackingPrice)} (target: ${fmtPrice(nextTarget.price)})`,
+        symbol: signalData.ticker,
+        signalId: signal.id,
+        metadata: {
+          target: nextTarget,
+          signalData: signalData,
+        },
+      }).catch(() => {});
 
-        storage.createActivity({
-          type: "target_hit",
-          title: `${nextTarget.key.toUpperCase()} hit for ${signalData.ticker}`,
-          description: `${nextTarget.key.toUpperCase()} reached at ${fmtPrice(currentTrackingPrice)} (target: ${fmtPrice(nextTarget.price)})`,
-          symbol: signalData.ticker,
-          signalId: signal.id,
-          metadata: {
-            target: nextTarget,
-            signalData: signalData,
-          },
-        }).catch(() => {});
+      const raiseStopLoss = nextTarget.raiseStopLoss ?? (nextTarget as any).raise_stop_loss;
+      if (raiseStopLoss != null){
+        const slValue = typeof raiseStopLoss === "number" ? raiseStopLoss : (raiseStopLoss?.price != null ? Number(raiseStopLoss.price) : null);
+        if (slValue != null) {
+          const isValidRaiseStopLoss = isBullish ? slValue >= signalData.stop_loss : slValue <= signalData.stop_loss;
+          if (isValidRaiseStopLoss) {
+            signalData.current_stop_loss = slValue;
 
-        if (nextTarget.raise_stop_loss){
-          const isValidRaiseStopLoss = isBullish ? nextTarget.raise_stop_loss >= signalData.stop_loss : nextTarget.raise_stop_loss <= signalData.stop_loss;
-          if (isValidRaiseStopLoss) {           
-            signalData.current_stop_loss = nextTarget.raise_stop_loss;
-
-            signalData.stop_loss_is_break_even = Math.abs(nextTarget.raise_stop_loss - signalData.entry_tracking_price) < 0.01;
+            signalData.stop_loss_is_break_even = Math.abs(slValue - signalData.entry_tracking_price) < 0.01;
             signalData.risk_value = signalData.stop_loss_is_break_even ? "0% (Risk-Free)" : 
-              profitPctFromInstrument(signalData.entry_tracking_price, nextTarget.raise_stop_loss, signalData.instrument_type, signalData.direction).toFixed(1);
+              profitPctFromInstrument(signalData.entry_tracking_price, slValue, signalData.instrument_type, signalData.direction).toFixed(1);
             await sendStopLossRaisedDiscord(signalData, app, signal.id);
             storage.createActivity({
               type: "stop_loss_raised",
-              title: `Stop loss raised to ${fmtPrice(nextTarget.raise_stop_loss)} for ${signalData.ticker}`,
-              description: `Stop loss raised to ${fmtPrice(nextTarget.raise_stop_loss)} after ${nextTarget.key.toUpperCase()} hit (current price: ${fmtPrice(currentTrackingPrice)})`,
+              title: `Stop loss raised to ${fmtPrice(slValue)} for ${signalData.ticker}`,
+              description: `Stop loss raised to ${fmtPrice(slValue)} after ${keyLabel} hit (current price: ${fmtPrice(currentTrackingPrice)})`,
               symbol: signalData.ticker,
               signalId: signal.id,
               metadata: {
