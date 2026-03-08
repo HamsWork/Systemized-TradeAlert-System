@@ -366,7 +366,8 @@ async function buildSignalData(
   signalDataObj.underlying_price_based = underlyingPriceBased;
 
   if (underlying_price_based === true) {
-    const intrumentPrice = await getCurrentInstrumentPrice(body, ticker);
+    // getCurrentInstrumentPrice expects snake_case (instrument_type, right, etc.); pass signalDataObj, not body
+    const intrumentPrice = await getCurrentInstrumentPrice(signalDataObj, ticker);
     if (intrumentPrice == null || intrumentPrice <= 0) {
       errors.push("Instrument price Error");
     } else {
