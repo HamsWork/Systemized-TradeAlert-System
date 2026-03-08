@@ -240,11 +240,11 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
             }).catch(() => {});
           }
         }
-        await storage.updateSignal(signal.id, { data: signalData });
-      } 
+      }
+      await storage.updateSignal(signal.id, { data: signalData });
     }
   }
-  
+
   if (signalData.current_stop_loss){
     const stopLossHit = isBullish ? currentTrackingPrice <= signalData.current_stop_loss : currentTrackingPrice >= signalData.current_stop_loss;
     if (stopLossHit) {
