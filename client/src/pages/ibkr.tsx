@@ -35,6 +35,10 @@ import {
   Filter,
   ChevronLeft,
   ChevronRight,
+  DollarSign,
+  Wallet,
+  ShieldCheck,
+  Activity,
 } from "lucide-react";
 import type { IbkrOrder, IbkrPosition, Integration, ConnectedApp } from "@shared/schema";
 import { formatCurrency, formatNumber, formatRelativeTime } from "@/lib/formatters";
@@ -185,6 +189,172 @@ function SideBadge({ side }: { side: string }) {
       {isBuy ? <ArrowUpRight className="mr-1 h-3 w-3" /> : <ArrowDownRight className="mr-1 h-3 w-3" />}
       {side.toUpperCase()}
     </Badge>
+  );
+}
+
+interface AccountSummary {
+  accountId: string;
+  netLiquidation: number | null;
+  totalCashValue: number | null;
+  buyingPower: number | null;
+  grossPositionValue: number | null;
+  availableFunds: number | null;
+  excessLiquidity: number | null;
+  settledCash: number | null;
+  accruedCash: number | null;
+  cushion: number | null;
+  maintMarginReq: number | null;
+  initMarginReq: number | null;
+  unrealizedPnL: number | null;
+  realizedPnL: number | null;
+  dailyPnL: number | null;
+  lastUpdated: string;
+}
+
+function PnlValue({ value, prefix }: { value: number | null; prefix?: string }) {
+  if (value == null) return <span className="text-muted-foreground">—</span>;
+  const isPositive = value >= 0;
+  return (
+    <span className={isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}>
+      {prefix}{isPositive ? "+" : ""}{formatCurrency(value)}
+    </span>
+  );
+}
+
+function AccountOverview({ accountSummary }: { accountSummary: AccountSummary[] }) {
+  if (accountSummary.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      {accountSummary.map((acct) => (
+        <Card key={acct.accountId} data-testid={`card-account-overview-${acct.accountId}`}>
+          <CardHeader className="pb-2 pt-4 px-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Wallet className="h-4 w-4 text-purple-500" />
+                <CardTitle className="text-sm font-semibold">{acct.accountId}</CardTitle>
+              </div>
+              <span className="text-[11px] text-muted-foreground">
+                Updated {formatRelativeTime(acct.lastUpdated)}
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent className="px-4 pb-4 pt-0">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              <MetricTile
+                label="Net Liquidation"
+                value={acct.netLiquidation != null ? formatCurrency(acct.netLiquidation) : "—"}
+                icon={DollarSign}
+                accent="text-blue-500"
+                testId="metric-net-liq"
+                accountId={acct.accountId}
+              />
+              <MetricTile
+                label="Buying Power"
+                value={acct.buyingPower != null ? formatCurrency(acct.buyingPower) : "—"}
+                icon={ShieldCheck}
+                accent="text-emerald-500"
+                testId="metric-buying-power"
+                accountId={acct.accountId}
+              />
+              <MetricTile
+                label="Daily P&L"
+                value={<PnlValue value={acct.dailyPnL} />}
+                icon={Activity}
+                accent="text-amber-500"
+                testId="metric-daily-pnl"
+                accountId={acct.accountId}
+              />
+              <MetricTile
+                label="Unrealized P&L"
+                value={<PnlValue value={acct.unrealizedPnL} />}
+                icon={TrendingUp}
+                accent="text-cyan-500"
+                testId="metric-unrealized-pnl"
+                accountId={acct.accountId}
+              />
+              <MetricTile
+                label="Realized P&L"
+                value={<PnlValue value={acct.realizedPnL} />}
+                icon={BarChart3}
+                accent="text-purple-500"
+                testId="metric-realized-pnl"
+                accountId={acct.accountId}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-3">
+              <MetricTile
+                label="Cash Balance"
+                value={acct.totalCashValue != null ? formatCurrency(acct.totalCashValue) : "—"}
+                icon={Wallet}
+                accent="text-green-500"
+                testId="metric-cash"
+                accountId={acct.accountId}
+                small
+              />
+              <MetricTile
+                label="Gross Position Value"
+                value={acct.grossPositionValue != null ? formatCurrency(acct.grossPositionValue) : "—"}
+                icon={Layers}
+                accent="text-indigo-500"
+                testId="metric-gross-pos"
+                accountId={acct.accountId}
+                small
+              />
+              <MetricTile
+                label="Available Funds"
+                value={acct.availableFunds != null ? formatCurrency(acct.availableFunds) : "—"}
+                icon={DollarSign}
+                accent="text-teal-500"
+                testId="metric-avail-funds"
+                accountId={acct.accountId}
+                small
+              />
+              <MetricTile
+                label="Excess Liquidity"
+                value={acct.excessLiquidity != null ? formatCurrency(acct.excessLiquidity) : "—"}
+                icon={ShieldCheck}
+                accent="text-sky-500"
+                testId="metric-excess-liq"
+                accountId={acct.accountId}
+                small
+              />
+              <MetricTile
+                label="Margin Cushion"
+                value={acct.cushion != null ? `${(acct.cushion * 100).toFixed(1)}%` : "—"}
+                icon={ShieldCheck}
+                accent="text-orange-500"
+                testId="metric-cushion"
+                accountId={acct.accountId}
+                small
+              />
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function MetricTile({ label, value, icon: Icon, accent, testId, small, accountId }: {
+  label: string;
+  value: React.ReactNode;
+  icon: ElementType;
+  accent: string;
+  testId: string;
+  small?: boolean;
+  accountId?: string;
+}) {
+  const fullTestId = accountId ? `${testId}-${accountId}` : testId;
+  return (
+    <div className={`rounded-lg border bg-card p-3 ${small ? "py-2" : ""}`} data-testid={fullTestId}>
+      <div className="flex items-center justify-between mb-1">
+        <p className={`font-medium text-muted-foreground uppercase tracking-wider ${small ? "text-[10px]" : "text-[11px]"}`}>{label}</p>
+        <Icon className={`h-3.5 w-3.5 ${accent}`} />
+      </div>
+      <p className={`font-bold ${small ? "text-sm" : "text-lg"}`}>{value}</p>
+    </div>
   );
 }
 
@@ -387,6 +557,11 @@ export default function IbkrPage() {
     refetchInterval: 5000,
   });
 
+  const { data: accountSummary = [] } = useQuery<AccountSummary[]>({
+    queryKey: ["/api/ibkr/account-summary"],
+    refetchInterval: 10000,
+  });
+
   const { data: ibkrIntegrations = [] } = useQuery<Integration[]>({
     queryKey: ["/api/integrations"],
     select: (data: Integration[]) => data.filter(i => i.type === "ibkr"),
@@ -461,6 +636,8 @@ export default function IbkrPage() {
           </div>
         }
       />
+
+      <AccountOverview accountSummary={accountSummary} />
 
       <SummaryCards orders={filteredOrders} positions={filteredPositions} />
 

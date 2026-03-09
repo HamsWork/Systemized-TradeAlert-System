@@ -120,6 +120,11 @@ export function registerIbkrRoutes(app: Express) {
     res.json(ibkrBars);
   }));
 
+  app.get("/api/ibkr/account-summary", asyncHandler(async (_req, res) => {
+    const summary = ibkrSyncManager.getAccountSummary();
+    res.json(summary);
+  }));
+
   app.get("/api/ibkr/status", asyncHandler(async (_req, res) => {
     const status = ibkrSyncManager.getConnectionStatus();
     const result: Record<string, boolean> = {};

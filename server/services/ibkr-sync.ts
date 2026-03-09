@@ -43,10 +43,32 @@ function mapOrderType(ibkrType: string): string {
   return map[ibkrType] || ibkrType.toLowerCase();
 }
 
+export interface AccountSummaryData {
+  accountId: string;
+  netLiquidation: number | null;
+  totalCashValue: number | null;
+  buyingPower: number | null;
+  grossPositionValue: number | null;
+  availableFunds: number | null;
+  excessLiquidity: number | null;
+  settledCash: number | null;
+  accruedCash: number | null;
+  cushion: number | null;
+  maintMarginReq: number | null;
+  initMarginReq: number | null;
+  unrealizedPnL: number | null;
+  realizedPnL: number | null;
+  dailyPnL: number | null;
+  lastUpdated: string;
+}
+
 class IbkrSyncManager {
   private clients: Map<string, IbkrClient> = new Map();
   private syncInterval: ReturnType<typeof setInterval> | null = null;
   private running = false;
+  private accountSummaryCache: Map<string, AccountSummaryData[]> = new Map();
+  private acctSummaryReqCounter = 30000;
+  private syncInFlight = false;
 
   async start(): Promise<void> {
     if (this.running) return;
@@ -91,6 +113,7 @@ class IbkrSyncManager {
       if (!ibkrIntegrations.find(i => i.id === id)) {
         this.clients.get(id)?.disconnect();
         this.clients.delete(id);
+        this.accountSummaryCache.delete(id);
       }
     }
   }
@@ -148,10 +171,21 @@ class IbkrSyncManager {
       client.disconnect();
       this.clients.delete(integrationId);
     }
+    this.accountSummaryCache.delete(integrationId);
     await storage.updateIntegration(integrationId, { status: "disconnected" } as any);
   }
 
   private async syncAll(): Promise<void> {
+    if (this.syncInFlight) return;
+    this.syncInFlight = true;
+    try {
+      await this.doSyncAll();
+    } finally {
+      this.syncInFlight = false;
+    }
+  }
+
+  private async doSyncAll(): Promise<void> {
     for (const [integrationId, client] of this.clients) {
       if (!client.isConnected) {
         console.log(`[IBKR Sync] Skipping ${integrationId} - not connected`);
@@ -161,11 +195,13 @@ class IbkrSyncManager {
         await Promise.all([
           this.syncOrders(integrationId, client),
           this.syncPositions(integrationId, client),
+          this.syncAccountSummary(integrationId, client),
         ]);
       } catch (err: any) {
         console.error(`[IBKR Sync] Error syncing ${integrationId}: ${err.message}`);
         if (err.message?.includes("disconnect") || err.message?.includes("socket")) {
           this.clients.delete(integrationId);
+          this.accountSummaryCache.delete(integrationId);
           await storage.updateIntegration(integrationId, { status: "disconnected" } as any);
         }
       }
@@ -389,6 +425,66 @@ class IbkrSyncManager {
       }
     }
     return [];
+  }
+
+  private async syncAccountSummary(integrationId: string, client: IbkrClient): Promise<void> {
+    try {
+      const reqId = this.acctSummaryReqCounter++;
+      const rawSummary = await client.fetchAccountSummary(reqId);
+      const accounts: AccountSummaryData[] = [];
+
+      for (const [accountId, tags] of Object.entries(rawSummary)) {
+        if (accountId === "All") continue;
+        const parseNum = (v: string | undefined): number | null => {
+          if (v == null || v === "") return null;
+          const n = parseFloat(v);
+          return isNaN(n) ? null : n;
+        };
+
+        const summary: AccountSummaryData = {
+          accountId,
+          netLiquidation: parseNum(tags["NetLiquidation"]),
+          totalCashValue: parseNum(tags["TotalCashValue"]),
+          buyingPower: parseNum(tags["BuyingPower"]),
+          grossPositionValue: parseNum(tags["GrossPositionValue"]),
+          availableFunds: parseNum(tags["AvailableFunds"]),
+          excessLiquidity: parseNum(tags["ExcessLiquidity"]),
+          settledCash: parseNum(tags["SettledCash"]),
+          accruedCash: parseNum(tags["AccruedCash"]),
+          cushion: parseNum(tags["Cushion"]),
+          maintMarginReq: parseNum(tags["MaintMarginReq"]),
+          initMarginReq: parseNum(tags["InitMarginReq"]),
+          unrealizedPnL: parseNum(tags["UnrealizedPnL"]),
+          realizedPnL: parseNum(tags["RealizedPnL"]),
+          dailyPnL: null,
+          lastUpdated: new Date().toISOString(),
+        };
+
+        const pnlReqId = this.acctSummaryReqCounter++;
+        const pnl = await client.fetchAccountPnL(accountId, pnlReqId);
+        if (pnl) {
+          summary.dailyPnL = pnl.dailyPnL;
+          if (summary.unrealizedPnL == null) summary.unrealizedPnL = pnl.unrealizedPnL;
+          if (summary.realizedPnL == null) summary.realizedPnL = pnl.realizedPnL;
+        }
+
+        accounts.push(summary);
+      }
+
+      if (accounts.length > 0) {
+        this.accountSummaryCache.set(integrationId, accounts);
+      }
+    } catch (err: any) {
+      console.warn(`[IBKR Sync] Account summary fetch failed for ${integrationId}: ${err.message}`);
+    }
+  }
+
+  getAccountSummary(): AccountSummaryData[] {
+    const all: AccountSummaryData[] = [];
+    for (const accounts of this.accountSummaryCache.values()) {
+      all.push(...accounts);
+    }
+    return all;
   }
 
   getConnectionStatus(): Map<string, boolean> {

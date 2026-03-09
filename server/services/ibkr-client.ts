@@ -344,4 +344,89 @@ export class IbkrClient {
   cancelPositions(): void {
     this.ib.cancelPositions();
   }
+
+  fetchAccountSummary(reqId: number): Promise<Record<string, Record<string, string>>> {
+    return new Promise((resolve) => {
+      const data: Record<string, Record<string, string>> = {};
+      const timeout = setTimeout(() => {
+        cleanup();
+        this.ib.cancelAccountSummary(reqId);
+        resolve(data);
+      }, 8000);
+
+      const onAccountSummary = (_reqId: number, account: string, tag: string, value: string, _currency: string) => {
+        if (_reqId !== reqId) return;
+        if (!data[account]) data[account] = {};
+        data[account][tag] = value;
+      };
+
+      const onAccountSummaryEnd = (_reqId: number) => {
+        if (_reqId !== reqId) return;
+        clearTimeout(timeout);
+        cleanup();
+        this.ib.cancelAccountSummary(reqId);
+        resolve(data);
+      };
+
+      const onError = (_err: Error, code: number, errReqId: number) => {
+        if (errReqId !== reqId) return;
+        clearTimeout(timeout);
+        cleanup();
+        this.ib.cancelAccountSummary(reqId);
+        resolve(data);
+      };
+
+      const cleanup = () => {
+        (this.ib.off as (ev: string, cb: (...args: any[]) => void) => void)(EventName.accountSummary, onAccountSummary);
+        (this.ib.off as (ev: string, cb: (...args: any[]) => void) => void)(EventName.accountSummaryEnd, onAccountSummaryEnd);
+        this.ib.off(EventName.error, onError);
+      };
+
+      (this.ib.on as (ev: string, cb: (...args: any[]) => void) => void)(EventName.accountSummary, onAccountSummary);
+      (this.ib.on as (ev: string, cb: (...args: any[]) => void) => void)(EventName.accountSummaryEnd, onAccountSummaryEnd);
+      this.ib.on(EventName.error, onError);
+
+      this.ib.reqAccountSummary(reqId, "All", "$LEDGER:ALL,NetLiquidation,TotalCashValue,BuyingPower,GrossPositionValue,AvailableFunds,ExcessLiquidity,SettledCash,AccruedCash,Cushion,MaintMarginReq,InitMarginReq,UnrealizedPnL,RealizedPnL");
+    });
+  }
+
+  fetchAccountPnL(account: string, reqId: number): Promise<{ dailyPnL: number; unrealizedPnL: number; realizedPnL: number } | null> {
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        cleanup();
+        this.ib.cancelPnL(reqId);
+        resolve(null);
+      }, 5000);
+
+      const onPnL = (_reqId: number, dailyPnL: number, unrealizedPnL?: number, realizedPnL?: number) => {
+        if (_reqId !== reqId) return;
+        clearTimeout(timeout);
+        cleanup();
+        this.ib.cancelPnL(reqId);
+        resolve({
+          dailyPnL: dailyPnL || 0,
+          unrealizedPnL: unrealizedPnL || 0,
+          realizedPnL: realizedPnL || 0,
+        });
+      };
+
+      const onError = (_err: Error, code: number, errReqId: number) => {
+        if (errReqId !== reqId) return;
+        clearTimeout(timeout);
+        cleanup();
+        this.ib.cancelPnL(reqId);
+        resolve(null);
+      };
+
+      const cleanup = () => {
+        (this.ib.off as (ev: string, cb: (...args: any[]) => void) => void)(EventName.pnl, onPnL);
+        this.ib.off(EventName.error, onError);
+      };
+
+      (this.ib.on as (ev: string, cb: (...args: any[]) => void) => void)(EventName.pnl, onPnL);
+      this.ib.on(EventName.error, onError);
+
+      this.ib.reqPnL(reqId, account);
+    });
+  }
 }
