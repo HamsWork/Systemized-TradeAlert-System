@@ -32,7 +32,7 @@ import {
   BarChart3,
   Layers,
   History,
-  Filter,
+
   ChevronLeft,
   ChevronRight,
   DollarSign,
@@ -541,7 +541,9 @@ function PositionsTable({ positions, page, onPageChange }: { positions: IbkrPosi
 
 export default function IbkrPage() {
   const [selectedAccount, setSelectedAccount] = useState<string>("all");
-  const [appFilter, setAppFilter] = useState<string>("all");
+  const [ordersAppFilter, setOrdersAppFilter] = useState<string>("all");
+  const [positionsAppFilter, setPositionsAppFilter] = useState<string>("all");
+  const [historyAppFilter, setHistoryAppFilter] = useState<string>("all");
   const [orderStatusFilter, setOrderStatusFilter] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<string>("orders");
   const [ordersPage, setOrdersPage] = useState(1);
@@ -572,44 +574,58 @@ export default function IbkrPage() {
     queryKey: ["/api/connected-apps"],
   });
 
-  const selectedIntegration = selectedAccount !== "all"
-    ? ibkrIntegrations.find(i => i.id === selectedAccount)
+  const effectiveAccount = ibkrIntegrations.length === 1
+    ? ibkrIntegrations[0].id
+    : selectedAccount;
+
+  const selectedIntegration = effectiveAccount !== "all"
+    ? ibkrIntegrations.find(i => i.id === effectiveAccount)
     : null;
   const selectedAccountId = selectedIntegration
     ? (selectedIntegration.config as Record<string, any> | null)?.accountId
     : null;
 
-  const accountOrders = selectedAccount !== "all"
-    ? orders.filter(o => o.integrationId === selectedAccount)
+  const accountOrders = effectiveAccount !== "all"
+    ? orders.filter(o => o.integrationId === effectiveAccount)
     : orders;
 
-  const accountPositions = selectedAccount !== "all"
-    ? positions.filter(p => p.integrationId === selectedAccount)
+  const accountPositions = effectiveAccount !== "all"
+    ? positions.filter(p => p.integrationId === effectiveAccount)
     : positions;
 
   const filteredAccountSummary = selectedAccountId
     ? accountSummary.filter(a => a.accountId === selectedAccountId)
     : accountSummary;
 
-  const sourceApps = Array.from(new Set(
-    [...accountOrders.map(o => o.sourceAppName), ...accountPositions.map(p => p.sourceAppName)]
-      .filter(Boolean)
+  const orderSourceApps = Array.from(new Set(
+    accountOrders.map(o => o.sourceAppName).filter(Boolean)
   )) as string[];
 
+  const positionSourceApps = Array.from(new Set(
+    accountPositions.map(p => p.sourceAppName).filter(Boolean)
+  )) as string[];
+
+  const allSourceApps = Array.from(new Set([...orderSourceApps, ...positionSourceApps]));
+
   const filteredOrders = accountOrders.filter(o => {
-    if (appFilter !== "all" && o.sourceAppName !== appFilter) return false;
+    if (ordersAppFilter !== "all" && o.sourceAppName !== ordersAppFilter) return false;
     if (orderStatusFilter !== "all" && o.status !== orderStatusFilter) return false;
     return true;
   });
 
   const filteredPositions = accountPositions.filter(p => {
-    if (appFilter !== "all" && p.sourceAppName !== appFilter) return false;
+    if (positionsAppFilter !== "all" && p.sourceAppName !== positionsAppFilter) return false;
+    return true;
+  });
+
+  const historyFilteredOrders = accountOrders.filter(o => {
+    if (historyAppFilter !== "all" && o.sourceAppName !== historyAppFilter) return false;
     return true;
   });
 
   const activeOrders = filteredOrders.filter(o => o.status === "submitted" || o.status === "pending");
-  const filledOrders = filteredOrders.filter(o => o.status === "filled");
-  const historicalOrders = filteredOrders.filter(o => o.status === "cancelled" || o.status === "rejected");
+  const filledOrders = historyFilteredOrders.filter(o => o.status === "filled");
+  const historicalOrders = historyFilteredOrders.filter(o => o.status === "cancelled" || o.status === "rejected");
 
   const isLoading = ordersLoading || positionsLoading;
 
@@ -637,52 +653,33 @@ export default function IbkrPage() {
         accent="text-purple-500"
         testId="heading-ibkr"
         actions={
-          <div className="flex items-center gap-3">
-            {ibkrIntegrations.length > 0 && (
-              <div className="flex items-center gap-1.5">
-                <Landmark className="h-3.5 w-3.5 text-muted-foreground" />
-                <Select value={selectedAccount} onValueChange={(v) => { setSelectedAccount(v); setAppFilter("all"); setOrdersPage(1); setPositionsPage(1); setHistoryPage(1); }}>
-                  <SelectTrigger className="w-[200px] h-9 text-sm" data-testid="select-account-filter">
-                    <SelectValue placeholder="All Accounts" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Accounts</SelectItem>
-                    {ibkrIntegrations.map(acct => {
-                      const cfg = acct.config as Record<string, any> | null;
-                      return (
-                        <SelectItem key={acct.id} value={acct.id} data-testid={`select-account-${acct.id}`}>
-                          <div className="flex items-center gap-2">
-                            <span>{acct.name}</span>
-                            {cfg?.accountId && <span className="text-muted-foreground">({cfg.accountId})</span>}
-                          </div>
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+          ibkrIntegrations.length > 1 ? (
             <div className="flex items-center gap-1.5">
-              <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-              <Select value={appFilter} onValueChange={(v) => { setAppFilter(v); setOrdersPage(1); setPositionsPage(1); setHistoryPage(1); }}>
-                <SelectTrigger className="w-[160px] h-9 text-sm" data-testid="select-app-filter">
-                  <SelectValue placeholder="All Apps" />
+              <Landmark className="h-3.5 w-3.5 text-muted-foreground" />
+              <Select value={selectedAccount} onValueChange={(v) => { setSelectedAccount(v); setOrdersAppFilter("all"); setPositionsAppFilter("all"); setHistoryAppFilter("all"); setOrdersPage(1); setPositionsPage(1); setHistoryPage(1); }}>
+                <SelectTrigger className="w-[220px] h-9 text-sm" data-testid="select-account-filter">
+                  <SelectValue placeholder="All Accounts" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Apps</SelectItem>
-                  {sourceApps.map(app => (
-                    <SelectItem key={app} value={app}>{app}</SelectItem>
-                  ))}
+                  <SelectItem value="all">All Accounts</SelectItem>
+                  {ibkrIntegrations.map(acct => {
+                    const cfg = acct.config as Record<string, any> | null;
+                    return (
+                      <SelectItem key={acct.id} value={acct.id} data-testid={`select-account-${acct.id}`}>
+                        {acct.name}{cfg?.accountId ? ` (${cfg.accountId})` : ""}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
-          </div>
+          ) : undefined
         }
       />
 
       <AccountOverview accountSummary={filteredAccountSummary} />
 
-      <SummaryCards orders={filteredOrders} positions={filteredPositions} />
+      <SummaryCards orders={accountOrders} positions={accountPositions} />
 
       <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setOrderStatusFilter("all"); setOrdersPage(1); setPositionsPage(1); setHistoryPage(1); }} className="space-y-4">
         <div className="flex items-center justify-between">
@@ -707,16 +704,31 @@ export default function IbkrPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">Active Orders</CardTitle>
-                <Select value={orderStatusFilter} onValueChange={(v) => { setOrderStatusFilter(v); setOrdersPage(1); }}>
-                  <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="select-order-status-filter">
-                    <SelectValue placeholder="All Statuses" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="submitted">Submitted</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center gap-2">
+                  {orderSourceApps.length > 0 && (
+                    <Select value={ordersAppFilter} onValueChange={(v) => { setOrdersAppFilter(v); setOrdersPage(1); }}>
+                      <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="select-orders-app-filter">
+                        <SelectValue placeholder="All Apps" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Apps</SelectItem>
+                        {orderSourceApps.map(app => (
+                          <SelectItem key={app} value={app}>{app}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <Select value={orderStatusFilter} onValueChange={(v) => { setOrderStatusFilter(v); setOrdersPage(1); }}>
+                    <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="select-order-status-filter">
+                      <SelectValue placeholder="All Statuses" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      <SelectItem value="submitted">Submitted</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="pt-0">
@@ -728,7 +740,22 @@ export default function IbkrPage() {
         <TabsContent value="positions" className="space-y-4">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Open Positions</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Open Positions</CardTitle>
+                {positionSourceApps.length > 0 && (
+                  <Select value={positionsAppFilter} onValueChange={(v) => { setPositionsAppFilter(v); setPositionsPage(1); }}>
+                    <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="select-positions-app-filter">
+                      <SelectValue placeholder="All Apps" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Apps</SelectItem>
+                      {positionSourceApps.map(app => (
+                        <SelectItem key={app} value={app}>{app}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="pt-0">
               <PositionsTable positions={filteredPositions} page={positionsPage} onPageChange={setPositionsPage} />
@@ -741,17 +768,32 @@ export default function IbkrPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">Order History</CardTitle>
-                <Select value={orderStatusFilter} onValueChange={(v) => { setOrderStatusFilter(v); setHistoryPage(1); }}>
-                  <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="select-history-status-filter">
-                    <SelectValue placeholder="All Statuses" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="filled">Filled</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
-                    <SelectItem value="rejected">Rejected</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center gap-2">
+                  {orderSourceApps.length > 0 && (
+                    <Select value={historyAppFilter} onValueChange={(v) => { setHistoryAppFilter(v); setHistoryPage(1); }}>
+                      <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="select-history-app-filter">
+                        <SelectValue placeholder="All Apps" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Apps</SelectItem>
+                        {orderSourceApps.map(app => (
+                          <SelectItem key={app} value={app}>{app}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <Select value={orderStatusFilter} onValueChange={(v) => { setOrderStatusFilter(v); setHistoryPage(1); }}>
+                    <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="select-history-status-filter">
+                      <SelectValue placeholder="All Statuses" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      <SelectItem value="filled">Filled</SelectItem>
+                      <SelectItem value="cancelled">Cancelled</SelectItem>
+                      <SelectItem value="rejected">Rejected</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="pt-0">
