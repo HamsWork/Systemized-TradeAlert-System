@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,16 +32,20 @@ import {
   BarChart3,
   Layers,
   History,
-
   ChevronLeft,
   ChevronRight,
   DollarSign,
   Wallet,
   ShieldCheck,
   Activity,
+  Plug,
+  Unplug,
+  Loader2,
 } from "lucide-react";
 import type { IbkrOrder, IbkrPosition, Integration, ConnectedApp } from "@shared/schema";
 import { formatCurrency, formatNumber, formatRelativeTime } from "@/lib/formatters";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import type { ElementType } from "react";
@@ -189,6 +193,115 @@ function SideBadge({ side }: { side: string }) {
       {isBuy ? <ArrowUpRight className="mr-1 h-3 w-3" /> : <ArrowDownRight className="mr-1 h-3 w-3" />}
       {side.toUpperCase()}
     </Badge>
+  );
+}
+
+function ConnectionStatus({ integrations }: { integrations: Integration[] }) {
+  const { toast } = useToast();
+
+  const { data: statusMap = {} } = useQuery<Record<string, boolean>>({
+    queryKey: ["/api/ibkr/status"],
+    refetchInterval: 5000,
+  });
+
+  const connectMutation = useMutation({
+    mutationFn: async (integrationId: string) => {
+      await apiRequest("POST", `/api/ibkr/connect/${integrationId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/ibkr/status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/ibkr/account-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
+      toast({ title: "Connected", description: "IBKR connection established" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Connection failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const disconnectMutation = useMutation({
+    mutationFn: async (integrationId: string) => {
+      await apiRequest("POST", `/api/ibkr/disconnect/${integrationId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/ibkr/status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/ibkr/account-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
+      toast({ title: "Disconnected", description: "IBKR connection closed" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Disconnect failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  if (integrations.length === 0) return null;
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      {integrations.map((integration) => {
+        const cfg = integration.config as Record<string, any> | null;
+        const isConnected = statusMap[integration.id] === true;
+        const isBusy = (connectMutation.isPending && connectMutation.variables === integration.id)
+          || (disconnectMutation.isPending && disconnectMutation.variables === integration.id);
+
+        return (
+          <Card key={integration.id} data-testid={`card-connection-${integration.id}`}>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`flex items-center justify-center h-9 w-9 rounded-lg ${isConnected ? "bg-emerald-500/10" : "bg-muted"}`}>
+                    {isConnected
+                      ? <Plug className="h-4 w-4 text-emerald-500" />
+                      : <Unplug className="h-4 w-4 text-muted-foreground" />
+                    }
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold truncate" data-testid={`text-connection-name-${integration.id}`}>{integration.name}</p>
+                    <div className="flex items-center gap-2">
+                      {cfg?.accountId && (
+                        <span className="text-xs text-muted-foreground font-mono">{cfg.accountId}</span>
+                      )}
+                      <Badge
+                        variant={isConnected ? "default" : "secondary"}
+                        className={`text-[10px] px-1.5 py-0 ${isConnected ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15" : ""}`}
+                        data-testid={`badge-status-${integration.id}`}
+                      >
+                        {isConnected ? "Connected" : "Disconnected"}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+                <Button
+                  variant={isConnected ? "outline" : "default"}
+                  size="sm"
+                  className="h-8 text-xs shrink-0"
+                  disabled={isBusy}
+                  onClick={() => isConnected
+                    ? disconnectMutation.mutate(integration.id)
+                    : connectMutation.mutate(integration.id)
+                  }
+                  data-testid={`button-toggle-connection-${integration.id}`}
+                >
+                  {isBusy ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : isConnected ? (
+                    <>
+                      <Unplug className="h-3.5 w-3.5 mr-1.5" />
+                      Disconnect
+                    </>
+                  ) : (
+                    <>
+                      <Plug className="h-3.5 w-3.5 mr-1.5" />
+                      Connect
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
   );
 }
 
@@ -672,6 +785,8 @@ export default function IbkrPage() {
           ) : undefined
         }
       />
+
+      <ConnectionStatus integrations={ibkrIntegrations} />
 
       <AccountOverview accountSummary={filteredAccountSummary} />
 
