@@ -3,6 +3,13 @@ import { storage } from "../storage";
 import { asyncHandler } from "../lib/async-handler";
 import { sendDirectWebhook } from "../services/discord";
 import { generateAllTemplates } from "../services/discord-preview";
+import {
+  generateAllTemplateGroups,
+  getDefaultTemplates,
+  buildSampleVariables,
+  renderTemplate,
+  type TemplateEmbed,
+} from "../services/discord-templates";
 
 function getParam(req: any, name: string): string {
   return req.params[name] as string;
@@ -40,37 +47,75 @@ export function registerDiscordRoutes(app: Express) {
   );
 
   app.get(
+    "/api/discord-templates/var-templates",
+    asyncHandler(async (_req, res) => {
+      const groups = generateAllTemplateGroups();
+      const result = groups.map(g => ({
+        instrumentType: g.instrumentType,
+        ticker: g.ticker,
+        templates: g.templates.map(t => {
+          const sampleVars = buildSampleVariables(g.instrumentType, t.type);
+          const rendered = renderTemplate(t.embed, sampleVars);
+          return {
+            type: t.type,
+            label: t.label,
+            content: t.content,
+            template: t.embed,
+            sampleVars,
+            preview: {
+              content: t.content,
+              embed: rendered,
+            },
+            isCustom: false,
+          };
+        }),
+      }));
+      res.json(result);
+    }),
+  );
+
+  app.get(
     "/api/discord-templates/app/:appId",
     asyncHandler(async (req, res) => {
       const appId = getParam(req, "appId");
 
-      const app = await storage.getConnectedApp(appId);
-      if (!app) return res.status(404).json({ message: "App not found" });
+      const connectedApp = await storage.getConnectedApp(appId);
+      if (!connectedApp) return res.status(404).json({ message: "App not found" });
 
-      const defaults = generateAllTemplates();
       const overrides = await storage.getDiscordTemplatesByApp(appId);
-
       const overrideMap = new Map<string, typeof overrides[0]>();
       for (const o of overrides) {
         overrideMap.set(`${o.instrumentType}::${o.messageType}`, o);
       }
 
-      const result = defaults.map(group => ({
-        instrumentType: group.instrumentType,
-        ticker: group.ticker,
-        templates: group.templates.map(t => {
-          const key = `${group.instrumentType}::${t.type}`;
+      const groups = generateAllTemplateGroups();
+      const result = groups.map(g => ({
+        instrumentType: g.instrumentType,
+        ticker: g.ticker,
+        templates: g.templates.map(t => {
+          const key = `${g.instrumentType}::${t.type}`;
           const override = overrideMap.get(key);
-          if (override) {
-            return {
-              type: t.type,
-              label: override.label || t.label,
-              content: override.content ?? t.content,
-              embed: override.embedJson as any || t.embed,
-              isCustom: true,
-            };
-          }
-          return { ...t, isCustom: false };
+          const templateEmbed = override
+            ? (override.embedJson as TemplateEmbed)
+            : t.embed;
+          const content = override ? (override.content ?? t.content) : t.content;
+          const label = override ? (override.label || t.label) : t.label;
+
+          const sampleVars = buildSampleVariables(g.instrumentType, t.type);
+          const rendered = renderTemplate(templateEmbed, sampleVars);
+
+          return {
+            type: t.type,
+            label,
+            content,
+            template: templateEmbed,
+            sampleVars,
+            preview: {
+              content,
+              embed: rendered,
+            },
+            isCustom: !!override,
+          };
         }),
       }));
 

@@ -3,6 +3,10 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { type InsertIntegration, type ConnectedApp } from "@shared/schema";
+import {
+  VARIABLE_CATEGORIES,
+  getVariablesForMessageType,
+} from "@shared/discord-template-vars";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +35,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
+import {
   MessageSquare,
   Send,
   Loader2,
@@ -46,6 +56,8 @@ import {
   RotateCcw,
   Pencil,
   Check,
+  Copy,
+  Info,
 } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import { useForm } from "react-hook-form";
@@ -165,7 +177,15 @@ function AddDiscordChannelDialog({ open, onOpenChange, onCreated }: { open: bool
   );
 }
 
-interface DiscordPreviewEmbed {
+interface TemplateEmbed {
+  description?: string;
+  color: string;
+  fields?: { name: string; value: string; inline?: boolean }[];
+  footer?: string;
+  timestamp?: boolean;
+}
+
+interface RenderedEmbed {
   description?: string;
   color: number;
   fields?: { name: string; value: string; inline?: boolean }[];
@@ -173,18 +193,23 @@ interface DiscordPreviewEmbed {
   timestamp?: string;
 }
 
-interface DiscordPreviewMsg {
+interface TemplateMsg {
   type: string;
   label: string;
   content: string;
-  embed: DiscordPreviewEmbed;
+  template: TemplateEmbed;
+  sampleVars: Record<string, string>;
+  preview: {
+    content: string;
+    embed: RenderedEmbed;
+  };
   isCustom?: boolean;
 }
 
 interface TemplateGroup {
   instrumentType: string;
   ticker: string;
-  templates: DiscordPreviewMsg[];
+  templates: TemplateMsg[];
 }
 
 interface DiscordChannel {
@@ -223,15 +248,14 @@ const TYPE_COLORS: Record<string, string> = {
   trade_closed_manually: "bg-gray-500/10 text-gray-500 border-gray-500/20",
 };
 
-function DiscordEmbed({ msg }: { msg: DiscordPreviewMsg }) {
-  const embed = msg.embed;
+function DiscordEmbed({ embed }: { embed: RenderedEmbed }) {
   const borderColor = colorToHex(embed.color);
   const fields = embed.fields?.filter(f => f.name !== "\u200b") || [];
   const inlineFields = fields.filter(f => f.inline);
   const blockFields = fields.filter(f => !f.inline);
 
   return (
-    <div className="rounded-md overflow-hidden bg-[#2b2d31] border border-[#1e1f22]" data-testid={`discord-embed-${msg.type}`}>
+    <div className="rounded-md overflow-hidden bg-[#2b2d31] border border-[#1e1f22]">
       <div className="flex">
         <div className="w-1 shrink-0" style={{ backgroundColor: borderColor }} />
         <div className="p-3 flex-1 min-w-0 space-y-2">
@@ -270,65 +294,150 @@ function DiscordEmbed({ msg }: { msg: DiscordPreviewMsg }) {
   );
 }
 
-function buildPayloadJson(preview: DiscordPreviewMsg): string {
-  return JSON.stringify({
-    content: preview.content || undefined,
-    embeds: [{
-      description: preview.embed.description,
-      color: preview.embed.color,
-      fields: preview.embed.fields,
-      footer: preview.embed.footer,
-      ...(preview.embed.timestamp ? { timestamp: preview.embed.timestamp } : {}),
-    }],
-  }, null, 2);
+function VariableTag({ varKey, onInsert }: { varKey: string; onInsert?: (v: string) => void }) {
+  const { toast } = useToast();
+  const tag = `{{${varKey}}}`;
+
+  const handleClick = () => {
+    if (onInsert) {
+      onInsert(tag);
+    } else {
+      navigator.clipboard.writeText(tag).then(() => {
+        toast({ title: "Copied", description: tag });
+      });
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      className="inline-flex items-center gap-1 rounded-md border border-blue-500/20 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-mono text-blue-400 hover:bg-blue-500/20 transition-colors cursor-pointer"
+      data-testid={`var-tag-${varKey}`}
+    >
+      <Copy className="h-2.5 w-2.5" />
+      {tag}
+    </button>
+  );
 }
 
-function parseJsonToPreview(json: string, fallback: DiscordPreviewMsg): DiscordPreviewMsg | null {
+function VariablesPanel({ messageType }: { messageType: string }) {
+  const vars = getVariablesForMessageType(messageType);
+  const grouped = useMemo(() => {
+    const map: Record<string, typeof vars> = {};
+    for (const v of vars) {
+      if (!map[v.category]) map[v.category] = [];
+      map[v.category].push(v);
+    }
+    return map;
+  }, [vars]);
+
+  return (
+    <div className="space-y-3" data-testid="panel-template-variables">
+      <div className="flex items-center gap-1.5">
+        <Info className="h-3.5 w-3.5 text-muted-foreground" />
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Insert Variables</p>
+      </div>
+      <p className="text-[10px] text-muted-foreground">
+        Click a variable to copy it. Paste into any field value in the embed JSON.
+      </p>
+      {Object.entries(grouped).map(([cat, catVars]) => (
+        <div key={cat} className="space-y-1.5">
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+            {VARIABLE_CATEGORIES[cat] || cat}
+          </p>
+          <div className="flex flex-wrap gap-1">
+            <TooltipProvider delayDuration={200}>
+              {catVars.map(v => (
+                <Tooltip key={v.key}>
+                  <TooltipTrigger asChild>
+                    <span><VariableTag varKey={v.key} /></span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-[200px]">
+                    <p className="text-xs font-medium">{v.label}</p>
+                    <p className="text-[10px] text-muted-foreground">{v.description}</p>
+                  </TooltipContent>
+                </Tooltip>
+              ))}
+            </TooltipProvider>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function buildTemplateJson(template: TemplateEmbed): string {
+  return JSON.stringify(template, null, 2);
+}
+
+function parseTemplateJson(json: string): TemplateEmbed | null {
   try {
     const parsed = JSON.parse(json);
-    const embed = parsed.embeds?.[0];
-    if (!embed) return null;
-    return {
-      type: fallback.type,
-      label: fallback.label,
-      content: parsed.content || "",
-      embed: {
-        description: embed.description || "",
-        color: typeof embed.color === "number" ? embed.color : fallback.embed.color,
-        fields: Array.isArray(embed.fields) ? embed.fields : [],
-        footer: embed.footer || undefined,
-        timestamp: embed.timestamp || undefined,
-      },
-    };
+    if (!parsed.color) return null;
+    return parsed as TemplateEmbed;
   } catch {
     return null;
   }
 }
 
+function renderTemplateLocally(template: TemplateEmbed, sampleVars: Record<string, string>): RenderedEmbed {
+  const sub = (s: string): string => {
+    return s.replace(/\{\{(\w+)\}\}/g, (_, key) => sampleVars[key] ?? `{{${key}}}`);
+  };
+
+  const colorHex = sub(template.color);
+  let colorNum: number;
+  if (colorHex.startsWith("#")) {
+    colorNum = parseInt(colorHex.slice(1), 16);
+  } else {
+    colorNum = parseInt(colorHex, 16) || 0x6b7280;
+  }
+
+  return {
+    description: template.description ? sub(template.description) : undefined,
+    color: colorNum,
+    fields: template.fields?.map(f => ({
+      name: sub(f.name),
+      value: sub(f.value),
+      inline: f.inline,
+    })),
+    footer: template.footer ? { text: sub(template.footer) } : undefined,
+    timestamp: template.timestamp ? new Date().toISOString() : undefined,
+  };
+}
+
 function EditTemplateModal({ template, appId, instrumentType, open, onOpenChange }: {
-  template: DiscordPreviewMsg;
+  template: TemplateMsg;
   appId: string;
   instrumentType: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const sampleVars = template.sampleVars || {};
   const { toast } = useToast();
-  const [jsonText, setJsonText] = useState(() => buildPayloadJson(template));
+  const [jsonText, setJsonText] = useState(() => buildTemplateJson(template.template));
+  const [contentText, setContentText] = useState(template.content);
   const [jsonError, setJsonError] = useState<string | null>(null);
 
   useEffect(() => {
-    setJsonText(buildPayloadJson(template));
+    setJsonText(buildTemplateJson(template.template));
+    setContentText(template.content);
     setJsonError(null);
   }, [template]);
 
-  const livePreview = useMemo(() => parseJsonToPreview(jsonText, template), [jsonText, template]);
+  const livePreview = useMemo(() => {
+    const parsed = parseTemplateJson(jsonText);
+    if (!parsed) return template.preview.embed;
+    return renderTemplateLocally(parsed, sampleVars);
+  }, [jsonText, sampleVars, template]);
 
   const handleJsonChange = (value: string) => {
     setJsonText(value);
     try {
       const parsed = JSON.parse(value);
-      if (!parsed.embeds?.[0]) {
-        setJsonError("Missing embeds[0]");
+      if (!parsed.color) {
+        setJsonError("Missing 'color' field");
       } else {
         setJsonError(null);
       }
@@ -340,20 +449,13 @@ function EditTemplateModal({ template, appId, instrumentType, open, onOpenChange
   const saveMutation = useMutation({
     mutationFn: async () => {
       const parsed = JSON.parse(jsonText);
-      const embed = parsed.embeds?.[0];
-      if (!embed) throw new Error("Missing embed");
+      if (!parsed.color) throw new Error("Missing color field");
       await apiRequest("PUT", `/api/discord-templates/app/${appId}`, {
         instrumentType,
         messageType: template.type,
         label: template.label,
-        content: parsed.content || "",
-        embedJson: {
-          description: embed.description,
-          color: embed.color,
-          fields: embed.fields,
-          footer: embed.footer,
-          timestamp: embed.timestamp,
-        },
+        content: contentText,
+        embedJson: parsed,
       });
     },
     onSuccess: () => {
@@ -366,53 +468,70 @@ function EditTemplateModal({ template, appId, instrumentType, open, onOpenChange
     },
   });
 
-  const displayPreview = livePreview || template;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto" data-testid="modal-edit-template">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto" data-testid="modal-edit-template">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Pencil className="h-4 w-4 text-muted-foreground" />
             Edit: {template.label}
           </DialogTitle>
-          <DialogDescription>Customize the embed JSON for this template</DialogDescription>
+          <DialogDescription>
+            Use {"{{variable}}"} placeholders in the embed template. They'll be replaced with real signal data when sent.
+          </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Embed JSON</p>
-              <button
-                onClick={() => { setJsonText(buildPayloadJson(template)); setJsonError(null); }}
-                className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
-                data-testid="button-reset-template-json"
-              >
-                Reset
-              </button>
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_240px] gap-4">
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Message Content</p>
+              <Input
+                value={contentText}
+                onChange={e => setContentText(e.target.value)}
+                placeholder="@everyone"
+                className="h-8 text-xs font-mono"
+                data-testid="input-template-content"
+              />
             </div>
-            <textarea
-              value={jsonText}
-              onChange={e => handleJsonChange(e.target.value)}
-              spellCheck={false}
-              className={`w-full rounded-lg border bg-muted/50 p-3 text-[11px] font-mono leading-relaxed resize-none min-h-[45vh] max-h-[55vh] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                jsonError ? "border-red-500/50" : "border-border"
-              }`}
-              data-testid="textarea-template-json"
-            />
-            {jsonError && (
-              <p className="text-[11px] text-red-500" data-testid="text-template-json-error">{jsonError}</p>
-            )}
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Embed Template (JSON)</p>
+                <button
+                  onClick={() => { setJsonText(buildTemplateJson(template.template)); setJsonError(null); }}
+                  className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                  data-testid="button-reset-template-json"
+                >
+                  Reset
+                </button>
+              </div>
+              <textarea
+                value={jsonText}
+                onChange={e => handleJsonChange(e.target.value)}
+                spellCheck={false}
+                className={`w-full rounded-lg border bg-muted/50 p-3 text-[11px] font-mono leading-relaxed resize-none min-h-[50vh] max-h-[60vh] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  jsonError ? "border-red-500/50" : "border-border"
+                }`}
+                data-testid="textarea-template-json"
+              />
+              {jsonError && (
+                <p className="text-[11px] text-red-500" data-testid="text-template-json-error">{jsonError}</p>
+              )}
+            </div>
           </div>
 
           <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Preview</p>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Live Preview (with sample data)</p>
             <div className="rounded-lg bg-[#313338] p-3 space-y-2">
-              {displayPreview.content && (
-                <p className="text-[13px] text-[#dbdee1]">{displayPreview.content}</p>
+              {contentText && (
+                <p className="text-[13px] text-[#dbdee1]">{contentText}</p>
               )}
-              <DiscordEmbed msg={displayPreview} />
+              <DiscordEmbed embed={livePreview} />
             </div>
+          </div>
+
+          <div className="lg:border-l lg:pl-4 border-border">
+            <VariablesPanel messageType={template.type} />
           </div>
         </div>
 
@@ -439,24 +558,34 @@ function EditTemplateModal({ template, appId, instrumentType, open, onOpenChange
 }
 
 function SendFromTemplateModal({ template, open, onOpenChange }: {
-  template: DiscordPreviewMsg;
+  template: TemplateMsg;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const { toast } = useToast();
   const [selectedChannelId, setSelectedChannelId] = useState<string>("");
   const [addChannelOpen, setAddChannelOpen] = useState(false);
-  const [jsonText, setJsonText] = useState(() => buildPayloadJson(template));
+
+  const renderedEmbed = template.preview.embed;
+  const payloadJson = useMemo(() => JSON.stringify({
+    content: template.content || undefined,
+    embeds: [{
+      description: renderedEmbed.description,
+      color: renderedEmbed.color,
+      fields: renderedEmbed.fields,
+      footer: renderedEmbed.footer,
+      ...(renderedEmbed.timestamp ? { timestamp: renderedEmbed.timestamp } : {}),
+    }],
+  }, null, 2), [template, renderedEmbed]);
+
+  const [jsonText, setJsonText] = useState(payloadJson);
   const [jsonError, setJsonError] = useState<string | null>(null);
 
   useEffect(() => {
-    setJsonText(buildPayloadJson(template));
+    setJsonText(payloadJson);
     setJsonError(null);
     setSelectedChannelId("");
-  }, [template]);
-
-  const livePreview = useMemo(() => parseJsonToPreview(jsonText, template), [jsonText, template]);
-  const isEdited = jsonText !== buildPayloadJson(template);
+  }, [payloadJson]);
 
   const handleJsonChange = (value: string) => {
     setJsonText(value);
@@ -511,8 +640,6 @@ function SendFromTemplateModal({ template, open, onOpenChange }: {
     },
   });
 
-  const displayPreview = livePreview || template;
-
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -522,7 +649,7 @@ function SendFromTemplateModal({ template, open, onOpenChange }: {
             <SiDiscord className="h-4 w-4 text-[#5865F2]" />
             Send: {template.label}
           </DialogTitle>
-          <DialogDescription>Select a Discord channel, edit the embed, then send</DialogDescription>
+          <DialogDescription>Select a Discord channel, review the rendered payload, then send</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
@@ -549,25 +676,11 @@ function SendFromTemplateModal({ template, open, onOpenChange }: {
                 </SelectItem>
               </SelectContent>
             </Select>
-            {channels.length === 0 && !channelsQuery.isLoading && (
-              <p className="text-[11px] text-muted-foreground">No Discord channels configured. Select "Add new Discord channel" above to create one.</p>
-            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Embed JSON</p>
-                {isEdited && (
-                  <button
-                    onClick={() => { setJsonText(buildPayloadJson(template)); setJsonError(null); }}
-                    className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
-                    data-testid="button-reset-template-json"
-                  >
-                    Reset
-                  </button>
-                )}
-              </div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Rendered Payload</p>
               <textarea
                 value={jsonText}
                 onChange={e => handleJsonChange(e.target.value)}
@@ -575,20 +688,20 @@ function SendFromTemplateModal({ template, open, onOpenChange }: {
                 className={`w-full rounded-lg border bg-muted/50 p-3 text-[11px] font-mono leading-relaxed resize-none min-h-[45vh] max-h-[55vh] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                   jsonError ? "border-red-500/50" : "border-border"
                 }`}
-                data-testid="textarea-template-json"
+                data-testid="textarea-send-json"
               />
               {jsonError && (
-                <p className="text-[11px] text-red-500" data-testid="text-template-json-error">{jsonError}</p>
+                <p className="text-[11px] text-red-500">{jsonError}</p>
               )}
             </div>
 
             <div className="space-y-2">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Preview</p>
               <div className="rounded-lg bg-[#313338] p-3 space-y-2">
-                {displayPreview.content && (
-                  <p className="text-[13px] text-[#dbdee1]">{displayPreview.content}</p>
+                {template.content && (
+                  <p className="text-[13px] text-[#dbdee1]">{template.content}</p>
                 )}
-                <DiscordEmbed msg={displayPreview} />
+                <DiscordEmbed embed={renderedEmbed} />
               </div>
             </div>
           </div>
@@ -627,8 +740,8 @@ export default function DiscordTemplatesPage() {
   const { toast } = useToast();
   const [selectedAppId, setSelectedAppId] = useState<string>("__default__");
   const [activeInstrument, setActiveInstrument] = useState<string>("Options");
-  const [sendModal, setSendModal] = useState<{ open: boolean; template: DiscordPreviewMsg | null }>({ open: false, template: null });
-  const [editModal, setEditModal] = useState<{ open: boolean; template: DiscordPreviewMsg | null; instrumentType: string }>({ open: false, template: null, instrumentType: "" });
+  const [sendModal, setSendModal] = useState<{ open: boolean; template: TemplateMsg | null }>({ open: false, template: null });
+  const [editModal, setEditModal] = useState<{ open: boolean; template: TemplateMsg | null; instrumentType: string }>({ open: false, template: null, instrumentType: "" });
   const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null);
 
   const { data: connectedApps = [] } = useQuery<ConnectedApp[]>({
@@ -638,7 +751,7 @@ export default function DiscordTemplatesPage() {
   const activeApps = connectedApps.filter(a => a.sendDiscordMessages);
 
   const defaultTemplatesQuery = useQuery<TemplateGroup[]>({
-    queryKey: ["/api/discord-templates"],
+    queryKey: ["/api/discord-templates/var-templates"],
     enabled: selectedAppId === "__default__",
   });
 
@@ -713,7 +826,7 @@ export default function DiscordTemplatesPage() {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {isDefault
-              ? "Default templates used when an app has no custom overrides."
+              ? "Default templates with {{variable}} placeholders. Select an app to customize."
               : `Custom templates for ${selectedApp?.name || "this app"}. Edit to customize Discord messages.`
             }
           </p>
@@ -745,7 +858,7 @@ export default function DiscordTemplatesPage() {
               variant={activeInstrument === g.instrumentType ? "default" : "outline"}
               size="sm"
               onClick={() => { setActiveInstrument(g.instrumentType); setExpandedTemplate(null); }}
-              data-testid={`tab-instrument-${g.instrumentType.toLowerCase()}`}
+              data-testid={`tab-instrument-${g.instrumentType.toLowerCase().replace(/\s+/g, "-")}`}
             >
               {g.instrumentType}
               <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5">
@@ -785,6 +898,8 @@ export default function DiscordTemplatesPage() {
               const colorClass = TYPE_COLORS[template.type] || "bg-muted text-muted-foreground border-border";
               const isExpanded = expandedTemplate === `${activeGroup.instrumentType}-${idx}`;
               const templateKey = `${activeGroup.instrumentType}-${idx}`;
+              const renderedEmbed = template.preview.embed;
+              const hasVars = JSON.stringify(template.template).includes("{{");
 
               return (
                 <div
@@ -853,11 +968,16 @@ export default function DiscordTemplatesPage() {
                         </Badge>
                       )}
                       <Badge variant="outline" className="text-[10px]">
-                        color: {colorToHex(template.embed.color)}
+                        color: {template.template.color}
                       </Badge>
                       <Badge variant="outline" className="text-[10px]">
-                        {(template.embed.fields || []).filter(f => f.name !== "\u200b").length} fields
+                        {(template.template.fields || []).filter(f => f.name !== "\u200b").length} fields
                       </Badge>
+                      {hasVars && (
+                        <Badge variant="outline" className="text-[10px] bg-blue-500/5 text-blue-400 border-blue-500/20">
+                          {"{{variables}}"}
+                        </Badge>
+                      )}
                     </div>
                   </div>
 
@@ -866,7 +986,7 @@ export default function DiscordTemplatesPage() {
                       {template.content && (
                         <p className="text-[13px] text-[#dbdee1]">{template.content}</p>
                       )}
-                      <DiscordEmbed msg={template} />
+                      <DiscordEmbed embed={renderedEmbed} />
                     </div>
                   )}
                 </div>
