@@ -652,12 +652,10 @@ export default function IbkrPage() {
   const [selectedAccount, setSelectedAccount] = useState<string>("all");
   const [ordersAppFilter, setOrdersAppFilter] = useState<string>("all");
   const [positionsAppFilter, setPositionsAppFilter] = useState<string>("all");
-  const [historyAppFilter, setHistoryAppFilter] = useState<string>("all");
   const [orderStatusFilter, setOrderStatusFilter] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<string>("orders");
   const [ordersPage, setOrdersPage] = useState(1);
   const [positionsPage, setPositionsPage] = useState(1);
-  const [historyPage, setHistoryPage] = useState(1);
 
   const { data: orders = [], isLoading: ordersLoading } = useQuery<IbkrOrder[]>({
     queryKey: ["/api/ibkr/orders"],
@@ -716,25 +714,18 @@ export default function IbkrPage() {
 
   const allSourceApps = Array.from(new Set([...orderSourceApps, ...positionSourceApps]));
 
-  const filteredOrders = accountOrders.filter(o => {
-    if (ordersAppFilter !== "all" && o.sourceAppName !== ordersAppFilter) return false;
-    if (orderStatusFilter !== "all" && o.status !== orderStatusFilter) return false;
-    return true;
-  });
+  const filteredOrders = accountOrders
+    .filter(o => {
+      if (ordersAppFilter !== "all" && o.sourceAppName !== ordersAppFilter) return false;
+      if (orderStatusFilter !== "all" && o.status !== orderStatusFilter) return false;
+      return true;
+    })
+    .sort((a, b) => new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime());
 
   const filteredPositions = accountPositions.filter(p => {
     if (positionsAppFilter !== "all" && p.sourceAppName !== positionsAppFilter) return false;
     return true;
   });
-
-  const historyFilteredOrders = accountOrders.filter(o => {
-    if (historyAppFilter !== "all" && o.sourceAppName !== historyAppFilter) return false;
-    return true;
-  });
-
-  const activeOrders = filteredOrders.filter(o => o.status === "submitted" || o.status === "pending");
-  const filledOrders = historyFilteredOrders.filter(o => o.status === "filled");
-  const historicalOrders = historyFilteredOrders.filter(o => o.status === "cancelled" || o.status === "rejected");
 
   const isLoading = ordersLoading || positionsLoading;
 
@@ -765,7 +756,7 @@ export default function IbkrPage() {
           ibkrIntegrations.length > 1 ? (
             <div className="flex items-center gap-1.5">
               <Landmark className="h-3.5 w-3.5 text-muted-foreground" />
-              <Select value={selectedAccount} onValueChange={(v) => { setSelectedAccount(v); setOrdersAppFilter("all"); setPositionsAppFilter("all"); setHistoryAppFilter("all"); setOrdersPage(1); setPositionsPage(1); setHistoryPage(1); }}>
+              <Select value={selectedAccount} onValueChange={(v) => { setSelectedAccount(v); setOrdersAppFilter("all"); setPositionsAppFilter("all"); setOrdersPage(1); setPositionsPage(1); }}>
                 <SelectTrigger className="w-[220px] h-9 text-sm" data-testid="select-account-filter">
                   <SelectValue placeholder="All Accounts" />
                 </SelectTrigger>
@@ -792,20 +783,16 @@ export default function IbkrPage() {
 
       <SummaryCards orders={accountOrders} positions={accountPositions} />
 
-      <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setOrderStatusFilter("all"); setOrdersPage(1); setPositionsPage(1); setHistoryPage(1); }} className="space-y-4">
+      <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setOrderStatusFilter("all"); setOrdersAppFilter("all"); setPositionsAppFilter("all"); setOrdersPage(1); setPositionsPage(1); }} className="space-y-4">
         <div className="flex items-center justify-between">
           <TabsList data-testid="tabs-ibkr">
             <TabsTrigger value="orders" data-testid="tab-orders">
               <Clock className="mr-1.5 h-3.5 w-3.5" />
-              Active Orders ({activeOrders.length})
+              Orders ({filteredOrders.length})
             </TabsTrigger>
             <TabsTrigger value="positions" data-testid="tab-positions">
               <Layers className="mr-1.5 h-3.5 w-3.5" />
               Positions ({filteredPositions.length})
-            </TabsTrigger>
-            <TabsTrigger value="history" data-testid="tab-history">
-              <History className="mr-1.5 h-3.5 w-3.5" />
-              History ({filledOrders.length + historicalOrders.length})
             </TabsTrigger>
           </TabsList>
         </div>
@@ -814,7 +801,7 @@ export default function IbkrPage() {
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Active Orders</CardTitle>
+                <CardTitle className="text-base">Orders</CardTitle>
                 <div className="flex items-center gap-2">
                   {orderSourceApps.length > 0 && (
                     <Select value={ordersAppFilter} onValueChange={(v) => { setOrdersAppFilter(v); setOrdersPage(1); }}>
@@ -837,13 +824,16 @@ export default function IbkrPage() {
                       <SelectItem value="all">All Statuses</SelectItem>
                       <SelectItem value="submitted">Submitted</SelectItem>
                       <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="filled">Filled</SelectItem>
+                      <SelectItem value="cancelled">Cancelled</SelectItem>
+                      <SelectItem value="rejected">Rejected</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="pt-0">
-              <OrdersTable orders={activeOrders} page={ordersPage} onPageChange={setOrdersPage} />
+              <OrdersTable orders={filteredOrders} page={ordersPage} onPageChange={setOrdersPage} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -870,45 +860,6 @@ export default function IbkrPage() {
             </CardHeader>
             <CardContent className="pt-0">
               <PositionsTable positions={filteredPositions} page={positionsPage} onPageChange={setPositionsPage} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="history" className="space-y-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Order History</CardTitle>
-                <div className="flex items-center gap-2">
-                  {orderSourceApps.length > 0 && (
-                    <Select value={historyAppFilter} onValueChange={(v) => { setHistoryAppFilter(v); setHistoryPage(1); }}>
-                      <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="select-history-app-filter">
-                        <SelectValue placeholder="All Apps" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Apps</SelectItem>
-                        {orderSourceApps.map(app => (
-                          <SelectItem key={app} value={app}>{app}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                  <Select value={orderStatusFilter} onValueChange={(v) => { setOrderStatusFilter(v); setHistoryPage(1); }}>
-                    <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="select-history-status-filter">
-                      <SelectValue placeholder="All Statuses" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Statuses</SelectItem>
-                      <SelectItem value="filled">Filled</SelectItem>
-                      <SelectItem value="cancelled">Cancelled</SelectItem>
-                      <SelectItem value="rejected">Rejected</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <OrdersTable orders={[...filledOrders, ...historicalOrders]} page={historyPage} onPageChange={setHistoryPage} />
             </CardContent>
           </Card>
         </TabsContent>
