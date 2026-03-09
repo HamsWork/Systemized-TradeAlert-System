@@ -321,7 +321,7 @@ function VariableTag({ varKey, onInsert }: { varKey: string; onInsert?: (v: stri
   );
 }
 
-function VariablesPanel({ messageType }: { messageType: string }) {
+function VariablesPanel({ messageType, sampleVars }: { messageType: string; sampleVars: Record<string, string> }) {
   const vars = getVariablesForMessageType(messageType);
   const grouped = useMemo(() => {
     const map: Record<string, typeof vars> = {};
@@ -339,27 +339,27 @@ function VariablesPanel({ messageType }: { messageType: string }) {
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Insert Variables</p>
       </div>
       <p className="text-[10px] text-muted-foreground">
-        Click a variable to copy it. Paste into any field value in the embed JSON.
+        Click a variable to copy it. Paste into any field in the embed JSON.
       </p>
       {Object.entries(grouped).map(([cat, catVars]) => (
-        <div key={cat} className="space-y-1.5">
+        <div key={cat} className="space-y-1">
           <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
             {VARIABLE_CATEGORIES[cat] || cat}
           </p>
-          <div className="flex flex-wrap gap-1">
-            <TooltipProvider delayDuration={200}>
-              {catVars.map(v => (
-                <Tooltip key={v.key}>
-                  <TooltipTrigger asChild>
-                    <span><VariableTag varKey={v.key} /></span>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-[200px]">
-                    <p className="text-xs font-medium">{v.label}</p>
-                    <p className="text-[10px] text-muted-foreground">{v.description}</p>
-                  </TooltipContent>
-                </Tooltip>
-              ))}
-            </TooltipProvider>
+          <div className="space-y-0.5">
+            {catVars.map(v => {
+              const defaultVal = sampleVars[v.key];
+              return (
+                <div key={v.key} className="flex items-start gap-1.5 group">
+                  <VariableTag varKey={v.key} />
+                  {defaultVal && (
+                    <span className="text-[10px] text-muted-foreground/70 font-mono truncate pt-0.5 max-w-[100px]" title={defaultVal} data-testid={`var-default-${v.key}`}>
+                      {defaultVal}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       ))}
@@ -417,12 +417,10 @@ function EditTemplateModal({ template, appId, instrumentType, open, onOpenChange
   const sampleVars = template.sampleVars || {};
   const { toast } = useToast();
   const [jsonText, setJsonText] = useState(() => buildTemplateJson(template.template));
-  const [contentText, setContentText] = useState(template.content);
   const [jsonError, setJsonError] = useState<string | null>(null);
 
   useEffect(() => {
     setJsonText(buildTemplateJson(template.template));
-    setContentText(template.content);
     setJsonError(null);
   }, [template]);
 
@@ -454,7 +452,7 @@ function EditTemplateModal({ template, appId, instrumentType, open, onOpenChange
         instrumentType,
         messageType: template.type,
         label: template.label,
-        content: contentText,
+        content: template.content,
         embedJson: parsed,
       });
     },
@@ -484,17 +482,6 @@ function EditTemplateModal({ template, appId, instrumentType, open, onOpenChange
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_240px] gap-4">
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Message Content</p>
-              <Input
-                value={contentText}
-                onChange={e => setContentText(e.target.value)}
-                placeholder="@everyone"
-                className="h-8 text-xs font-mono"
-                data-testid="input-template-content"
-              />
-            </div>
-
-            <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Embed Template (JSON)</p>
                 <button
@@ -523,15 +510,15 @@ function EditTemplateModal({ template, appId, instrumentType, open, onOpenChange
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Live Preview (with sample data)</p>
             <div className="rounded-lg bg-[#313338] p-3 space-y-2">
-              {contentText && (
-                <p className="text-[13px] text-[#dbdee1]">{contentText}</p>
+              {template.content && (
+                <p className="text-[13px] text-[#dbdee1]">{template.content}</p>
               )}
               <DiscordEmbed embed={livePreview} />
             </div>
           </div>
 
           <div className="lg:border-l lg:pl-4 border-border">
-            <VariablesPanel messageType={template.type} />
+            <VariablesPanel messageType={template.type} sampleVars={sampleVars} />
           </div>
         </div>
 
