@@ -9,6 +9,7 @@ import {
   type IbkrOrder, type InsertIbkrOrder,
   type IbkrPosition, type InsertIbkrPosition,
   type DiscordMessage, type InsertDiscordMessage,
+  type DiscordTemplate, type InsertDiscordTemplate,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -71,6 +72,10 @@ export interface IStorage {
   getDiscordMessages(): Promise<DiscordMessage[]>;
   getDiscordMessagesBySignal(signalId: string): Promise<DiscordMessage[]>;
   createDiscordMessage(message: InsertDiscordMessage): Promise<DiscordMessage>;
+
+  getDiscordTemplatesByApp(appId: string): Promise<DiscordTemplate[]>;
+  upsertDiscordTemplate(template: InsertDiscordTemplate): Promise<DiscordTemplate>;
+  deleteDiscordTemplatesByApp(appId: string, instrumentType?: string): Promise<void>;
 
   getDashboardStats(): Promise<{
     totalAlerts: number;

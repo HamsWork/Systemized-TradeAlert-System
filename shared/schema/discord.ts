@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, jsonb, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -25,3 +25,24 @@ export const insertDiscordMessageSchema = createInsertSchema(discordMessages).om
 
 export type DiscordMessage = typeof discordMessages.$inferSelect;
 export type InsertDiscordMessage = z.infer<typeof insertDiscordMessageSchema>;
+
+export const discordTemplates = pgTable("discord_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  appId: varchar("app_id").notNull(),
+  instrumentType: text("instrument_type").notNull(),
+  messageType: text("message_type").notNull(),
+  label: text("label").notNull().default(""),
+  content: text("content").notNull().default(""),
+  embedJson: jsonb("embed_json").notNull().default({}),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  unique().on(table.appId, table.instrumentType, table.messageType),
+]);
+
+export const insertDiscordTemplateSchema = createInsertSchema(discordTemplates).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type DiscordTemplate = typeof discordTemplates.$inferSelect;
+export type InsertDiscordTemplate = z.infer<typeof insertDiscordTemplateSchema>;

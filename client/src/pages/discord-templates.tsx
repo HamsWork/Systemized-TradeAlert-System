@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { type InsertIntegration } from "@shared/schema";
+import { type InsertIntegration, type ConnectedApp } from "@shared/schema";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +42,10 @@ import {
   X,
   AlertCircle,
   Plus,
+  Save,
+  RotateCcw,
+  Pencil,
+  Check,
 } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import { useForm } from "react-hook-form";
@@ -174,6 +178,7 @@ interface DiscordPreviewMsg {
   label: string;
   content: string;
   embed: DiscordPreviewEmbed;
+  isCustom?: boolean;
 }
 
 interface TemplateGroup {
@@ -298,6 +303,139 @@ function parseJsonToPreview(json: string, fallback: DiscordPreviewMsg): DiscordP
   } catch {
     return null;
   }
+}
+
+function EditTemplateModal({ template, appId, instrumentType, open, onOpenChange }: {
+  template: DiscordPreviewMsg;
+  appId: string;
+  instrumentType: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { toast } = useToast();
+  const [jsonText, setJsonText] = useState(() => buildPayloadJson(template));
+  const [jsonError, setJsonError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setJsonText(buildPayloadJson(template));
+    setJsonError(null);
+  }, [template]);
+
+  const livePreview = useMemo(() => parseJsonToPreview(jsonText, template), [jsonText, template]);
+
+  const handleJsonChange = (value: string) => {
+    setJsonText(value);
+    try {
+      const parsed = JSON.parse(value);
+      if (!parsed.embeds?.[0]) {
+        setJsonError("Missing embeds[0]");
+      } else {
+        setJsonError(null);
+      }
+    } catch {
+      setJsonError("Invalid JSON");
+    }
+  };
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const parsed = JSON.parse(jsonText);
+      const embed = parsed.embeds?.[0];
+      if (!embed) throw new Error("Missing embed");
+      await apiRequest("PUT", `/api/discord-templates/app/${appId}`, {
+        instrumentType,
+        messageType: template.type,
+        label: template.label,
+        content: parsed.content || "",
+        embedJson: {
+          description: embed.description,
+          color: embed.color,
+          fields: embed.fields,
+          footer: embed.footer,
+          timestamp: embed.timestamp,
+        },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/discord-templates/app", appId] });
+      toast({ title: "Template saved", description: `${template.label} template updated` });
+      onOpenChange(false);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const displayPreview = livePreview || template;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto" data-testid="modal-edit-template">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Pencil className="h-4 w-4 text-muted-foreground" />
+            Edit: {template.label}
+          </DialogTitle>
+          <DialogDescription>Customize the embed JSON for this template</DialogDescription>
+        </DialogHeader>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Embed JSON</p>
+              <button
+                onClick={() => { setJsonText(buildPayloadJson(template)); setJsonError(null); }}
+                className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                data-testid="button-reset-template-json"
+              >
+                Reset
+              </button>
+            </div>
+            <textarea
+              value={jsonText}
+              onChange={e => handleJsonChange(e.target.value)}
+              spellCheck={false}
+              className={`w-full rounded-lg border bg-muted/50 p-3 text-[11px] font-mono leading-relaxed resize-none min-h-[45vh] max-h-[55vh] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                jsonError ? "border-red-500/50" : "border-border"
+              }`}
+              data-testid="textarea-template-json"
+            />
+            {jsonError && (
+              <p className="text-[11px] text-red-500" data-testid="text-template-json-error">{jsonError}</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Preview</p>
+            <div className="rounded-lg bg-[#313338] p-3 space-y-2">
+              {displayPreview.content && (
+                <p className="text-[13px] text-[#dbdee1]">{displayPreview.content}</p>
+              )}
+              <DiscordEmbed msg={displayPreview} />
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-edit">
+            Cancel
+          </Button>
+          <Button
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending || !!jsonError}
+            data-testid="button-save-template"
+          >
+            {saveMutation.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+            ) : (
+              <Save className="h-3.5 w-3.5 mr-1.5" />
+            )}
+            Save Template
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function SendFromTemplateModal({ template, open, onOpenChange }: {
@@ -486,20 +624,57 @@ function SendFromTemplateModal({ template, open, onOpenChange }: {
 }
 
 export default function DiscordTemplatesPage() {
+  const { toast } = useToast();
+  const [selectedAppId, setSelectedAppId] = useState<string>("__default__");
   const [activeInstrument, setActiveInstrument] = useState<string>("Options");
   const [sendModal, setSendModal] = useState<{ open: boolean; template: DiscordPreviewMsg | null }>({ open: false, template: null });
+  const [editModal, setEditModal] = useState<{ open: boolean; template: DiscordPreviewMsg | null; instrumentType: string }>({ open: false, template: null, instrumentType: "" });
   const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null);
 
-  const templatesQuery = useQuery<TemplateGroup[]>({
-    queryKey: ["/api/discord-templates"],
+  const { data: connectedApps = [] } = useQuery<ConnectedApp[]>({
+    queryKey: ["/api/connected-apps"],
   });
 
-  const activeGroup = useMemo(() => {
-    if (!templatesQuery.data) return null;
-    return templatesQuery.data.find(g => g.instrumentType === activeInstrument) || null;
-  }, [templatesQuery.data, activeInstrument]);
+  const activeApps = connectedApps.filter(a => a.sendDiscordMessages);
 
-  if (templatesQuery.isLoading) {
+  const defaultTemplatesQuery = useQuery<TemplateGroup[]>({
+    queryKey: ["/api/discord-templates"],
+    enabled: selectedAppId === "__default__",
+  });
+
+  const appTemplatesQuery = useQuery<TemplateGroup[]>({
+    queryKey: ["/api/discord-templates/app", selectedAppId],
+    enabled: selectedAppId !== "__default__",
+  });
+
+  const resetMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("DELETE", `/api/discord-templates/app/${selectedAppId}?instrumentType=${encodeURIComponent(activeInstrument)}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/discord-templates/app", selectedAppId] });
+      toast({ title: "Reset to defaults", description: `${activeInstrument} templates reset for this app` });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Reset failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const isDefault = selectedAppId === "__default__";
+  const templatesData = isDefault ? defaultTemplatesQuery.data : appTemplatesQuery.data;
+  const isLoading = isDefault ? defaultTemplatesQuery.isLoading : appTemplatesQuery.isLoading;
+  const isError = isDefault ? defaultTemplatesQuery.isError : appTemplatesQuery.isError;
+  const error = isDefault ? defaultTemplatesQuery.error : appTemplatesQuery.error;
+  const refetch = isDefault ? defaultTemplatesQuery.refetch : appTemplatesQuery.refetch;
+
+  const activeGroup = useMemo(() => {
+    if (!templatesData) return null;
+    return templatesData.find(g => g.instrumentType === activeInstrument) || null;
+  }, [templatesData, activeInstrument]);
+
+  const hasCustomTemplates = activeGroup?.templates.some(t => t.isCustom) ?? false;
+
+  if (isLoading) {
     return (
       <div className="p-6 space-y-4">
         <Skeleton className="h-8 w-64" />
@@ -510,14 +685,14 @@ export default function DiscordTemplatesPage() {
     );
   }
 
-  if (templatesQuery.isError) {
+  if (isError) {
     return (
       <div className="p-6">
         <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-6 text-center space-y-2" data-testid="error-templates">
           <AlertCircle className="h-8 w-8 text-red-500 mx-auto" />
           <p className="text-sm font-medium text-red-500">Failed to load templates</p>
-          <p className="text-xs text-muted-foreground">{(templatesQuery.error as Error)?.message || "Unknown error"}</p>
-          <Button variant="outline" size="sm" onClick={() => templatesQuery.refetch()} data-testid="button-retry-templates">
+          <p className="text-xs text-muted-foreground">{(error as Error)?.message || "Unknown error"}</p>
+          <Button variant="outline" size="sm" onClick={() => refetch()} data-testid="button-retry-templates">
             Retry
           </Button>
         </div>
@@ -525,37 +700,77 @@ export default function DiscordTemplatesPage() {
     );
   }
 
-  const groups = templatesQuery.data || [];
+  const groups = templatesData || [];
+  const selectedApp = connectedApps.find(a => a.id === selectedAppId);
 
   return (
     <div className="p-6 space-y-6" data-testid="page-discord-templates">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2" data-testid="text-page-title">
             <SiDiscord className="h-6 w-6 text-[#5865F2]" />
             Discord Message Templates
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            All available Discord message templates by instrument type. Click any template to send it manually.
+            {isDefault
+              ? "Default templates used when an app has no custom overrides."
+              : `Custom templates for ${selectedApp?.name || "this app"}. Edit to customize Discord messages.`
+            }
           </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Select value={selectedAppId} onValueChange={(v) => { setSelectedAppId(v); setExpandedTemplate(null); }}>
+            <SelectTrigger className="w-[220px] h-9 text-sm" data-testid="select-app-templates">
+              <SelectValue placeholder="Select App" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__default__" data-testid="option-default-templates">
+                Default Templates
+              </SelectItem>
+              {activeApps.map(app => (
+                <SelectItem key={app.id} value={app.id} data-testid={`option-app-${app.id}`}>
+                  {app.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
-      <div className="flex gap-2" data-testid="tabs-instrument-type">
-        {groups.map((g) => (
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex gap-2" data-testid="tabs-instrument-type">
+          {groups.map((g) => (
+            <Button
+              key={g.instrumentType}
+              variant={activeInstrument === g.instrumentType ? "default" : "outline"}
+              size="sm"
+              onClick={() => { setActiveInstrument(g.instrumentType); setExpandedTemplate(null); }}
+              data-testid={`tab-instrument-${g.instrumentType.toLowerCase()}`}
+            >
+              {g.instrumentType}
+              <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5">
+                {g.templates.length}
+              </Badge>
+            </Button>
+          ))}
+        </div>
+        {!isDefault && hasCustomTemplates && (
           <Button
-            key={g.instrumentType}
-            variant={activeInstrument === g.instrumentType ? "default" : "outline"}
+            variant="outline"
             size="sm"
-            onClick={() => setActiveInstrument(g.instrumentType)}
-            data-testid={`tab-instrument-${g.instrumentType.toLowerCase()}`}
+            onClick={() => resetMutation.mutate()}
+            disabled={resetMutation.isPending}
+            className="text-xs"
+            data-testid="button-reset-all-templates"
           >
-            {g.instrumentType}
-            <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5">
-              {g.templates.length}
-            </Badge>
+            {resetMutation.isPending ? (
+              <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+            ) : (
+              <RotateCcw className="h-3 w-3 mr-1.5" />
+            )}
+            Reset to Defaults
           </Button>
-        ))}
+        )}
       </div>
 
       {activeGroup && (
@@ -584,7 +799,15 @@ export default function DiscordTemplatesPage() {
                           <Icon className="h-3.5 w-3.5" />
                         </div>
                         <div>
-                          <p className="text-sm font-semibold" data-testid={`text-template-label-${idx}`}>{template.label}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-semibold" data-testid={`text-template-label-${idx}`}>{template.label}</p>
+                            {template.isCustom && (
+                              <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-blue-500/10 text-blue-500">
+                                <Check className="h-2.5 w-2.5 mr-0.5" />
+                                Custom
+                              </Badge>
+                            )}
+                          </div>
                           <p className="text-[10px] text-muted-foreground font-mono">{template.type}</p>
                         </div>
                       </div>
@@ -599,6 +822,18 @@ export default function DiscordTemplatesPage() {
                           <Eye className="h-3 w-3 mr-1" />
                           {isExpanded ? "Hide" : "Preview"}
                         </Button>
+                        {!isDefault && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => setEditModal({ open: true, template, instrumentType: activeGroup.instrumentType })}
+                            data-testid={`button-edit-template-${idx}`}
+                          >
+                            <Pencil className="h-3 w-3 mr-1" />
+                            Edit
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           className="h-7 text-xs bg-[#5865F2] hover:bg-[#4752C4] text-white"
@@ -606,7 +841,7 @@ export default function DiscordTemplatesPage() {
                           data-testid={`button-send-template-${idx}`}
                         >
                           <Send className="h-3 w-3 mr-1" />
-                          Send Manual
+                          Send
                         </Button>
                       </div>
                     </div>
@@ -646,6 +881,16 @@ export default function DiscordTemplatesPage() {
           template={sendModal.template}
           open={sendModal.open}
           onOpenChange={(open) => setSendModal(prev => ({ ...prev, open }))}
+        />
+      )}
+
+      {editModal.template && !isDefault && (
+        <EditTemplateModal
+          template={editModal.template}
+          appId={selectedAppId}
+          instrumentType={editModal.instrumentType}
+          open={editModal.open}
+          onOpenChange={(open) => setEditModal(prev => ({ ...prev, open }))}
         />
       )}
     </div>

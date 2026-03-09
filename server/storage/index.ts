@@ -72,6 +72,9 @@ export class DatabaseStorage implements IStorage {
   getDiscordMessages = discordMethods.getDiscordMessages;
   getDiscordMessagesBySignal = discordMethods.getDiscordMessagesBySignal;
   createDiscordMessage = discordMethods.createDiscordMessage;
+  getDiscordTemplatesByApp = discordMethods.getDiscordTemplatesByApp;
+  upsertDiscordTemplate = discordMethods.upsertDiscordTemplate;
+  deleteDiscordTemplatesByApp = discordMethods.deleteDiscordTemplatesByApp;
 
   getDashboardStats = dashboardMethods.getDashboardStats;
 }

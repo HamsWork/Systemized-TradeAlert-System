@@ -53,7 +53,7 @@ Connected apps push signals to TradeSync via `POST /api/ingest/signals` using th
 7. **IBKR** (`/ibkr`) - Dedicated IBKR page with account overview (Net Liquidation, Buying Power, Daily P&L, Unrealized/Realized P&L, Cash Balance, Gross Position Value, Available Funds, Excess Liquidity, Margin Cushion), order status, open positions, and order history per connected app. Account data synced via `reqAccountSummary` and `reqPnL` IBKR API calls every 10s.
 8. **Settings** (`/settings`) - System controls organized by category (signals, trading, system) with toggle switches and value inputs
 9. **System Audit** (`/audit`) - Live self-documenting system overview: scans the actual codebase to generate real-time reports of architecture, feature maps, services, endpoints, DB tables, and file statistics. Three views: System Architecture, Feature File Map, JSON Export
-10. **Discord Templates** (`/discord-templates`) - All possible Discord message templates organized by instrument type (Options/Shares/LETF/LETF Option/Crypto). Shows 6 templates per type: Entry Signal, Target TP1/TP2 Hit, SL Raised, Stop Loss Hit, Trade Closed. Each template has expandable Discord-themed preview and "Send Manual" button that opens an editable JSON modal with signal selector for sending custom messages via webhook.
+10. **Discord Templates** (`/discord-templates`) - Discord message templates organized by instrument type (Options/Shares/LETF/LETF Option/Crypto). Supports per-app custom templates: app selector dropdown shows "Default Templates" plus all connected apps with Discord enabled. Default templates are read-only previews; selecting an app enables Edit buttons for customizing embed JSON per template. Custom templates are saved to `discord_templates` table (unique per app+instrument+messageType). "Reset to Defaults" button removes all custom overrides for the active instrument type. Each template has expandable Discord-themed preview and "Send" button for manual webhook delivery.
 
 ## API Routes
 
@@ -73,6 +73,9 @@ All routes prefixed with `/api`:
 - `GET /ibkr/chart-data?symbol=X&secType=OPT&strike=N&expiration=DATE&right=C` - Historical chart data (Polygon.io primary, IBKR fallback; supports stocks and option contracts)
 - `GET /ibkr/status` - Get connection status of all IBKR integrations
 - `GET /discord-templates` - All Discord message templates grouped by instrument type with sample data
+- `GET /discord-templates/app/:appId` - Per-app templates (merged with defaults, marks custom overrides)
+- `PUT /discord-templates/app/:appId` - Upsert custom template for an app (body: instrumentType, messageType, label, content, embedJson)
+- `DELETE /discord-templates/app/:appId` - Reset custom templates for an app (optional ?instrumentType= filter)
 - `GET /dashboard/stats`
 - `GET/POST /alerts`, `GET/PATCH/DELETE /alerts/:id` (backend only, not exposed in frontend)
 - `GET /system-audit` - Live codebase scan: architecture, endpoints, DB tables, services, feature map, file stats
@@ -96,6 +99,7 @@ All routes prefixed with `/api`:
 - `shared/schema/settings.ts` - System settings table, insert schema, types
 - `shared/schema/integrations.ts` - Integrations table, insert schema, types
 - `shared/schema/ibkr.ts` - IBKR orders + positions tables, insert schemas, types
+- `shared/schema/discord.ts` - Discord messages + discord_templates tables, insert schemas, types
 - `shared/schema/watchlist.ts` - Watchlist table
 
 ### Server Storage (split by domain)
