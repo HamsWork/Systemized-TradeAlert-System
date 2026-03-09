@@ -21,6 +21,7 @@ const SAMPLE_OPTIONS_DATA: Record<string, any> = {
   direction: "Call",
   entry_price: 5.2,
   entry_option_price: 5.2,
+  entry_instrument_price: 5.2,
   entry_underlying_price: 195.5,
   expiration: "2026-04-18",
   strike: 200,
@@ -37,6 +38,7 @@ const SAMPLE_SHARES_DATA: Record<string, any> = {
   instrument_type: "Shares",
   direction: "Long",
   entry_price: 420.0,
+  entry_instrument_price: 420.0,
   stop_loss: 410.0,
   time_stop: "5 days",
   targets: {
@@ -54,6 +56,7 @@ const SAMPLE_LETF_DATA: Record<string, any> = {
   instrument_type: "LETF",
   direction: "Long",
   entry_price: 72.5,
+  entry_instrument_price: 72.5,
   entry_underlying_price: 490.0,
   underlying_symbol: "QQQ",
   stop_loss: 68.0,
@@ -73,6 +76,7 @@ const SAMPLE_LETF_OPTION_DATA: Record<string, any> = {
   direction: "Call",
   entry_price: 6.5,
   entry_option_price: 6.5,
+  entry_instrument_price: 6.5,
   entry_underlying_price: 72.5,
   underlying_symbol: "QQQ",
   expiration: "2026-04-18",
@@ -90,6 +94,7 @@ const SAMPLE_CRYPTO_DATA: Record<string, any> = {
   instrument_type: "Crypto",
   direction: "Long",
   entry_price: 95000,
+  entry_instrument_price: 95000,
   stop_loss: 92000,
   targets: {
     tp1: {
@@ -116,11 +121,12 @@ function buildPreviewsFromData(
 
   const expendName = appName === "Discord Scalper" ? "Scalp Trade" : "";
 
+  const fakeSignal = { data } as unknown as Signal;
   previews.push({
     type: "signal_alert",
     label: "Entry Signal",
     content: "@everyone",
-    embed: buildEntryAlertEmbed(data, ticker, expendName),
+    embed: buildEntryAlertEmbed(fakeSignal, expendName),
   });
 
   const targets =
@@ -134,37 +140,74 @@ function buildPreviewsFromData(
     .filter(([, val]) => val?.price != null && Number(val.take_off_percent) !== 0)
     .sort(([, a], [, b]) => Number(a.price) - Number(b.price));
 
-  for (const [key, val] of targetEntries) {
+  for (let i = 0; i < targetEntries.length; i++) {
+    const [key, val] = targetEntries[i];
+    const tpNumber = i + 1;
     const price = Number(val.price);
+    const entryPrice = data.entry_instrument_price ?? data.entry_price ?? 0;
+    const profitPct = entryPrice ? ((price - entryPrice) / entryPrice) * 100 : 0;
+    const targetData = {
+      ...data,
+      current_tp_number: tpNumber,
+      current_tp_price: price,
+      current_tp_key: key,
+      current_instrument_price: price,
+      current_target_number: tpNumber,
+      hit_targets: {
+        [`tp${tpNumber}`]: { profitPct },
+        [`target_${tpNumber}`]: { takeOffPercent: val.take_off_percent ?? 50 },
+      },
+    };
     previews.push({
       type: "target_hit",
       label: `Target ${key.toUpperCase()} Hit`,
       content: "",
-      embed: buildTargetHitEmbed(data, ticker, { key, price }),
+      embed: buildTargetHitEmbed(targetData, null),
     });
   }
 
-  for (const [key, val] of targetEntries) {
+  for (let i = 0; i < targetEntries.length; i++) {
+    const [key, val] = targetEntries[i];
     const newStop =
       val.raise_stop_loss?.price != null
         ? Number(val.raise_stop_loss.price)
         : null;
     if (newStop == null) continue;
+    const tpNumber = i + 1;
+    const entryPrice = data.entry_instrument_price ?? data.entry_price ?? 0;
+    const isBreakEven = entryPrice > 0 && Math.abs(newStop - entryPrice) < 0.01;
+    const riskValue = entryPrice > 0 ? `${(((newStop - entryPrice) / entryPrice) * 100).toFixed(1)}%` : "—";
+    const slData = {
+      ...data,
+      current_stop_loss: newStop,
+      new_stop_loss: newStop,
+      sl_raised_target_key: key,
+      stop_loss_is_break_even: isBreakEven,
+      current_target_number: tpNumber,
+      risk_value: riskValue,
+    };
     previews.push({
       type: "stop_loss_raised",
       label: `SL Raised (${key.toUpperCase()})`,
       content: "",
-      embed: buildStopLossRaisedEmbed(data, ticker, key, newStop),
+      embed: buildStopLossRaisedEmbed(slData, null),
     });
   }
 
   const stopLoss = data.stop_loss != null ? Number(data.stop_loss) : null;
   if (stopLoss != null) {
+    const entryPrice = data.entry_instrument_price ?? data.entry_price ?? 0;
+    const slPct = entryPrice ? ((stopLoss - entryPrice) / entryPrice) * 100 : null;
+    const slData = {
+      ...data,
+      current_instrument_price: stopLoss,
+      stop_loss_percent: slPct,
+    };
     previews.push({
       type: "stop_loss_hit",
       label: "Stop Loss Hit",
       content: "",
-      embed: buildStopLossHitEmbed(data, ticker, stopLoss),
+      embed: buildStopLossHitEmbed(slData, null),
     });
   }
 
