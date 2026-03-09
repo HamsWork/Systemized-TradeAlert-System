@@ -540,6 +540,7 @@ function PositionsTable({ positions, page, onPageChange }: { positions: IbkrPosi
 }
 
 export default function IbkrPage() {
+  const [selectedAccount, setSelectedAccount] = useState<string>("all");
   const [appFilter, setAppFilter] = useState<string>("all");
   const [orderStatusFilter, setOrderStatusFilter] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<string>("orders");
@@ -571,18 +572,37 @@ export default function IbkrPage() {
     queryKey: ["/api/connected-apps"],
   });
 
+  const selectedIntegration = selectedAccount !== "all"
+    ? ibkrIntegrations.find(i => i.id === selectedAccount)
+    : null;
+  const selectedAccountId = selectedIntegration
+    ? (selectedIntegration.config as Record<string, any> | null)?.accountId
+    : null;
+
+  const accountOrders = selectedAccount !== "all"
+    ? orders.filter(o => o.integrationId === selectedAccount)
+    : orders;
+
+  const accountPositions = selectedAccount !== "all"
+    ? positions.filter(p => p.integrationId === selectedAccount)
+    : positions;
+
+  const filteredAccountSummary = selectedAccountId
+    ? accountSummary.filter(a => a.accountId === selectedAccountId)
+    : accountSummary;
+
   const sourceApps = Array.from(new Set(
-    [...orders.map(o => o.sourceAppName), ...positions.map(p => p.sourceAppName)]
+    [...accountOrders.map(o => o.sourceAppName), ...accountPositions.map(p => p.sourceAppName)]
       .filter(Boolean)
   )) as string[];
 
-  const filteredOrders = orders.filter(o => {
+  const filteredOrders = accountOrders.filter(o => {
     if (appFilter !== "all" && o.sourceAppName !== appFilter) return false;
     if (orderStatusFilter !== "all" && o.status !== orderStatusFilter) return false;
     return true;
   });
 
-  const filteredPositions = positions.filter(p => {
+  const filteredPositions = accountPositions.filter(p => {
     if (appFilter !== "all" && p.sourceAppName !== appFilter) return false;
     return true;
   });
@@ -617,57 +637,52 @@ export default function IbkrPage() {
         accent="text-purple-500"
         testId="heading-ibkr"
         actions={
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Filter className="h-3.5 w-3.5" />
-              <span>Filter by:</span>
+          <div className="flex items-center gap-3">
+            {ibkrIntegrations.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <Landmark className="h-3.5 w-3.5 text-muted-foreground" />
+                <Select value={selectedAccount} onValueChange={(v) => { setSelectedAccount(v); setAppFilter("all"); setOrdersPage(1); setPositionsPage(1); setHistoryPage(1); }}>
+                  <SelectTrigger className="w-[200px] h-9 text-sm" data-testid="select-account-filter">
+                    <SelectValue placeholder="All Accounts" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Accounts</SelectItem>
+                    {ibkrIntegrations.map(acct => {
+                      const cfg = acct.config as Record<string, any> | null;
+                      return (
+                        <SelectItem key={acct.id} value={acct.id} data-testid={`select-account-${acct.id}`}>
+                          <div className="flex items-center gap-2">
+                            <span>{acct.name}</span>
+                            {cfg?.accountId && <span className="text-muted-foreground">({cfg.accountId})</span>}
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="flex items-center gap-1.5">
+              <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+              <Select value={appFilter} onValueChange={(v) => { setAppFilter(v); setOrdersPage(1); setPositionsPage(1); setHistoryPage(1); }}>
+                <SelectTrigger className="w-[160px] h-9 text-sm" data-testid="select-app-filter">
+                  <SelectValue placeholder="All Apps" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Apps</SelectItem>
+                  {sourceApps.map(app => (
+                    <SelectItem key={app} value={app}>{app}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <Select value={appFilter} onValueChange={(v) => { setAppFilter(v); setOrdersPage(1); setPositionsPage(1); setHistoryPage(1); }}>
-              <SelectTrigger className="w-[180px] h-9 text-sm" data-testid="select-app-filter">
-                <SelectValue placeholder="All Apps" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Apps</SelectItem>
-                {sourceApps.map(app => (
-                  <SelectItem key={app} value={app}>{app}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
         }
       />
 
-      <AccountOverview accountSummary={accountSummary} />
+      <AccountOverview accountSummary={filteredAccountSummary} />
 
       <SummaryCards orders={filteredOrders} positions={filteredPositions} />
-
-      {ibkrIntegrations.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {ibkrIntegrations.map(acct => {
-            const config = acct.config as Record<string, any> | null;
-            return (
-              <Card key={acct.id} className="flex-1 min-w-[200px]" data-testid={`card-ibkr-account-${acct.id}`}>
-                <CardContent className="p-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Landmark className="h-4 w-4 text-purple-500" />
-                      <span className="text-sm font-medium">{acct.name}</span>
-                    </div>
-                    <Badge variant={acct.enabled ? "default" : "secondary"} className="text-xs">
-                      {acct.enabled ? "Active" : "Offline"}
-                    </Badge>
-                  </div>
-                  <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
-                    <span>Account: {config?.accountId}</span>
-                    <span className="capitalize">{config?.accountType}</span>
-                    <span>{config?.host}:{config?.port}</span>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
 
       <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setOrderStatusFilter("all"); setOrdersPage(1); setPositionsPage(1); setHistoryPage(1); }} className="space-y-4">
         <div className="flex items-center justify-between">
