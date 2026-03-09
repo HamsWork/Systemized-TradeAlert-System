@@ -417,13 +417,12 @@ function OrdersTable({ orders, page, onPageChange }: { orders: IbkrOrder[]; page
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50">
-              <TableHead className="text-xs font-medium">Order ID</TableHead>
               <TableHead className="text-xs font-medium">Symbol</TableHead>
+              <TableHead className="text-xs font-medium">App</TableHead>
               <TableHead className="text-xs font-medium">Side</TableHead>
               <TableHead className="text-xs font-medium">Type</TableHead>
               <TableHead className="text-xs font-medium text-right">Qty</TableHead>
               <TableHead className="text-xs font-medium text-right">Filled</TableHead>
-              <TableHead className="text-xs font-medium text-right">Price</TableHead>
               <TableHead className="text-xs font-medium text-right">Mkt Price</TableHead>
               <TableHead className="text-xs font-medium">Status</TableHead>
               <TableHead className="text-xs font-medium">Time</TableHead>
@@ -432,16 +431,13 @@ function OrdersTable({ orders, page, onPageChange }: { orders: IbkrOrder[]; page
           <TableBody>
             {paged.map((order) => (
               <TableRow key={order.id} data-testid={`row-order-${order.id}`}>
-                <TableCell className="font-mono text-xs">{order.orderId}</TableCell>
                 <TableCell><SymbolDisplay symbol={order.symbol} secType={order.secType} expiration={order.expiration} strike={order.strike} right={order.right} /></TableCell>
+                <TableCell className="text-xs text-muted-foreground" data-testid={`text-app-${order.id}`}>{order.sourceAppName || "—"}</TableCell>
                 <TableCell><SideBadge side={order.side} /></TableCell>
                 <TableCell className="text-xs capitalize">{order.orderType.replace("_", " ")}</TableCell>
                 <TableCell className="text-right text-sm">{formatNumber(order.quantity)}</TableCell>
                 <TableCell className="text-right text-sm">{formatNumber(order.filledQuantity)}</TableCell>
-                <TableCell className="text-right text-sm font-mono">
-                  {order.limitPrice ? formatCurrency(order.limitPrice) : order.stopPrice ? formatCurrency(order.stopPrice) : "MKT"}
-                </TableCell>
-                <TableCell className="text-right text-sm font-mono" data-testid={`text-mkt-price-${order.id}`}>{order.lastPrice ? formatCurrency(order.lastPrice) : "-"}</TableCell>
+                <TableCell className="text-right text-sm font-mono" data-testid={`text-mkt-price-${order.id}`}>{order.lastPrice ? formatCurrency(order.lastPrice) : "—"}</TableCell>
                 <TableCell><OrderStatusBadge status={order.status} /></TableCell>
                 <TableCell className="text-xs text-muted-foreground">
                   {formatRelativeTime(order.submittedAt)}
