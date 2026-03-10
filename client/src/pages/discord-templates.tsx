@@ -248,7 +248,7 @@ const TYPE_COLORS: Record<string, string> = {
 
 function DiscordEmbed({ embed }: { embed: RenderedEmbed }) {
   const borderColor = colorToHex(embed.color);
-  const fields = embed.fields?.filter(f => f.name !== "\u200b" && f.name !== "---") || [];
+  const fields = embed.fields?.filter(f => f.name !== "\u200b") || [];
   const inlineFields = fields.filter(f => f.inline);
   const blockFields = fields.filter(f => !f.inline);
 
@@ -381,7 +381,6 @@ function parseTemplateJson(json: string): TemplateEmbed | null {
 
 function renderTemplateLocally(template: TemplateEmbed, sampleVars: Record<string, string>): RenderedEmbed {
   const sub = (s: string): string => {
-    if (s === "---") return "\u200b";
     return s.replace(/\{\{(\w+)\}\}/g, (_, key) => sampleVars[key] ?? `{{${key}}}`);
   };
 
@@ -957,7 +956,7 @@ export default function DiscordTemplatesPage() {
                         color: {template.template.color}
                       </Badge>
                       <Badge variant="outline" className="text-[10px]">
-                        {(template.template.fields || []).filter(f => f.name !== "\u200b" && f.name !== "---").length} fields
+                        {(template.template.fields || []).filter(f => f.name !== "\u200b").length} fields
                       </Badge>
                       {hasVars && (
                         <Badge variant="outline" className="text-[10px] bg-blue-500/5 text-blue-400 border-blue-500/20">

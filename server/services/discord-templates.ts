@@ -8,8 +8,8 @@ export interface TemplateEmbed {
   timestamp?: boolean;
 }
 
-const SPACER = "---";
-const SPACER_FIELD = { name: SPACER, value: SPACER, inline: false } as const;
+const ZWS = "\u200b";
+const SPACER_FIELD = { name: ZWS, value: "", inline: false } as const;
 
 export interface MessageTemplate {
   type: string;
@@ -462,7 +462,6 @@ export function renderTemplate(
   vars: Record<string, string>,
 ): { description?: string; color: number; fields?: { name: string; value: string; inline?: boolean }[]; footer?: { text: string }; timestamp?: string } {
   const sub = (s: string): string => {
-    if (s === SPACER) return "\u200b";
     return s.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
   };
 

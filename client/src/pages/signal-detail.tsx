@@ -643,7 +643,7 @@ function colorToHex(color: number): string {
 function DiscordEmbed({ msg }: { msg: DiscordPreviewMsg }) {
   const embed = msg.embed;
   const borderColor = colorToHex(embed.color);
-  const fields = embed.fields?.filter(f => f.name !== "\u200b" && f.name !== "---") || [];
+  const fields = embed.fields?.filter(f => f.name !== "\u200b") || [];
   const inlineFields = fields.filter(f => f.inline);
   const blockFields = fields.filter(f => !f.inline);
 
