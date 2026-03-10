@@ -308,6 +308,9 @@ async function buildSignalData(
 
   const errors: string[] = [];
 
+  const isOpra = typeof ticker === "string" && ticker.startsWith("O:");
+  const stockSymbol: string | undefined = body.symbol ?? (isOpra ? undefined : ticker);
+
   const signalDataObj: Record<string, any> = {
     ticker,
     instrument_type: instrumentType,
@@ -322,15 +325,16 @@ async function buildSignalData(
   }
 
   if (instrumentType === "LETF" || instrumentType === "LETF Option") {
-    signalDataObj.letfTicker = ticker;
-    signalDataObj.underlying_ticker = getLETFUnderlying(ticker);
-    signalDataObj.leverage = getLETFLeverage(ticker);
+    const letfSymbol = stockSymbol ?? ticker;
+    signalDataObj.letfTicker = letfSymbol;
+    signalDataObj.underlying_ticker = getLETFUnderlying(letfSymbol) ?? body.underlying_ticker ?? stockSymbol;
+    signalDataObj.leverage = getLETFLeverage(letfSymbol);
 
     const dirText = direction === "Short" || direction === "Put" ? "BEAR" : "BULL";
 
     signalDataObj.leverage_direction = dirText;
   } else {
-    signalDataObj.underlying_ticker = ticker;
+    signalDataObj.underlying_ticker = stockSymbol ?? ticker;
   }
 
   
@@ -357,16 +361,17 @@ async function buildSignalData(
   signalDataObj.underlying_price_based = underlyingPriceBased;
 
   if (underlyingPriceBased) {
-    const instrumentPrice = await getCurrentInstrumentPrice(signalDataObj, ticker);
-    if (instrumentPrice == null || instrumentPrice <= 0) {
-      errors.push("Instrument price Error");
-    } else {
+    const priceSymbol = signalDataObj.underlying_ticker ?? stockSymbol ?? ticker;
+    const instrumentPrice = await getCurrentInstrumentPrice(signalDataObj, priceSymbol);
+    if (instrumentPrice != null && instrumentPrice > 0) {
       signalDataObj.entry_instrument_price = instrumentPrice;
+    } else {
+      console.warn(`[Signal] Could not fetch instrument price for ${ticker} (symbol: ${priceSymbol}), proceeding without it`);
     }
     signalDataObj.entry_tracking_price = entryPrice;
     signalDataObj.entry_underlying_price = entryPrice;
   } else {
-    const symbolForPrice = signalDataObj.underlying_ticker ?? ticker;
+    const symbolForPrice = signalDataObj.underlying_ticker ?? stockSymbol ?? ticker;
     if (!symbolForPrice || typeof symbolForPrice !== "string") {
       errors.push("Ticker is required for Shares");
     } else {

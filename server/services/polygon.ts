@@ -286,25 +286,36 @@ export async function fetchOptionContractPrice(
   expiration: string,
   strike: number,
   right: string,
+  contractTicker?: string,
 ): Promise<{ exists: boolean; price: number | null }> {
-  const optionTicker = buildOptionsTicker(symbol, expiration, right, strike);
+  const builtTicker = buildOptionsTicker(symbol, expiration, right, strike);
   const apiKey = process.env.POLYGON_API_KEY;
-  const url = `${MASSIVE_API_BASE}/v3/snapshot/options/${symbol}/${encodeURIComponent(optionTicker)}?apiKey=${apiKey}`;
 
-  const response = await fetchWithRetry(url, undefined, `option snapshot ${optionTicker}`);
-  if (!response) {
-    console.warn(`[Polygon] Failed to fetch option contract data for ${optionTicker}`);
-    return { exists: false, price: null };
+  const tryFetch = async (opTicker: string): Promise<{ exists: boolean; price: number | null } | null> => {
+    const url = `${MASSIVE_API_BASE}/v3/snapshot/options/${symbol}/${encodeURIComponent(opTicker)}?apiKey=${apiKey}`;
+    const response = await fetchWithRetry(url, undefined, `option snapshot ${opTicker}`);
+    if (!response) return null;
+    const data = await response.json();
+    const result = data.results;
+    if (!result) return null;
+    const bid = result.last_quote?.bid;
+    const ask = result.last_quote?.ask;
+    const price = bid && ask
+      ? (bid + ask) / 2
+      : result.last_trade?.price ?? result.day?.close ?? null;
+    return { exists: price !== null, price };
+  };
+
+  if (contractTicker && contractTicker !== builtTicker) {
+    const ctResult = await tryFetch(contractTicker);
+    if (ctResult && ctResult.price != null) return ctResult;
   }
-  const data = await response.json();
-  const result = data.results;
 
-  const bid = result.last_quote?.bid;
-  const ask = result.last_quote?.ask;
-  const price = bid && ask
-    ? (bid + ask) / 2
-    : result.last_trade?.price ?? result.day?.close ?? null;
-  return { exists: price !== null, price };
+  const result = await tryFetch(builtTicker);
+  if (result) return result;
+
+  console.warn(`[Polygon] Failed to fetch option contract data for ${contractTicker ?? builtTicker}`);
+  return { exists: false, price: null };
 }
 
 export async function fetchStockPrice(symbol: string): Promise<number | null> {

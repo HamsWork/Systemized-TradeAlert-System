@@ -77,11 +77,15 @@ export async function getCurrentInstrumentPrice(
   const instrumentType = data.instrument_type;
   if (instrumentType === "Options" || instrumentType === "LETF Option") {
     if (data.strike == null || !data.expiration || !data.direction || data.right == null) return null;
+    const contractTicker = typeof data.ticker === "string" && data.ticker.startsWith("O:")
+      ? data.ticker
+      : undefined;
     const result = await fetchOptionContractPrice(
       ticker,
       data.expiration,
       Number(data.strike),
       data.right,
+      contractTicker,
     );
     return result.price ?? null;
   }
