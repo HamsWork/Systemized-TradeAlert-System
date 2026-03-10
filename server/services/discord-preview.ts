@@ -4,7 +4,6 @@ import {
   buildTargetHitEmbed,
   buildStopLossRaisedEmbed,
   buildStopLossHitEmbed,
-  buildTradeClosedEmbed,
   type DiscordEmbed,
 } from "./discord";
 
@@ -210,13 +209,6 @@ function buildPreviewsFromData(
       embed: buildStopLossHitEmbed(slData, null),
     });
   }
-
-  previews.push({
-    type: "trade_closed_manually",
-    label: "Trade Closed",
-    content: "",
-    embed: buildTradeClosedEmbed(data, ticker),
-  });
 
   return previews;
 }

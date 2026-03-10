@@ -75,10 +75,6 @@ export function getVariablesForMessageType(messageType: string): TemplateVariabl
       return [...core, ...options, ...letf, ...result.filter(v =>
         ["exit_price", "profit_pct", "pnl_dollar", "r_multiple"].includes(v.key)
       )];
-    case "trade_closed_manually":
-      return [...core, ...options, ...letf, ...result.filter(v =>
-        ["exit_price", "profit_pct", "pnl_dollar", "r_multiple"].includes(v.key)
-      )];
     default:
       return [...core, ...options, ...letf, ...targets, ...result];
   }

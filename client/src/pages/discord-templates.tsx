@@ -237,7 +237,6 @@ const TYPE_ICONS: Record<string, typeof TrendingUp> = {
   target_hit: Target,
   stop_loss_raised: ShieldAlert,
   stop_loss_hit: AlertTriangle,
-  trade_closed_manually: X,
 };
 
 const TYPE_COLORS: Record<string, string> = {
@@ -245,7 +244,6 @@ const TYPE_COLORS: Record<string, string> = {
   target_hit: "bg-green-500/10 text-green-500 border-green-500/20",
   stop_loss_raised: "bg-amber-500/10 text-amber-500 border-amber-500/20",
   stop_loss_hit: "bg-red-500/10 text-red-500 border-red-500/20",
-  trade_closed_manually: "bg-gray-500/10 text-gray-500 border-gray-500/20",
 };
 
 function DiscordEmbed({ embed }: { embed: RenderedEmbed }) {

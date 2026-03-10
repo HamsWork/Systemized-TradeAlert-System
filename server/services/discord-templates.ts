@@ -236,40 +236,6 @@ function stopLossHitTemplate(instrumentType: string): TemplateEmbed {
   };
 }
 
-function tradeClosedTemplate(instrumentType: string): TemplateEmbed {
-  const label = instrumentType === "LETF" || instrumentType === "Shares" ? "Shares" : instrumentType === "Crypto" ? "Crypto" : "Options";
-  const tickerVar = instrumentType === "LETF" || instrumentType === "LETF Option" ? "{{underlying}}" : "{{ticker}}";
-  const fields: TemplateEmbed["fields"] = [];
-
-  if (instrumentType === "LETF") {
-    fields.push({ name: "💹 LETF", value: "{{letf_ticker}} ({{leverage}}x {{letf_direction}})", inline: true });
-    fields.push({ name: "💵 LETF Entry", value: "{{letf_entry}}", inline: true });
-    fields.push({ name: "📊 Underlying Price", value: "{{stock_price}}", inline: true });
-  } else if (instrumentType === "LETF Option") {
-    fields.push({ name: "💹 Leveraged ETF", value: "{{letf_ticker}} ({{leverage}}x {{letf_direction}})", inline: true });
-    fields.push({ name: "❌ Expiration", value: "{{expiry}}", inline: true });
-    fields.push({ name: "✍️ Strike", value: "{{strike}} {{right}}", inline: true });
-  } else if (instrumentType === "Options") {
-    fields.push({ name: "❌ Expiration", value: "{{expiry}}", inline: true });
-    fields.push({ name: "✍️ Strike", value: "{{strike}} {{right}}", inline: true });
-  }
-
-  fields.push(
-    { name: "✅ Entry", value: "{{entry_price}}", inline: true },
-    { name: "🏁 Exit", value: "{{exit_price}}", inline: true },
-    { name: "💸 Profit", value: "{{profit_pct}}", inline: true },
-    { name: "​", value: "", inline: false },
-    { name: "🚨 Status: Position Closed 🚨", value: "​", inline: false },
-    { name: "Total P&L", value: "{{pnl_dollar}} | R-Multiple: {{r_multiple}}", inline: false },
-  );
-
-  return {
-    description: `**📉 ${tickerVar} ${label} Closed Manually**`,
-    color: GRAY,
-    fields,
-    footer: DISCLAIMER,
-  };
-}
 
 function getEntryTemplate(instrumentType: string): TemplateEmbed {
   switch (instrumentType) {
@@ -288,7 +254,6 @@ export function getDefaultTemplates(instrumentType: string): MessageTemplate[] {
     { type: "target_hit", label: "Target Hit", content: "", embed: targetHitTemplate(instrumentType) },
     { type: "stop_loss_raised", label: "SL Raised", content: "", embed: stopLossRaisedTemplate(instrumentType) },
     { type: "stop_loss_hit", label: "Stop Loss Hit", content: "", embed: stopLossHitTemplate(instrumentType) },
-    { type: "trade_closed_manually", label: "Trade Closed", content: "", embed: tradeClosedTemplate(instrumentType) },
   ];
 }
 
@@ -485,14 +450,6 @@ export function buildSampleVariables(
     vars.r_multiple = "—";
   }
 
-  if (messageType === "trade_closed_manually") {
-    const exitP = entryPrice * 1.05;
-    vars.exit_price = fmtPrice(exitP);
-    const pct = entryPrice ? (((exitP - entryPrice) / entryPrice) * 100).toFixed(1) : "0.0";
-    vars.profit_pct = `${pct}%`;
-    vars.pnl_dollar = `+$${(exitP - entryPrice).toFixed(2)}`;
-    vars.r_multiple = "1.50";
-  }
 
   return vars;
 }
