@@ -127,9 +127,16 @@ export function registerIbkrRoutes(app: Express) {
 
   app.get("/api/ibkr/status", asyncHandler(async (_req, res) => {
     const status = ibkrSyncManager.getConnectionStatus();
-    const result: Record<string, boolean> = {};
-    for (const [id, connected] of Array.from(status)) {
-      result[id] = connected;
+    const result: Record<string, string> = {};
+    for (const [id, state] of Array.from(status)) {
+      result[id] = state;
+    }
+    const allIntegrations = await storage.getIntegrations();
+    const ibkrIntegrations = allIntegrations.filter(i => i.type === "ibkr");
+    for (const integration of ibkrIntegrations) {
+      if (!(integration.id in result)) {
+        result[integration.id] = integration.status || "disconnected";
+      }
     }
     res.json(result);
   }));

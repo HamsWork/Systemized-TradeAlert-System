@@ -298,7 +298,7 @@ function ConnectionStatus({ apps, integrations }: { apps: ConnectedApp[]; integr
   );
 }
 
-function IbkrAccountCard({ accounts, ibkrStatus, integrations }: { accounts: AccountSummaryData[]; ibkrStatus: Record<string, boolean>; integrations: Integration[] }) {
+function IbkrAccountCard({ accounts, ibkrStatus, integrations }: { accounts: AccountSummaryData[]; ibkrStatus: Record<string, string>; integrations: Integration[] }) {
   const ibkrIntegrations = integrations.filter(i => i.type === "ibkr");
   if (ibkrIntegrations.length === 0 && accounts.length === 0) return null;
 
@@ -322,18 +322,25 @@ function IbkrAccountCard({ accounts, ibkrStatus, integrations }: { accounts: Acc
       <CardContent className="space-y-4">
         {ibkrIntegrations.map((integration) => {
           const config = (integration.config || {}) as Record<string, any>;
-          const connected = ibkrStatus[integration.id] === true;
+          const status = ibkrStatus[integration.id] || integration.status || "disconnected";
+          const statusConfig: Record<string, { dot: string; badge: string; label: string }> = {
+            connected: { dot: "bg-emerald-500", badge: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20", label: "Connected" },
+            connecting: { dot: "bg-amber-500 animate-pulse", badge: "bg-amber-500/10 text-amber-500 border-amber-500/20", label: "Connecting..." },
+            disconnecting: { dot: "bg-amber-500 animate-pulse", badge: "bg-amber-500/10 text-amber-500 border-amber-500/20", label: "Disconnecting..." },
+            disconnected: { dot: "bg-red-500", badge: "bg-red-500/10 text-red-500 border-red-500/20", label: "Disconnected" },
+          };
+          const sc = statusConfig[status] || statusConfig.disconnected;
           return (
             <div key={integration.id} className="flex items-center justify-between gap-2 py-1.5 border-b last:border-b-0" data-testid={`ibkr-connection-${integration.id}`}>
               <div className="flex items-center gap-2 min-w-0">
-                <span className={`h-2 w-2 rounded-full shrink-0 ${connected ? "bg-emerald-500" : "bg-red-500"}`} />
+                <span className={`h-2 w-2 rounded-full shrink-0 ${sc.dot}`} />
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{integration.name || "IBKR Gateway"}</p>
                   <p className="text-[10px] text-muted-foreground font-mono">{config.host || "127.0.0.1"}:{config.port || "7497"}</p>
                 </div>
               </div>
-              <Badge variant={connected ? "default" : "destructive"} className={`text-[10px] shrink-0 ${connected ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : ""}`}>
-                {connected ? "Connected" : "Disconnected"}
+              <Badge variant="outline" className={`text-[10px] shrink-0 ${sc.badge}`} data-testid={`badge-ibkr-status-${integration.id}`}>
+                {sc.label}
               </Badge>
             </div>
           );
@@ -487,7 +494,7 @@ export default function Dashboard() {
   const positionsQuery = useQuery<IbkrPosition[]>({ queryKey: ["/api/ibkr/positions"] });
   const ordersQuery = useQuery<IbkrOrder[]>({ queryKey: ["/api/ibkr/orders"] });
   const accountSummaryQuery = useQuery<AccountSummaryData[]>({ queryKey: ["/api/ibkr/account-summary"] });
-  const ibkrStatusQuery = useQuery<Record<string, boolean>>({ queryKey: ["/api/ibkr/status"] });
+  const ibkrStatusQuery = useQuery<Record<string, string>>({ queryKey: ["/api/ibkr/status"] });
 
   const isLoading = statsQuery.isLoading || signalsQuery.isLoading || activityQuery.isLoading;
 

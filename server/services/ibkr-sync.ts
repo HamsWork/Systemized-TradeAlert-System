@@ -69,6 +69,8 @@ class IbkrSyncManager {
   private accountSummaryCache: Map<string, AccountSummaryData[]> = new Map();
   private acctSummaryReqCounter = 30000;
   private syncInFlight = false;
+  private connectingIds: Set<string> = new Set();
+  private disconnectingIds: Set<string> = new Set();
 
   async start(): Promise<void> {
     if (this.running) return;
@@ -120,6 +122,8 @@ class IbkrSyncManager {
 
   private async connectOne(integration: Integration): Promise<void> {
     const client = new IbkrClient(integration);
+    this.connectingIds.add(integration.id);
+    await storage.updateIntegration(integration.id, { status: "connecting" } as any);
     try {
       client.onOrderStatus(async (data) => {
         try {
@@ -144,10 +148,12 @@ class IbkrSyncManager {
       });
 
       await client.connect();
+      this.connectingIds.delete(integration.id);
       this.clients.set(integration.id, client);
       await storage.updateIntegration(integration.id, { status: "connected" } as any);
       console.log(`[IBKR Sync] Connected integration ${integration.name} (${integration.id})`);
     } catch (err: any) {
+      this.connectingIds.delete(integration.id);
       console.warn(`[IBKR Sync] Failed to connect ${integration.name}: ${err.message}`);
       await storage.updateIntegration(integration.id, { status: "disconnected" } as any);
     }
@@ -166,11 +172,14 @@ class IbkrSyncManager {
   }
 
   async disconnectOne(integrationId: string): Promise<void> {
+    this.disconnectingIds.add(integrationId);
+    await storage.updateIntegration(integrationId, { status: "disconnecting" } as any);
     const client = this.clients.get(integrationId);
     if (client) {
       client.disconnect();
       this.clients.delete(integrationId);
     }
+    this.disconnectingIds.delete(integrationId);
     this.accountSummaryCache.delete(integrationId);
     await storage.updateIntegration(integrationId, { status: "disconnected" } as any);
   }
@@ -487,10 +496,16 @@ class IbkrSyncManager {
     return all;
   }
 
-  getConnectionStatus(): Map<string, boolean> {
-    const status = new Map<string, boolean>();
+  getConnectionStatus(): Map<string, string> {
+    const status = new Map<string, string>();
     for (const [id, client] of this.clients) {
-      status.set(id, client.isConnected);
+      status.set(id, client.isConnected ? "connected" : "disconnected");
+    }
+    for (const id of this.connectingIds) {
+      status.set(id, "connecting");
+    }
+    for (const id of this.disconnectingIds) {
+      status.set(id, "disconnecting");
     }
     return status;
   }

@@ -199,7 +199,7 @@ function SideBadge({ side }: { side: string }) {
 function ConnectionStatus({ integrations }: { integrations: Integration[] }) {
   const { toast } = useToast();
 
-  const { data: statusMap = {} } = useQuery<Record<string, boolean>>({
+  const { data: statusMap = {} } = useQuery<Record<string, string>>({
     queryKey: ["/api/ibkr/status"],
     refetchInterval: 5000,
   });
@@ -240,19 +240,31 @@ function ConnectionStatus({ integrations }: { integrations: Integration[] }) {
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
       {integrations.map((integration) => {
         const cfg = integration.config as Record<string, any> | null;
-        const isConnected = statusMap[integration.id] === true;
-        const isBusy = (connectMutation.isPending && connectMutation.variables === integration.id)
+        const connStatus = statusMap[integration.id] || "disconnected";
+        const isConnected = connStatus === "connected";
+        const isTransitioning = connStatus === "connecting" || connStatus === "disconnecting";
+        const isBusy = isTransitioning
+          || (connectMutation.isPending && connectMutation.variables === integration.id)
           || (disconnectMutation.isPending && disconnectMutation.variables === integration.id);
+        const statusStyles: Record<string, { bg: string; icon: string; badge: string; label: string }> = {
+          connected: { bg: "bg-emerald-500/10", icon: "text-emerald-500", badge: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15", label: "Connected" },
+          connecting: { bg: "bg-amber-500/10", icon: "text-amber-500", badge: "bg-amber-500/15 text-amber-600 dark:text-amber-400 hover:bg-amber-500/15", label: "Connecting..." },
+          disconnecting: { bg: "bg-amber-500/10", icon: "text-amber-500", badge: "bg-amber-500/15 text-amber-600 dark:text-amber-400 hover:bg-amber-500/15", label: "Disconnecting..." },
+          disconnected: { bg: "bg-muted", icon: "text-muted-foreground", badge: "", label: "Disconnected" },
+        };
+        const ss = statusStyles[connStatus] || statusStyles.disconnected;
 
         return (
           <Card key={integration.id} data-testid={`card-connection-${integration.id}`}>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className={`flex items-center justify-center h-9 w-9 rounded-lg ${isConnected ? "bg-emerald-500/10" : "bg-muted"}`}>
-                    {isConnected
-                      ? <Plug className="h-4 w-4 text-emerald-500" />
-                      : <Unplug className="h-4 w-4 text-muted-foreground" />
+                  <div className={`flex items-center justify-center h-9 w-9 rounded-lg ${ss.bg}`}>
+                    {isTransitioning
+                      ? <Loader2 className={`h-4 w-4 animate-spin ${ss.icon}`} />
+                      : isConnected
+                        ? <Plug className={`h-4 w-4 ${ss.icon}`} />
+                        : <Unplug className={`h-4 w-4 ${ss.icon}`} />
                     }
                   </div>
                   <div className="min-w-0">
@@ -263,10 +275,10 @@ function ConnectionStatus({ integrations }: { integrations: Integration[] }) {
                       )}
                       <Badge
                         variant={isConnected ? "default" : "secondary"}
-                        className={`text-[10px] px-1.5 py-0 ${isConnected ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15" : ""}`}
+                        className={`text-[10px] px-1.5 py-0 ${ss.badge}`}
                         data-testid={`badge-status-${integration.id}`}
                       >
-                        {isConnected ? "Connected" : "Disconnected"}
+                        {ss.label}
                       </Badge>
                     </div>
                   </div>
