@@ -22,41 +22,7 @@ import {
 
 import type { ConnectedApp } from "@shared/schema";
 import { generateDiscordPreviews, generateAllTemplates } from "../services/discord-preview";
-import {
-  convertStockPriceToInstrument,
-  getInstrumentTypeForConvert,
-} from "../utils/convert-targets";
-
-function instrumentPriceFromUnderlying(
-  data: Record<string, any>,
-  stockPrice: number,
-): number | null {
-  const instType = data.instrument_type || "Shares";
-  const isOptionInst = instType === "Options" || instType === "LETF Option";
-  if (!data.underlying_price_based) return null;
-  const stockEntry =
-    data.entry_underlying_price != null
-      ? Number(data.entry_underlying_price)
-      : null;
-  const instrumentEntry =
-    data.entry_option_price != null
-      ? Number(data.entry_option_price)
-      : data.entry_price != null
-        ? Number(data.entry_price)
-        : null;
-  if (stockEntry == null || instrumentEntry == null) return null;
-  const delta = data.delta != null ? Number(data.delta) : null;
-  const leverage = data.leverage != null ? Number(data.leverage) : 0;
-  const instrumentType = getInstrumentTypeForConvert(data.instrument_type);
-  return convertStockPriceToInstrument(
-    stockEntry,
-    instrumentEntry,
-    stockPrice,
-    delta,
-    leverage,
-    instrumentType,
-  );
-}
+// NOTE: instrumentPriceFromUnderlying and related conversion helpers were removed.
 
 declare global {
   namespace Express {
@@ -265,17 +231,16 @@ export function registerSignalRoutes(app: Express) {
               .status(400)
               .json({ message: `Target ${targetKey} not found` });
           const dataForTargetHit = { ...data };
-          const fetchedInstrumentPrice = await getCurrentInstrumentPrice(
-            data,
-            ticker,
-          );
-          const fallbackInstrumentPrice =
-            instrumentPriceFromUnderlying(data, Number(t.price)) ??
-            Number(t.price);
+          const fetchedInstrumentPrice = await getCurrentInstrumentPrice(data, ticker);
+          const fallbackInstrumentPrice = Number(t.price);
           dataForTargetHit.current_instrument_price =
-            fetchedInstrumentPrice ?? dataForTargetHit.current_instrument_price ?? fallbackInstrumentPrice;
+            fetchedInstrumentPrice ??
+            dataForTargetHit.current_instrument_price ??
+            fallbackInstrumentPrice;
           const currentInstrumentPrice =
-            fetchedInstrumentPrice ?? dataForTargetHit.current_instrument_price ?? Number(t.price);
+            fetchedInstrumentPrice ??
+            dataForTargetHit.current_instrument_price ??
+            Number(t.price);
           dataForTargetHit.current_tp_key = targetKey;
           dataForTargetHit.current_tp_number = targetKey.replace(/^tp/i, "") || "1";
           dataForTargetHit.current_tp_price = Number(t.price);
@@ -329,13 +294,11 @@ export function registerSignalRoutes(app: Express) {
                   ? Number(data.entry_price)
                   : newSL;
           const dataForSLRaised = { ...data };
-          const fetchedInstrumentPriceSL = await getCurrentInstrumentPrice(
-            data,
-            ticker,
-          );
-          const fallbackSL = instrumentPriceFromUnderlying(data, newSL);
+          const fetchedInstrumentPriceSL = await getCurrentInstrumentPrice(data, ticker);
           dataForSLRaised.current_instrument_price =
-            fetchedInstrumentPriceSL ?? dataForSLRaised.current_instrument_price ?? fallbackSL ?? currentTrackingPrice;
+            fetchedInstrumentPriceSL ??
+            dataForSLRaised.current_instrument_price ??
+            currentTrackingPrice;
           const currentInstrumentPrice =
             fetchedInstrumentPriceSL ??
             (typeof bodyPayload.currentInstrumentPrice === "number" &&
@@ -367,13 +330,8 @@ export function registerSignalRoutes(app: Express) {
           if (stopLoss == null)
             return res.status(400).json({ message: "No stop loss defined" });
           const dataForSLHit = { ...data };
-          const fetchedInstrumentPriceSLHit = await getCurrentInstrumentPrice(
-            data,
-            ticker,
-          );
-          const fallbackSLHit = instrumentPriceFromUnderlying(data, stopLoss);
-          const instrumentPriceToStore =
-            fetchedInstrumentPriceSLHit ?? fallbackSLHit ?? null;
+          const fetchedInstrumentPriceSLHit = await getCurrentInstrumentPrice(data, ticker);
+          const instrumentPriceToStore = fetchedInstrumentPriceSLHit ?? null;
           if (instrumentPriceToStore != null) {
             dataForSLHit.current_instrument_price = instrumentPriceToStore;
             dataForSLHit.instrumentSLFilled = instrumentPriceToStore;

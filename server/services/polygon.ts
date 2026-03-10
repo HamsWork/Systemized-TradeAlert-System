@@ -70,6 +70,44 @@ function resolveTicker(params: ChartParams): string {
   return params.symbol.toUpperCase();
 }
 
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit | undefined,
+  label: string,
+  maxRetries = 2,
+): Promise<Response | null> {
+  let attempt = 0;
+  while (attempt <= maxRetries) {
+    try {
+      const res = await fetch(url, options);
+      if (res.ok) return res;
+      // Retry on common rate-limit / transient errors
+      if (res.status === 429 || res.status === 502 || res.status === 503) {
+        attempt++;
+        if (attempt > maxRetries) {
+          console.warn(`[Polygon] ${label} failed after retries with status ${res.status}`);
+          return null;
+        }
+        const backoffMs = 500 * attempt;
+        await new Promise((r) => setTimeout(r, backoffMs));
+        continue;
+      }
+      // Non-retryable HTTP error
+      console.warn(`[Polygon] ${label} HTTP ${res.status}`);
+      return null;
+    } catch (err: any) {
+      attempt++;
+      if (attempt > maxRetries) {
+        console.warn(`[Polygon] ${label} network error after retries: ${err?.message ?? err}`);
+        return null;
+      }
+      const backoffMs = 500 * attempt;
+      await new Promise((r) => setTimeout(r, backoffMs));
+    }
+  }
+  return null;
+}
+
 async function fetchFromPolygon(params: ChartParams): Promise<ChartBar[]> {
   const apiKey = process.env.POLYGON_API_KEY;
   if (!apiKey) {
@@ -253,9 +291,9 @@ export async function fetchOptionContractPrice(
   const apiKey = process.env.POLYGON_API_KEY;
   const url = `${MASSIVE_API_BASE}/v3/snapshot/options/${symbol}/${encodeURIComponent(optionTicker)}?apiKey=${apiKey}`;
 
-  const response = await fetch(url);
-  if (!response.ok) {
-    console.warn(`[Polygon] Failed to fetch option contract data for ${optionTicker}: ${response.statusText}`);
+  const response = await fetchWithRetry(url, undefined, `option snapshot ${optionTicker}`);
+  if (!response) {
+    console.warn(`[Polygon] Failed to fetch option contract data for ${optionTicker}`);
     return { exists: false, price: null };
   }
   const data = await response.json();
@@ -277,9 +315,9 @@ export async function fetchStockPrice(symbol: string): Promise<number | null> {
   const url = `${MASSIVE_API_BASE}/v2/snapshot/locale/us/markets/stocks/tickers/${encodeURIComponent(
     symbol.toUpperCase(),
   )}?apiKey=${apiKey}`;
+  const res = await fetchWithRetry(url, undefined, `stock snapshot ${symbol.toUpperCase()}`);
+  if (!res) return null;
   try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
     const data: SnapshotResponse = await res.json();
     const snap = data.ticker;
     if (!snap) return null;
