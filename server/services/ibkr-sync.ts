@@ -194,10 +194,20 @@ class IbkrSyncManager {
     }
   }
 
+  private reconnectCounter = 0;
+
   private async doSyncAll(): Promise<void> {
+    this.reconnectCounter++;
+    if (this.reconnectCounter % 3 === 0) {
+      await this.tryReconnectDisconnected();
+    }
+
     for (const [integrationId, client] of this.clients) {
       if (!client.isConnected) {
-        console.log(`[IBKR Sync] Skipping ${integrationId} - not connected`);
+        console.log(`[IBKR Sync] ${integrationId} lost connection, removing stale client`);
+        this.clients.delete(integrationId);
+        this.accountSummaryCache.delete(integrationId);
+        await storage.updateIntegration(integrationId, { status: "disconnected" } as any);
         continue;
       }
       try {
@@ -214,6 +224,20 @@ class IbkrSyncManager {
           await storage.updateIntegration(integrationId, { status: "disconnected" } as any);
         }
       }
+    }
+  }
+
+  private async tryReconnectDisconnected(): Promise<void> {
+    const integrations = await storage.getIntegrations();
+    const ibkrIntegrations = integrations.filter(i => i.type === "ibkr" && i.enabled);
+
+    for (const integration of ibkrIntegrations) {
+      if (this.clients.has(integration.id)) continue;
+      if (this.connectingIds.has(integration.id)) continue;
+      if (this.disconnectingIds.has(integration.id)) continue;
+
+      console.log(`[IBKR Sync] Auto-reconnecting ${integration.name} (${integration.id})...`);
+      await this.connectOne(integration);
     }
   }
 
