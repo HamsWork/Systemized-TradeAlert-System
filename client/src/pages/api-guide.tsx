@@ -32,7 +32,12 @@ import {
   Info,
   Eye,
   EyeOff,
+  Rocket,
+  MessageSquare,
+  Terminal,
+  CheckCircle2,
 } from "lucide-react";
+import { SiDiscord } from "react-icons/si";
 import type { ConnectedApp } from "@shared/schema";
 
 function CopyButton({ text }: { text: string }) {
@@ -252,7 +257,7 @@ function EndpointInteractive({ endpoint, baseUrl, defaultApiKey }: { endpoint: E
           error: "Server returned non-JSON (likely HTML). Check that the request URL is correct and the API is running.",
           status: res.status,
           contentType,
-          bodyPreview: text.slice(0, 200) + (text.length > 200 ? "…" : ""),
+          bodyPreview: text.slice(0, 200) + (text.length > 200 ? "..." : ""),
         }, null, 2));
       } else {
         const data = await res.json();
@@ -498,7 +503,7 @@ function EndpointInteractive({ endpoint, baseUrl, defaultApiKey }: { endpoint: E
                 {queryResponse ? (
                   <div>
                     {queryStatus !== null && (
-                      <div className={`px-4 py-2 border-b border-zinc-800/60 text-xs font-mono ${queryStatus >= 200 && queryStatus < 300 ? "text-emerald-400" : "text-red-400"}`}>
+                      <div className={`px-4 py-1.5 border-b border-zinc-800/40 text-xs font-mono ${queryStatus >= 200 && queryStatus < 300 ? "text-emerald-400 bg-emerald-500/5" : "text-red-400 bg-red-500/5"}`}>
                         Status: {queryStatus}
                       </div>
                     )}
@@ -507,8 +512,8 @@ function EndpointInteractive({ endpoint, baseUrl, defaultApiKey }: { endpoint: E
                     </pre>
                   </div>
                 ) : (
-                  <div className="p-6 text-center text-xs text-muted-foreground">
-                    Click "Run Query" to see the response
+                  <div className="p-6 text-center">
+                    <p className="text-sm text-muted-foreground">Run a query to see the response here.</p>
                   </div>
                 )}
               </div>
@@ -586,7 +591,7 @@ const sections: SectionDef[] = [
           { name: "stop_loss", type: "number", required: false, description: "Stop loss price in the same space as entry_price (option / LETF / stock)." },
           { name: "auto_track", type: "boolean", required: false, description: "Enable automatic tracking of target hits and stop loss against live price. Defaults to true." },
           { name: "underlying_price_based", type: "boolean", required: false, description: "When true, targets and stop loss are compared against the underlying stock price instead of the option/LETF price. Applies to Options, LETF, and LETF Option instrument types. Defaults to false." },
-          { name: "time_stop", type: "string", required: false, description: "Time-based stop — exit the trade by this date (e.g., '2026-03-01')." },
+          { name: "time_stop", type: "string", required: false, description: "Time-based stop -- exit the trade by this date (e.g., '2026-03-01')." },
           { name: "discord_channel_webhook", type: "string", required: false, description: "Optional Discord webhook URL. When set, the signal alert is sent to this channel instead of the app's configured webhooks." },
           { name: "targets", type: "json", required: false, description: "Take-profit targets. Target prices must be in the same space as entry_price (option / LETF / stock).", explanation: `The targets object defines your profit-taking strategy. Each key (tp1, tp2, etc.) maps to a target with a price (option contract price for Options, LETF price for LETF, stock price for Shares), a take_off_percent indicating how much of the position to close, and an optional raise_stop_loss that adjusts your stop loss when the target is hit.
 
@@ -801,7 +806,7 @@ Example:
       {
         method: "PATCH",
         path: "/api/signals/:id",
-        description: "Update a signal's data. Accepts partial updates — only include the fields you want to change. The data field is a JSON object and will be merged with the existing signal data.",
+        description: "Update a signal's data. Accepts partial updates -- only include the fields you want to change. The data field is a JSON object and will be merged with the existing signal data.",
         params: [
           { name: "id", type: "string", required: true, description: "The unique signal ID (UUID format)." },
           { name: "status", type: "string", required: false, description: "Update the signal status.", enumValues: ["active", "closed", "completed", "stopped_out"] },
@@ -835,10 +840,336 @@ Example:
       },
     ],
   },
+  {
+    id: "discord-templates",
+    title: "Discord Templates",
+    icon: MessageSquare,
+    description: "Manage per-app Discord notification templates. Each connected app can have custom templates per instrument type and message type, using {{variable}} placeholders.",
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/discord-templates/var-templates",
+        description: "Get all default Discord templates grouped by instrument type. Returns the template structure, sample variables, and a rendered preview for each message type (signal_alert, target_hit, stop_loss_raised, stop_loss_hit).",
+        params: [],
+        responseExample: `[
+  {
+    "instrumentType": "Options",
+    "ticker": "AAPL",
+    "templates": [
+      {
+        "type": "signal_alert",
+        "label": "Signal Alert",
+        "content": "{{source_app}}",
+        "template": {
+          "title": "{{direction}} {{ticker}} {{strike}} {{expiration}}",
+          "color": "{{embed_color}}",
+          "fields": [
+            { "name": "Ticker", "value": "{{ticker}}", "inline": true },
+            { "name": "Stock Price", "value": "{{stock_price}}", "inline": true },
+            { "name": "Direction", "value": "{{direction}}", "inline": true }
+          ]
+        },
+        "sampleVars": {
+          "ticker": "AAPL",
+          "direction": "Call",
+          "strike": "190",
+          "stock_price": "$189.50",
+          "source_app": "My App"
+        },
+        "preview": { "content": "My App", "embed": { "..." : "rendered" } },
+        "isCustom": false
+      }
+    ]
+  }
+]`,
+      },
+      {
+        method: "GET",
+        path: "/api/discord-templates/app/:appId",
+        description: "Get Discord templates for a specific connected app. Returns defaults merged with any custom overrides. Templates marked isCustom: true have been customized for this app.",
+        params: [
+          { name: "appId", type: "string", required: true, description: "The connected app's unique ID (UUID)." },
+        ],
+        responseExample: `[
+  {
+    "instrumentType": "Options",
+    "ticker": "AAPL",
+    "templates": [
+      {
+        "type": "signal_alert",
+        "label": "Signal Alert",
+        "content": "{{source_app}}",
+        "template": {
+          "title": "{{direction}} {{ticker}} {{strike}} {{expiration}}",
+          "color": "{{embed_color}}",
+          "fields": [...]
+        },
+        "sampleVars": { "ticker": "AAPL", "..." : "..." },
+        "preview": { "content": "...", "embed": { "..." : "..." } },
+        "isCustom": true
+      }
+    ]
+  }
+]`,
+      },
+      {
+        method: "PUT",
+        path: "/api/discord-templates/app/:appId",
+        description: "Create or update a custom Discord template for a connected app. Overrides the default template for the specified instrument type and message type. Use {{variable}} placeholders in title, description, field names/values, and footer text.",
+        params: [
+          { name: "appId", type: "string", required: true, description: "The connected app's unique ID (UUID)." },
+          { name: "instrumentType", type: "string", required: true, description: "The instrument type this template applies to.", enumValues: ["Options", "Shares", "LETF", "LETF Option", "Crypto"] },
+          { name: "messageType", type: "string", required: true, description: "The message event type.", enumValues: ["signal_alert", "target_hit", "stop_loss_raised", "stop_loss_hit"] },
+          { name: "label", type: "string", required: false, description: "Display label for the template (e.g. 'Signal Alert')." },
+          { name: "content", type: "string", required: false, description: "Message content above the embed. Supports {{variable}} placeholders." },
+          { name: "embedJson", type: "json", required: true, description: "The embed template object with title, color, fields, footer, etc. Use {{variable}} placeholders.", explanation: `The embedJson defines the Discord embed structure. Available placeholders vary by instrument type and message type.
+
+Common variables:
+  {{ticker}}          Ticker symbol
+  {{direction}}       Call/Put/Long/Short
+  {{entry_price}}     Entry price
+  {{stock_price}}     Current stock price
+  {{source_app}}      Connected app name
+  {{embed_color}}     Color based on direction
+
+Options-specific:
+  {{strike}}          Strike price
+  {{expiration}}      Expiration date
+  {{option_price}}    Option contract price
+
+Target hit variables:
+  {{target_label}}    Target key (tp1, tp2)
+  {{target_price}}    Target price level
+  {{take_off_pct}}    Take-off percentage
+
+Stop loss variables:
+  {{stop_loss}}       Stop loss price
+  {{new_stop_loss}}   Raised stop loss price
+
+Example:
+{
+  "title": "{{direction}} {{ticker}} {{strike}} {{expiration}}",
+  "color": "{{embed_color}}",
+  "fields": [
+    { "name": "Ticker", "value": "{{ticker}}", "inline": true },
+    { "name": "Entry", "value": "{{entry_price}}", "inline": true },
+    { "name": "Stop Loss", "value": "{{stop_loss}}", "inline": true }
+  ],
+  "footer": { "text": "TradeSync" }
+}` },
+        ],
+        responseExample: `{
+  "id": "tmpl-uuid",
+  "appId": "app-uuid",
+  "instrumentType": "Options",
+  "messageType": "signal_alert",
+  "label": "Signal Alert",
+  "content": "{{source_app}}",
+  "embedJson": {
+    "title": "{{direction}} {{ticker}} {{strike}} {{expiration}}",
+    "color": "{{embed_color}}",
+    "fields": [
+      { "name": "Ticker", "value": "{{ticker}}", "inline": true },
+      { "name": "Entry", "value": "{{entry_price}}", "inline": true }
+    ]
+  }
+}`,
+      },
+      {
+        method: "DELETE",
+        path: "/api/discord-templates/app/:appId",
+        description: "Delete custom Discord templates for a connected app. Optionally filter by instrument type. After deletion, the app reverts to using default templates.",
+        params: [
+          { name: "appId", type: "string", required: true, description: "The connected app's unique ID (UUID)." },
+          { name: "instrumentType", type: "string", required: false, description: "Optional: only delete templates for this instrument type. If omitted, deletes all custom templates for the app.", enumValues: ["Options", "Shares", "LETF", "LETF Option", "Crypto"] },
+        ],
+        responseExample: `{
+  "success": true
+}`,
+      },
+    ],
+  },
 ];
 
+function QuickStartContent({ baseUrl }: { baseUrl: string }) {
+  return (
+    <div data-testid="section-quick-start">
+      <div className="p-6 border-b border-border/60">
+        <div className="flex items-center gap-2 mb-1">
+          <Rocket className="h-5 w-5 text-primary" />
+          <h1 className="text-2xl font-bold tracking-tight" data-testid="heading-quick-start">Quick Start</h1>
+        </div>
+        <p className="text-sm text-muted-foreground mt-1">
+          Get up and running with TradeSync in 3 steps. Base URL: <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">{baseUrl}</code>
+        </p>
+      </div>
+
+      <div className="p-6 space-y-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="rounded-xl border border-border/60 bg-muted/20 dark:bg-zinc-900/30 p-5" data-testid="card-step-1">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex items-center justify-center h-8 w-8 rounded-full bg-primary/10 text-primary text-sm font-bold">1</div>
+              <h3 className="font-semibold text-sm">Create a Connected App</h3>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Go to <strong>Connected Apps</strong> and create a new app. Each app gets a unique API key (<code className="font-mono text-[11px]">ts_...</code>) used to authenticate signal requests.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-border/60 bg-muted/20 dark:bg-zinc-900/30 p-5" data-testid="card-step-2">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex items-center justify-center h-8 w-8 rounded-full bg-primary/10 text-primary text-sm font-bold">2</div>
+              <h3 className="font-semibold text-sm">Send a Signal</h3>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              POST to <code className="font-mono text-[11px]">/api/ingest/signals</code> with your API key as a Bearer token. Include ticker, instrument type, direction, and optional trade plan details.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-border/60 bg-muted/20 dark:bg-zinc-900/30 p-5" data-testid="card-step-3">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex items-center justify-center h-8 w-8 rounded-full bg-primary/10 text-primary text-sm font-bold">3</div>
+              <h3 className="font-semibold text-sm">Automated Processing</h3>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              TradeSync automatically sends Discord notifications using your app's templates, executes IBKR orders if configured, and tracks targets/stop-loss in real-time.
+            </p>
+          </div>
+        </div>
+
+        <Separator />
+
+        <div>
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Terminal className="h-4 w-4 text-muted-foreground" />
+            Your First Signal
+          </h2>
+          <div className="rounded-lg bg-zinc-950/60 dark:bg-zinc-950/80 border border-zinc-800/60 overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-800/40 bg-zinc-900/50">
+              <span className="text-xs text-muted-foreground font-mono">cURL</span>
+              <CopyButton text={`curl -X POST ${baseUrl}/api/ingest/signals \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer YOUR_API_KEY" \\\n  -d '{\n    "ticker": "AAPL",\n    "instrumentType": "Options",\n    "direction": "Call",\n    "expiration": "2026-04-17",\n    "strike": "190",\n    "entryPrice": "5.20",\n    "stop_loss": 3.50,\n    "targets": {\n      "tp1": { "price": 7.00, "take_off_percent": 50, "raise_stop_loss": { "price": 5.20 } },\n      "tp2": { "price": 10.00, "take_off_percent": 50 }\n    }\n  }'`} />
+            </div>
+            <pre className="p-4 overflow-x-auto text-[13px] font-mono text-zinc-300 leading-relaxed whitespace-pre-wrap">
+              <code>{`curl -X POST ${baseUrl}/api/ingest/signals \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -d '{
+    "ticker": "AAPL",
+    "instrumentType": "Options",
+    "direction": "Call",
+    "expiration": "2026-04-17",
+    "strike": "190",
+    "entryPrice": "5.20",
+    "stop_loss": 3.50,
+    "targets": {
+      "tp1": { "price": 7.00, "take_off_percent": 50, "raise_stop_loss": { "price": 5.20 } },
+      "tp2": { "price": 10.00, "take_off_percent": 50 }
+    }
+  }'`}</code>
+            </pre>
+          </div>
+        </div>
+
+        <Separator />
+
+        <div>
+          <h2 className="text-lg font-semibold mb-4">What Happens Next</h2>
+          <div className="space-y-3">
+            <div className="flex items-start gap-3">
+              <CheckCircle2 className="h-4 w-4 text-emerald-500 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Signal Created</p>
+                <p className="text-xs text-muted-foreground">The signal is stored and linked to your connected app. It appears on the Signals page with live price tracking.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <SiDiscord className="h-4 w-4 text-[#5865F2] mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Discord Notification</p>
+                <p className="text-xs text-muted-foreground">An embed is sent to configured Discord channels using your app's template. Templates support <code className="font-mono text-[11px]">{"{{variable}}"}</code> placeholders for dynamic content.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <TrendingUp className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-medium">IBKR Order Execution</p>
+                <p className="text-xs text-muted-foreground">If IBKR is connected and the app has execution enabled, an entry order is placed automatically through Interactive Brokers.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <Zap className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Auto-Tracking</p>
+                <p className="text-xs text-muted-foreground">Targets and stop-loss levels are monitored against live prices. When hit, Discord alerts fire and stop-loss is automatically raised per your plan.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <Separator />
+
+        <div>
+          <h2 className="text-lg font-semibold mb-4">Instrument Types</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {[
+              { type: "Options", desc: "Stock options (calls/puts). Requires ticker (underlying), strike, expiration. Prices in option contract price.", directions: "Call / Put" },
+              { type: "Shares", desc: "Stocks and equities. Prices in stock price.", directions: "Long / Short" },
+              { type: "LETF", desc: "Leveraged ETFs (e.g. TQQQ, SOXL). Prices in LETF price, not the underlying index.", directions: "Long / Short" },
+              { type: "LETF Option", desc: "Options on leveraged ETFs. Combines LETF with options contract pricing.", directions: "Call / Put" },
+              { type: "Crypto", desc: "Cryptocurrency pairs. Prices in crypto price.", directions: "Long / Short" },
+            ].map(item => (
+              <div key={item.type} className="rounded-lg border border-border/50 p-3 bg-muted/10 dark:bg-zinc-900/20" data-testid={`card-instrument-${item.type.toLowerCase().replace(/\s/g, "-")}`}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <Badge variant="secondary" className="text-xs font-medium">{item.type}</Badge>
+                  <span className="text-[10px] text-muted-foreground font-mono">{item.directions}</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <Separator />
+
+        <div>
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Shield className="h-4 w-4 text-muted-foreground" />
+            Authentication
+          </h2>
+          <div className="rounded-lg border border-border/60 bg-muted/10 dark:bg-zinc-900/20 p-5 space-y-4">
+            <div>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                The signal ingestion endpoint (<code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">POST /api/ingest/signals</code>) accepts an optional Bearer token to link signals to a connected app.
+                Without a token, signals are processed as "Manual". All other API endpoints are open for internal dashboard use.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <h4 className="text-xs font-semibold mb-2 flex items-center gap-1.5">
+                  <Key className="h-3 w-3" /> Authorization Header
+                </h4>
+                <div className="rounded bg-zinc-900/60 border border-zinc-800/50 p-3">
+                  <code className="text-xs font-mono text-zinc-300">Authorization: Bearer ts_your_api_key</code>
+                </div>
+              </div>
+              <div>
+                <h4 className="text-xs font-semibold mb-2 flex items-center gap-1.5">
+                  <Lock className="h-3 w-3" /> API Key Format
+                </h4>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Keys are auto-generated with the <code className="font-mono">ts_</code> prefix when creating a connected app. Manage keys on the Connected Apps page.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ApiGuidePage() {
-  const [activeSection, setActiveSection] = useState("signals");
+  const [activeSection, setActiveSection] = useState("quickstart");
   const [activeEndpointIndex, setActiveEndpointIndex] = useState(0);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -865,7 +1196,7 @@ export default function ApiGuidePage() {
   const builtInApp = apps.find(a => a.isBuiltIn);
   const activeApp = builtInApp || apps.find(a => a.status === "active");
 
-  const currentSection = activeSection === "auth"
+  const currentSection = activeSection === "quickstart"
     ? null
     : sections.find(s => s.id === activeSection);
   const currentEndpoint = currentSection?.endpoints[activeEndpointIndex];
@@ -883,6 +1214,30 @@ export default function ApiGuidePage() {
     setMobileNavOpen(false);
   };
 
+  const navItems = (
+    <>
+      <button
+        className={`flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md transition-colors ${activeSection === "quickstart" ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"}`}
+        onClick={() => handleSectionClick("quickstart")}
+        data-testid="nav-section-quickstart"
+      >
+        <Rocket className="h-3.5 w-3.5" />
+        <span>Quick Start</span>
+      </button>
+      <Separator className="my-2" />
+      {sections.map((section) => (
+        <NavItem
+          key={section.id}
+          section={section}
+          activeSection={activeSection}
+          activePath={activePath}
+          onClick={handleSectionClick}
+          onEndpointClick={handleEndpointClick}
+        />
+      ))}
+    </>
+  );
+
   const sidebarContent = (
     <>
       <div className="p-4 border-b">
@@ -893,25 +1248,7 @@ export default function ApiGuidePage() {
         <p className="text-[11px] text-muted-foreground">REST API Reference</p>
       </div>
       <div className="p-3 space-y-1">
-        <button
-          className={`flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md transition-colors ${activeSection === "auth" ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"}`}
-          onClick={() => handleSectionClick("auth")}
-          data-testid="nav-section-auth"
-        >
-          <Shield className="h-3.5 w-3.5" />
-          <span>Authentication</span>
-        </button>
-        <Separator className="my-2" />
-        {sections.map((section) => (
-          <NavItem
-            key={section.id}
-            section={section}
-            activeSection={activeSection}
-            activePath={activePath}
-            onClick={handleSectionClick}
-            onEndpointClick={handleEndpointClick}
-          />
-        ))}
+        {navItems}
       </div>
     </>
   );
@@ -936,13 +1273,7 @@ export default function ApiGuidePage() {
               </Button>
             </div>
             <div className="p-3 space-y-1">
-              <button className={`flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md transition-colors ${activeSection === "auth" ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"}`} onClick={() => handleSectionClick("auth")}>
-                <Shield className="h-3.5 w-3.5" /><span>Authentication</span>
-              </button>
-              <Separator className="my-2" />
-              {sections.map((section) => (
-                <NavItem key={section.id} section={section} activeSection={activeSection} activePath={activePath} onClick={handleSectionClick} onEndpointClick={handleEndpointClick} />
-              ))}
+              {navItems}
             </div>
           </aside>
         </div>
@@ -956,74 +1287,8 @@ export default function ApiGuidePage() {
           <span className="text-sm font-medium">API Reference</span>
         </div>
 
-        {activeSection === "auth" && (
-          <div>
-            <div className="p-6 border-b border-border/60">
-              <h1 className="text-2xl font-bold tracking-tight mb-1" data-testid="heading-api-guide">API Reference</h1>
-              <p className="text-sm text-muted-foreground">
-                Complete REST API documentation for TradeSync. Base URL: <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">{baseUrl}</code>
-              </p>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
-              <div className="p-6 lg:border-r border-border/60">
-                <div className="flex items-center gap-2 mb-3">
-                  <Shield className="h-4 w-4 text-blue-500" />
-                  <h3 className="font-semibold text-lg">Authentication</h3>
-                </div>
-                <p className="text-sm text-muted-foreground leading-relaxed mb-6">
-                  The signal ingestion endpoint (<code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">POST /api/ingest/signals</code>) requires authentication via a Bearer token.
-                  All other endpoints are open for internal dashboard use.
-                </p>
-
-                <div className="space-y-5">
-                  <div data-testid="param-authorization">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <code className="text-sm font-mono font-semibold">Authorization</code>
-                      <Badge variant="secondary" className="text-[10px] font-normal px-1.5 py-0">string</Badge>
-                      <span className="text-[10px] text-red-400 font-medium">required</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">Bearer token with your connected app's API key. Format: <code className="font-mono">Bearer ts_xxx...</code></p>
-                  </div>
-                  <div data-testid="param-content-type">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <code className="text-sm font-mono font-semibold">Content-Type</code>
-                      <Badge variant="secondary" className="text-[10px] font-normal px-1.5 py-0">string</Badge>
-                      <span className="text-[10px] text-red-400 font-medium">required</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">Must be <code className="font-mono">application/json</code> for all POST/PUT/PATCH requests.</p>
-                  </div>
-                </div>
-
-                <div className="mt-6 pt-4 border-t">
-                  <h4 className="text-sm font-semibold mb-2">API Key Format</h4>
-                  <p className="text-xs text-muted-foreground">Keys are auto-generated with the <code className="font-mono">ts_</code> prefix when connecting an app. Manage keys on the Connected Apps page.</p>
-                </div>
-              </div>
-
-              <div className="p-6 bg-zinc-950/40 dark:bg-zinc-950/60 space-y-5">
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-base font-semibold">Code Examples</h3>
-                    <CopyButton text={`curl -X POST ${baseUrl}/api/ingest/signals \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer ts_your_api_key" \\\n  -d '{"ticker":"AAPL","instrumentType":"Options","direction":"Call","expiration":"2026-03-20","strike":"190","entryPrice":"189.50"}'`} />
-                  </div>
-                  <div className="rounded-lg bg-zinc-900/80 border border-zinc-800/60 overflow-hidden">
-                    <pre className="p-4 overflow-x-auto text-[13px] font-mono text-zinc-300 leading-relaxed whitespace-pre-wrap">
-                      <code>{`curl -X POST ${baseUrl}/api/ingest/signals \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer ts_your_api_key" \\\n  -d '{"ticker":"AAPL","instrumentType":"Options","direction":"Call","expiration":"2026-03-20","strike":"190","entryPrice":"189.50"}'`}</code>
-                    </pre>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-base font-semibold mb-3">API Key Example</h3>
-                  <div className="rounded-lg bg-zinc-900/80 border border-zinc-800/60 overflow-hidden">
-                    <pre className="p-4 text-[13px] font-mono text-zinc-300">
-                      <code>ts_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6</code>
-                    </pre>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+        {activeSection === "quickstart" && (
+          <QuickStartContent baseUrl={baseUrl} />
         )}
 
         {currentSection && currentEndpoint && (
