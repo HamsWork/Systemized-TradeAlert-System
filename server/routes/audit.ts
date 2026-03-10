@@ -100,12 +100,14 @@ function extractServices(): { name: string; file: string; description: string; e
 
       const descriptions: Record<string, string> = {
         "signal-processor.ts": "Signal ingestion pipeline: validates, transforms (TDI format), enriches with market data, stores signals, triggers Discord alerts and IBKR trade execution",
-        "trade-executor.ts": "IBKR trade execution: connects to TWS/Gateway, places market entry orders, handles order status and cancellation",
-        "trade-monitor.ts": "Background trade monitor: checks active signals every 10s against live prices, fires Discord alerts on target hits/stop loss, updates signal status",
-        "discord.ts": "Discord webhook sender: formats signal alerts and trade execution notifications as rich embeds",
-        "polygon.ts": "Polygon.io API client: fetches historical OHLCV bars for stocks and option contracts, caches results",
-        "ibkr-client.ts": "IbkrClient class wrapping @stoqey/ib IBApi for connection, order/position fetching, market data, historical data",
-        "ibkr-sync.ts": "IbkrSyncManager singleton: auto-connects enabled IBKR integrations, syncs orders/positions/prices to DB every 10s with real-time order status callbacks",
+        "trade-executor.ts": "IBKR trade execution: connects to TWS/Gateway, places market entry/close orders, handles contract building for stocks, options, and leveraged ETFs",
+        "trade-monitor.ts": "Background trade monitor: checks active signals every 10s against live prices, fires Discord alerts on target hits/stop loss, raises stop loss on TP hits, marks signals completed/stopped_out",
+        "discord.ts": "Discord webhook sender: renders per-app templates with {{variable}} placeholders, sends rich embeds for signal alerts, target hits, stop loss raises, and stop loss hits",
+        "discord-preview.ts": "Discord embed preview generator: builds preview payloads for all message types (signal_alert, target_hit, stop_loss_raised, stop_loss_hit) from signal data",
+        "discord-templates.ts": "Discord template engine: defines per-instrument-type embed templates with {{variable}} placeholders, renders templates with sample/live variables, manages default and custom template groups",
+        "polygon.ts": "Polygon.io API client: fetches historical OHLCV bars for stocks and option contracts, fetches live stock/option prices, background refresh every 60s",
+        "ibkr-client.ts": "IbkrClient class wrapping @stoqey/ib IBApi for connection, order/position fetching, market data, account summary, historical data",
+        "ibkr-sync.ts": "IbkrSyncManager singleton: auto-connects/reconnects enabled IBKR integrations every 30s, syncs orders/positions/account summary to DB every 10s with real-time order status callbacks",
       };
 
       services.push({
@@ -135,7 +137,7 @@ function buildFeatureMap(): FeatureMapping[] {
   return [
     {
       name: "Dashboard",
-      description: "System overview with signal pipeline flow, stat cards, recent signals, activity feed, connections status, positions summary",
+      description: "System overview with stat cards, recent signals, activity feed, IBKR account summary (net liquidation, buying power, P&L), connection status, and positions summary",
       layers: {
         frontend: ["client/src/pages/dashboard.tsx"],
         api: ["server/routes/dashboard.ts"],
@@ -144,7 +146,7 @@ function buildFeatureMap(): FeatureMapping[] {
     },
     {
       name: "Signal Ingestion",
-      description: "External apps push signals via POST /api/ingest/signals with Bearer API key auth. Supports standard and TDI formats with auto-detection and transformation",
+      description: "External apps push signals via POST /api/ingest/signals with required Bearer API key auth. Supports standard and TDI formats with auto-detection and transformation. 5 instrument types: Options, Shares, LETF, LETF Option, Crypto",
       layers: {
         api: ["server/routes/signals.ts"],
         logic: ["server/services/signal-processor.ts"],
@@ -154,7 +156,7 @@ function buildFeatureMap(): FeatureMapping[] {
     },
     {
       name: "Signals Management",
-      description: "Full CRUD for trading signals with filtering by status. Signal cards open detail modals with trade charts, price lines, IBKR orders, and activity feed",
+      description: "Full CRUD for trading signals with filtering by status. Signal cards open detail views with trade charts, price lines, IBKR orders, and activity feed. Manual target-hit, stop-loss-hit, close, and auto-track toggle APIs",
       layers: {
         frontend: ["client/src/pages/signals.tsx", "client/src/pages/signal-detail.tsx"],
         api: ["server/routes/signals.ts"],
@@ -164,7 +166,7 @@ function buildFeatureMap(): FeatureMapping[] {
     },
     {
       name: "Trade Chart & Visualization",
-      description: "Candlestick charts with entry/TP/SL price lines. Options signals show tabbed view (option contract vs underlying stock). Polygon.io primary data source with IBKR and TradingView fallbacks",
+      description: "Candlestick charts with entry/TP/SL price lines. Options signals show tabbed view (option contract vs underlying stock). Polygon.io primary data source with IBKR fallback",
       layers: {
         frontend: ["client/src/pages/signal-detail.tsx"],
         api: ["server/routes/ibkr.ts"],
@@ -173,7 +175,7 @@ function buildFeatureMap(): FeatureMapping[] {
     },
     {
       name: "IBKR Trade Execution",
-      description: "Places market entry orders on IBKR TWS/Gateway per connected app settings. Handles contract building for stocks, options, and leveraged ETFs",
+      description: "Places market entry/close orders on IBKR TWS/Gateway per connected app settings. Handles contract building for stocks, options, and leveraged ETFs. Close orders triggered on signal close",
       layers: {
         logic: ["server/services/trade-executor.ts"],
         storage: ["server/storage/ibkr.ts"],
@@ -182,7 +184,7 @@ function buildFeatureMap(): FeatureMapping[] {
     },
     {
       name: "IBKR Real-Time Sync",
-      description: "Background sync manager: maintains persistent connections to IBKR integrations, syncs orders/positions/market prices every 10s with real-time order status callbacks",
+      description: "Background sync manager: maintains persistent connections to IBKR integrations, auto-reconnects every 30s, syncs orders/positions/account summary every 10s. 4-state connection status (connected/connecting/disconnected/disconnecting)",
       layers: {
         frontend: ["client/src/pages/ibkr.tsx"],
         api: ["server/routes/ibkr.ts"],
@@ -193,7 +195,7 @@ function buildFeatureMap(): FeatureMapping[] {
     },
     {
       name: "Trade Monitor",
-      description: "Background process: checks active signals every 10s against live IBKR prices. Fires Discord alerts on target hits/stop loss triggers. Raises stop loss on TP hits. Marks signals completed/stopped_out",
+      description: "Background process: checks active signals every 10s against live prices. Fires Discord alerts on target hits/stop loss triggers. Raises stop loss on TP hits. Marks signals completed/stopped_out. Supports underlying_price_based tracking",
       layers: {
         logic: ["server/services/trade-monitor.ts"],
         storage: ["server/storage/signals.ts"],
@@ -201,16 +203,27 @@ function buildFeatureMap(): FeatureMapping[] {
     },
     {
       name: "Discord Notifications",
-      description: "Sends rich embed webhooks to Discord channels. Supports per-instrument-type webhooks (Shares/Options/LETF) configured per connected app",
+      description: "Sends rich embed webhooks to Discord channels. Renders per-app templates with {{variable}} placeholders. 4 message types: signal_alert, target_hit, stop_loss_raised, stop_loss_hit. Manual send and preview support",
       layers: {
-        logic: ["server/services/discord.ts"],
+        logic: ["server/services/discord.ts", "server/services/discord-preview.ts"],
+        storage: ["server/storage/discord.ts"],
+        schema: ["shared/schema/discord.ts"],
+      },
+    },
+    {
+      name: "Discord Templates",
+      description: "Per-app customizable Discord notification templates with {{variable}} placeholders. 5 instrument types x 4 message types = 20 default templates. Apps can override any template with custom embed JSON. Spacer fields for layout control",
+      layers: {
+        frontend: ["client/src/pages/discord-templates.tsx"],
+        api: ["server/routes/discord.ts"],
+        logic: ["server/services/discord-templates.ts"],
         storage: ["server/storage/discord.ts"],
         schema: ["shared/schema/discord.ts"],
       },
     },
     {
       name: "Connected Apps",
-      description: "Manage plugged-in trading apps with API key management (show/hide, copy, regenerate), Discord webhook config, and IBKR account assignment",
+      description: "Manage plugged-in trading apps with API key management (show/hide, copy, regenerate), per-instrument Discord webhook config, IBKR account assignment, and per-app Discord template overrides",
       layers: {
         frontend: ["client/src/pages/connected-apps.tsx"],
         api: ["server/routes/apps.ts"],
@@ -220,7 +233,7 @@ function buildFeatureMap(): FeatureMapping[] {
     },
     {
       name: "Integrations",
-      description: "Full CRUD for Discord channels and IBKR trading accounts with per-integration notification and trading toggles",
+      description: "Full CRUD for Discord channels (webhook URL) and IBKR trading accounts (host:port, client ID) with per-integration enable/disable toggles",
       layers: {
         frontend: ["client/src/pages/integrations.tsx"],
         api: ["server/routes/integrations.ts"],
@@ -230,7 +243,7 @@ function buildFeatureMap(): FeatureMapping[] {
     },
     {
       name: "Activity Feed",
-      description: "System event log tracking all actions: signal ingestion, rejections, trade executions, Discord alerts. Filterable by signal and symbol",
+      description: "System event log tracking all actions: signal ingestion, rejections, trade executions, Discord alerts, target hits, stop loss events. Filterable by signal and symbol",
       layers: {
         frontend: ["client/src/pages/activity.tsx"],
         api: ["server/routes/activity.ts"],
@@ -239,18 +252,8 @@ function buildFeatureMap(): FeatureMapping[] {
       },
     },
     {
-      name: "System Settings",
-      description: "Key-value toggle/config store organized by category (signals, trading, system) with toggle switches and value inputs",
-      layers: {
-        frontend: ["client/src/pages/settings.tsx"],
-        api: ["server/routes/settings.ts"],
-        storage: ["server/storage/settings.ts"],
-        schema: ["shared/schema/settings.ts"],
-      },
-    },
-    {
       name: "API Guide",
-      description: "Interactive API documentation with live code generation, parameter definitions, and example payloads",
+      description: "Interactive API documentation with Quick Start guide, Signals API (ingest, close, target-hit, stop-loss-hit, auto-track, CRUD), and Discord Templates API (GET/PUT/DELETE). Live code generation in Shell, Python, Go, JavaScript",
       layers: {
         frontend: ["client/src/pages/api-guide.tsx"],
       },
