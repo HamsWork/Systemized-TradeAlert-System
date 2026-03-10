@@ -893,16 +893,16 @@ export default function DiscordTemplatesPage() {
                   data-testid={`card-template-${template.type}-${idx}`}
                 >
                   <div className="p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className={`p-1.5 rounded-md border ${colorClass}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className={`p-1.5 rounded-md border shrink-0 ${colorClass}`}>
                           <Icon className="h-3.5 w-3.5" />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <p className="text-sm font-semibold" data-testid={`text-template-label-${idx}`}>{template.label}</p>
+                            <p className="text-sm font-semibold truncate" data-testid={`text-template-label-${idx}`}>{template.label}</p>
                             {template.isCustom && (
-                              <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-blue-500/10 text-blue-500">
+                              <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-blue-500/10 text-blue-500 shrink-0">
                                 <Check className="h-2.5 w-2.5 mr-0.5" />
                                 Custom
                               </Badge>
@@ -911,22 +911,22 @@ export default function DiscordTemplatesPage() {
                           <p className="text-[10px] text-muted-foreground font-mono">{template.type}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1 shrink-0">
                         <Button
                           variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs"
+                          size="icon"
+                          className="h-7 w-7"
                           onClick={() => setExpandedTemplate(isExpanded ? null : templateKey)}
                           data-testid={`button-toggle-preview-${idx}`}
+                          title={isExpanded ? "Hide Preview" : "Preview"}
                         >
-                          <Eye className="h-3 w-3 mr-1" />
-                          {isExpanded ? "Hide" : "Preview"}
+                          <Eye className="h-3.5 w-3.5" />
                         </Button>
                         {!isDefault && (
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-7 text-xs"
+                            className="h-7 text-xs px-2"
                             onClick={() => setEditModal({ open: true, template, instrumentType: activeGroup.instrumentType })}
                             data-testid={`button-edit-template-${idx}`}
                           >
@@ -935,13 +935,13 @@ export default function DiscordTemplatesPage() {
                           </Button>
                         )}
                         <Button
-                          size="sm"
-                          className="h-7 text-xs bg-[#5865F2] hover:bg-[#4752C4] text-white"
+                          size="icon"
+                          className="h-7 w-7 bg-[#5865F2] hover:bg-[#4752C4] text-white"
                           onClick={() => setSendModal({ open: true, template })}
                           data-testid={`button-send-template-${idx}`}
+                          title="Send to Discord"
                         >
-                          <Send className="h-3 w-3 mr-1" />
-                          Send
+                          <Send className="h-3.5 w-3.5" />
                         </Button>
                       </div>
                     </div>
