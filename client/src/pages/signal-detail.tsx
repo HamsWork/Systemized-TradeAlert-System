@@ -1223,6 +1223,25 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                     </div>
                   )}
 
+                  {(instrumentType === "Options" || instrumentType === "LETF" || instrumentType === "LETF Option") && (
+                    <div className="flex items-center justify-between" data-testid="detail-price-basis">
+                      <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                        <BarChart3 className="h-3 w-3" /> Price Basis
+                      </span>
+                      <Badge
+                        variant="outline"
+                        className={`text-[10px] ${data.underlying_price_based === true ? "text-purple-500 border-purple-500/30 bg-purple-500/5" : "text-blue-500 border-blue-500/30 bg-blue-500/5"}`}
+                        data-testid="badge-price-basis"
+                      >
+                        {data.underlying_price_based === true
+                          ? `Underlying${underlyingSymbol ? ` (${underlyingSymbol})` : ""} Price`
+                          : instrumentType === "Options" || instrumentType === "LETF Option"
+                            ? "Option Premium"
+                            : "LETF Price"}
+                      </Badge>
+                    </div>
+                  )}
+
                   {signal.sourceAppName && (
                     <div className="flex items-center justify-between" data-testid="detail-source">
                       <span className="text-xs text-muted-foreground">Source</span>
@@ -1355,24 +1374,6 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                   </>
                 )}
 
-                {tradePlanType && (
-                  <>
-                    <Separator />
-                    <div data-testid="detail-trade-plan-type">
-                      <div className="flex items-center gap-1.5 mb-2">
-                        <BarChart3 className="h-3.5 w-3.5 text-blue-500/70" />
-                        <span className="text-[10px] font-medium text-blue-500/80 uppercase tracking-wider">Plan Type</span>
-                      </div>
-                      <Badge variant="outline" className={`text-xs ${data.underlying_price_based === true ? "text-purple-500 border-purple-500/30 bg-purple-500/5" : "text-blue-500 border-blue-500/30 bg-blue-500/5"}`} data-testid="badge-trade-plan-type">
-                        {data.underlying_price_based === true
-                          ? "Underlying Stock Price Based"
-                          : tradePlanType === "stock_price_based"
-                            ? "Stock Price Based"
-                            : "Option Price Based"}
-                      </Badge>
-                    </div>
-                  </>
-                )}
 
                 {timeStop && (
                   <>
