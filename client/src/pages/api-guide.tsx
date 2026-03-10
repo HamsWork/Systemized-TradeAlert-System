@@ -579,14 +579,14 @@ const sections: SectionDef[] = [
       {
         method: "POST",
         path: "/api/ingest/signals",
-        description: "Push a trading signal into TradeSync. Optionally include a Bearer token to link the signal to a connected app. Without an API key, the signal is processed as Manual. Trade plan prices (entry_price, targets, stop_loss) must be in the correct price space: Options use option contract price; LETF use LETF price (e.g. TQQQ), not the underlying index (e.g. QQQ); Shares use stock price.",
-        auth: "Bearer Token (Optional)",
+        description: "Push a trading signal into TradeSync. Requires a Bearer token from a connected app (returns 401 without one). Trade plan prices (entry_price, targets, stop_loss) must be in the correct price space: Options use option contract price; LETF use LETF price (e.g. TQQQ), not the underlying index (e.g. QQQ); Shares use stock price.",
+        auth: "Bearer Token (Required)",
         params: [
           { name: "ticker", type: "string", required: true, description: "Ticker symbol (e.g., 'AAPL', 'TSLA', 'TQQQ'). For Options this is the underlying (e.g. AAPL)." },
           { name: "instrumentType", type: "string", required: true, description: "Instrument type.", enumValues: ["Options", "Shares", "LETF", "LETF Option", "Crypto"] },
-          { name: "direction", type: "string", required: true, description: "Trade direction. Use Call/Put for Options, Long/Short for Shares and LETF.", enumValues: ["Call", "Put", "Long", "Short"] },
-          { name: "expiration", type: "string", required: false, description: "Expiration date (e.g., '2026-03-01'). Required for Options." },
-          { name: "strike", type: "string", required: false, description: "Option strike price (e.g., '190'). Required for Options." },
+          { name: "direction", type: "string", required: true, description: "Trade direction. Use Call/Put for Options and LETF Option; Long/Short for Shares, LETF, and Crypto.", enumValues: ["Call", "Put", "Long", "Short"] },
+          { name: "expiration", type: "string", required: false, description: "Expiration date (e.g., '2026-03-01'). Required for Options and LETF Option." },
+          { name: "strike", type: "string", required: false, description: "Option strike price (e.g., '190'). Required for Options and LETF Option." },
           { name: "entryPrice", type: "string", required: false, description: "Entry price. Must match instrument: option contract price for Options, LETF price for LETF, stock price for Shares." },
           { name: "stop_loss", type: "number", required: false, description: "Stop loss price in the same space as entry_price (option / LETF / stock)." },
           { name: "auto_track", type: "boolean", required: false, description: "Enable automatic tracking of target hits and stop loss against live price. Defaults to true." },
@@ -651,7 +651,7 @@ Example:
       {
         method: "POST",
         path: "/api/signals/:id/close",
-        description: "Close an active trade (signal). Sets the signal status to \"closed\" and stops target/stop-loss monitoring. Only signals with status \"active\" can be closed. Returns the updated signal.",
+        description: "Close an active trade (signal). Sets the signal status to \"closed\" and stops target/stop-loss monitoring. If IBKR is connected and the signal has a filled position, a close order is placed automatically. Sends a Discord notification. Only signals with status \"active\" can be closed. Returns the updated signal.",
         params: [
           { name: "id", type: "string", required: true, description: "The unique signal ID (UUID) of the active trade to close." },
         ],
@@ -1139,8 +1139,8 @@ function QuickStartContent({ baseUrl }: { baseUrl: string }) {
           <div className="rounded-lg border border-border/60 bg-muted/10 dark:bg-zinc-900/20 p-5 space-y-4">
             <div>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                The signal ingestion endpoint (<code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">POST /api/ingest/signals</code>) accepts an optional Bearer token to link signals to a connected app.
-                Without a token, signals are processed as "Manual". All other API endpoints are open for internal dashboard use.
+                The signal ingestion endpoint (<code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">POST /api/ingest/signals</code>) requires a Bearer token to authenticate signals.
+                Each connected app has a unique API key. Requests without a valid token are rejected with a 401 error. All other API endpoints are open for internal dashboard use.
               </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
