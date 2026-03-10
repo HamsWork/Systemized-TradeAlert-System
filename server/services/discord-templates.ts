@@ -32,16 +32,16 @@ function optionsEntryTemplate(): TemplateEmbed {
     description: "**🚨 {{ticker}} Options Entry - {{app_name}}**",
     color: GREEN,
     fields: [
-      { name: "​", value: "", inline: false },
+      { name: "\u200b", value: "\u200b", inline: false },
       { name: "🟢 Ticker", value: "{{ticker}}", inline: true },
       { name: "📊 Stock Price", value: "{{stock_price}}", inline: true },
-      { name: "​", value: "", inline: false },
+      { name: "\u200b", value: "\u200b", inline: false },
       { name: "❌ Expiration", value: "{{expiry}}", inline: true },
       { name: "✍️ Strike", value: "{{strike}} {{right}}", inline: true },
       { name: "💵 Option Price", value: "{{option_price}}", inline: true },
-      { name: "​", value: "", inline: false },
+      { name: "\u200b", value: "\u200b", inline: false },
       { name: "📝 Trade Plan", value: "{{trade_plan}}", inline: false },
-      { name: "​", value: "", inline: false },
+      { name: "\u200b", value: "\u200b", inline: false },
       { name: "💰 Take Profit Plan", value: "{{take_profit_plan}}", inline: false },
     ],
     footer: DISCLAIMER,
@@ -53,13 +53,13 @@ function sharesEntryTemplate(): TemplateEmbed {
     description: "**🚨 {{ticker}} Shares Entry - {{app_name}}**",
     color: GREEN,
     fields: [
-      { name: "​", value: "", inline: false },
+      { name: "\u200b", value: "\u200b", inline: false },
       { name: "🟢 Ticker", value: "{{ticker}}", inline: true },
       { name: "📊 Stock Price", value: "{{stock_price}}", inline: true },
       { name: "📈 Direction", value: "{{direction}}", inline: true },
-      { name: "​", value: "", inline: false },
+      { name: "\u200b", value: "\u200b", inline: false },
       { name: "📝 Trade Plan", value: "{{trade_plan}}", inline: false },
-      { name: "​", value: "", inline: false },
+      { name: "\u200b", value: "\u200b", inline: false },
       { name: "💰 Take Profit Plan", value: "{{take_profit_plan}}", inline: false },
     ],
     footer: DISCLAIMER,
@@ -71,15 +71,15 @@ function letfEntryTemplate(): TemplateEmbed {
     description: "**🚨 {{underlying}} Shares Entry - {{app_name}}**",
     color: GREEN,
     fields: [
-      { name: "​", value: "", inline: false },
+      { name: "\u200b", value: "\u200b", inline: false },
       { name: "🟢 Ticker", value: "{{underlying}}", inline: true },
       { name: "📈 Direction", value: "{{direction}}", inline: true },
-      { name: "​", value: "", inline: false },
+      { name: "\u200b", value: "\u200b", inline: false },
       { name: "📹 LETF", value: "{{letf_ticker}} ({{leverage}}x {{letf_direction}})", inline: true },
       { name: "💰 LETF Entry", value: "{{letf_entry}}", inline: true },
-      { name: "​", value: "", inline: false },
+      { name: "\u200b", value: "\u200b", inline: false },
       { name: "📝 Trade Plan", value: "{{trade_plan}}", inline: false },
-      { name: "​", value: "", inline: false },
+      { name: "\u200b", value: "\u200b", inline: false },
       { name: "💰 Take Profit Plan", value: "{{take_profit_plan}}", inline: false },
     ],
     footer: DISCLAIMER,
@@ -91,17 +91,17 @@ function letfOptionEntryTemplate(): TemplateEmbed {
     description: "**🚨 {{underlying}} Options Entry - {{app_name}}**",
     color: GREEN,
     fields: [
-      { name: "​", value: "", inline: false },
+      { name: "\u200b", value: "\u200b", inline: false },
       { name: "🟢 Ticker", value: "{{underlying}}", inline: true },
       { name: "📊 LETF Price", value: "{{stock_price}}", inline: true },
       { name: "💹 Leveraged ETF", value: "{{letf_ticker}} ({{leverage}}x {{letf_direction}})", inline: true },
-      { name: "​", value: "", inline: false },
+      { name: "\u200b", value: "\u200b", inline: false },
       { name: "❌ Expiration", value: "{{expiry}}", inline: true },
       { name: "✍️ Strike", value: "{{strike}} {{right}}", inline: true },
       { name: "💵 Option Price", value: "{{option_price}}", inline: true },
-      { name: "​", value: "", inline: false },
+      { name: "\u200b", value: "\u200b", inline: false },
       { name: "📝 Trade Plan", value: "{{trade_plan}}", inline: false },
-      { name: "​", value: "", inline: false },
+      { name: "\u200b", value: "\u200b", inline: false },
       { name: "💰 Take Profit Plan", value: "{{take_profit_plan}}", inline: false },
     ],
     footer: DISCLAIMER,
@@ -113,13 +113,13 @@ function cryptoEntryTemplate(): TemplateEmbed {
     description: "**🚨 {{ticker}} Crypto Entry - {{app_name}}**",
     color: GREEN,
     fields: [
-      { name: "​", value: "", inline: false },
+      { name: "\u200b", value: "\u200b", inline: false },
       { name: "🟢 Ticker", value: "{{ticker}}", inline: true },
       { name: "📈 Direction", value: "{{direction}}", inline: true },
       { name: "💵 Entry Price", value: "{{entry_price}}", inline: true },
-      { name: "​", value: "", inline: false },
+      { name: "\u200b", value: "\u200b", inline: false },
       { name: "📝 Trade Plan", value: "{{trade_plan}}", inline: false },
-      { name: "​", value: "", inline: false },
+      { name: "\u200b", value: "\u200b", inline: false },
       { name: "💰 Take Profit Plan", value: "{{take_profit_plan}}", inline: false },
     ],
     footer: DISCLAIMER,
@@ -129,11 +129,11 @@ function cryptoEntryTemplate(): TemplateEmbed {
 function targetHitTemplate(instrumentType: string): TemplateEmbed {
   const label = instrumentType === "LETF" || instrumentType === "Shares" ? "Shares" : instrumentType === "Crypto" ? "Crypto" : "Options";
   const tickerVar = instrumentType === "LETF" || instrumentType === "LETF Option" ? "{{underlying}}" : "{{ticker}}";
-  const fields: TemplateEmbed["fields"] = [{ name: "​", value: "", inline: false }];
+  const fields: TemplateEmbed["fields"] = [{ name: "\u200b", value: "\u200b", inline: false }];
 
   if (instrumentType === "LETF") {
     fields.push({ name: "💹 LETF: {{letf_ticker}} ({{leverage}}x {{letf_direction}})", value: "", inline: true });
-    fields.push({ name: "​", value: "", inline: false });
+    fields.push({ name: "\u200b", value: "\u200b", inline: false });
   } else if (instrumentType === "LETF Option") {
     fields.push({ name: "💹 Leveraged ETF", value: "{{letf_ticker}} ({{leverage}}x {{letf_direction}})", inline: true });
     fields.push({ name: "❌ Expiration", value: "{{expiry}}", inline: true });
@@ -148,10 +148,10 @@ function targetHitTemplate(instrumentType: string): TemplateEmbed {
     { name: "✅ Entry", value: "{{entry_price}}", inline: true },
     { name: "🎯 TP{{tp_number}} Hit", value: "{{tp_price}}", inline: true },
     { name: "💸 Profit", value: "{{profit_pct}}", inline: true },
-    { name: "​", value: "", inline: false },
+    { name: "\u200b", value: "\u200b", inline: false },
     { name: "🚨 Status: TP{{tp_number}} Reached 🚨", value: "​", inline: false },
     { name: "🔍 Position Management", value: "{{position_mgmt}}", inline: false },
-    { name: "​", value: "", inline: false },
+    { name: "\u200b", value: "\u200b", inline: false },
     { name: "🛡️ Risk Management", value: "{{risk_mgmt}}", inline: false },
   );
 
@@ -166,7 +166,7 @@ function targetHitTemplate(instrumentType: string): TemplateEmbed {
 function stopLossRaisedTemplate(instrumentType: string): TemplateEmbed {
   const label = instrumentType === "LETF" || instrumentType === "Shares" ? "Shares" : instrumentType === "Crypto" ? "Crypto" : "Options";
   const tickerVar = instrumentType === "LETF" || instrumentType === "LETF Option" ? "{{underlying}}" : "{{ticker}}";
-  const fields: TemplateEmbed["fields"] = [{ name: "​", value: "", inline: false }];
+  const fields: TemplateEmbed["fields"] = [{ name: "\u200b", value: "\u200b", inline: false }];
 
   if (instrumentType === "LETF") {
     fields.push({ name: "💹 LETF", value: "{{letf_ticker}} ({{leverage}}x {{letf_direction}})", inline: true });
@@ -186,7 +186,7 @@ function stopLossRaisedTemplate(instrumentType: string): TemplateEmbed {
     { name: "✅ Entry", value: "{{entry_price}}", inline: true },
     { name: "🛡️ New Stop", value: "{{new_stop_loss}}", inline: true },
     { name: "💸 Risk", value: "{{risk_value}}", inline: true },
-    { name: "​", value: "", inline: false },
+    { name: "\u200b", value: "\u200b", inline: false },
     { name: "🚨 Status: Stop Loss Raised 🚨", value: "​", inline: false },
     { name: "🛡️ Risk Management", value: "{{risk_mgmt}}", inline: false },
   );
@@ -202,7 +202,7 @@ function stopLossRaisedTemplate(instrumentType: string): TemplateEmbed {
 function stopLossHitTemplate(instrumentType: string): TemplateEmbed {
   const label = instrumentType === "LETF" || instrumentType === "Shares" ? "Shares" : instrumentType === "Crypto" ? "Crypto" : "Options";
   const tickerVar = instrumentType === "LETF" || instrumentType === "LETF Option" ? "{{underlying}}" : "{{ticker}}";
-  const fields: TemplateEmbed["fields"] = [{ name: "​", value: "", inline: false }];
+  const fields: TemplateEmbed["fields"] = [{ name: "\u200b", value: "\u200b", inline: false }];
 
   if (instrumentType === "LETF") {
     fields.push({ name: "💹 LETF", value: "{{letf_ticker}} ({{leverage}}x {{letf_direction}})", inline: true });
@@ -222,7 +222,7 @@ function stopLossHitTemplate(instrumentType: string): TemplateEmbed {
     { name: "✅ Entry", value: "{{entry_price}}", inline: true },
     { name: "🛑 Stop Hit", value: "{{exit_price}}", inline: true },
     { name: "💸 Result", value: "{{profit_pct}}", inline: true },
-    { name: "​", value: "", inline: false },
+    { name: "\u200b", value: "\u200b", inline: false },
     { name: "🚨 Status: Position Closed 🚨", value: "​", inline: false },
     { name: "🛡️ Discipline Matters", value: "Following the plan keeps you in the game for winning trades", inline: false },
   );
