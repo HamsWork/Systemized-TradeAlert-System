@@ -386,7 +386,51 @@ export class IbkrClient {
       (this.ib.on as (ev: string, cb: (...args: any[]) => void) => void)(EventName.accountSummaryEnd, onAccountSummaryEnd);
       this.ib.on(EventName.error, onError);
 
-      this.ib.reqAccountSummary(reqId, "All", "$LEDGER:ALL,NetLiquidation,TotalCashValue,BuyingPower,GrossPositionValue,AvailableFunds,ExcessLiquidity,SettledCash,AccruedCash,Cushion,MaintMarginReq,InitMarginReq,UnrealizedPnL,RealizedPnL");
+      this.ib.reqAccountSummary(reqId, "All", "NetLiquidation,TotalCashValue,BuyingPower,GrossPositionValue,AvailableFunds,ExcessLiquidity,SettledCash,AccruedCash,Cushion,MaintMarginReq,InitMarginReq,UnrealizedPnL,RealizedPnL");
+    });
+  }
+
+  fetchAccountValues(): Promise<Record<string, Record<string, string>>> {
+    return new Promise((resolve) => {
+      const data: Record<string, Record<string, string>> = {};
+      const timeout = setTimeout(() => {
+        cleanup();
+        this.ib.reqAccountUpdates(false, "");
+        resolve(data);
+      }, 8000);
+
+      const onUpdateAccountValue = (key: string, value: string, currency: string, accountName: string) => {
+        if (!accountName) return;
+        if (!data[accountName]) data[accountName] = {};
+        const tag = currency && currency !== "" && currency !== "BASE" ? `${key}-${currency}` : key;
+        data[accountName][key] = value;
+      };
+
+      const onAccountDownloadEnd = (accountName: string) => {
+        clearTimeout(timeout);
+        cleanup();
+        this.ib.reqAccountUpdates(false, "");
+        resolve(data);
+      };
+
+      const onError = (_err: Error, _code: number, _errReqId: number) => {
+        clearTimeout(timeout);
+        cleanup();
+        this.ib.reqAccountUpdates(false, "");
+        resolve(data);
+      };
+
+      const cleanup = () => {
+        (this.ib.off as (ev: string, cb: (...args: any[]) => void) => void)(EventName.updateAccountValue, onUpdateAccountValue);
+        (this.ib.off as (ev: string, cb: (...args: any[]) => void) => void)(EventName.accountDownloadEnd, onAccountDownloadEnd);
+        this.ib.off(EventName.error, onError);
+      };
+
+      (this.ib.on as (ev: string, cb: (...args: any[]) => void) => void)(EventName.updateAccountValue, onUpdateAccountValue);
+      (this.ib.on as (ev: string, cb: (...args: any[]) => void) => void)(EventName.accountDownloadEnd, onAccountDownloadEnd);
+      this.ib.on(EventName.error, onError);
+
+      this.ib.reqAccountUpdates(true, "");
     });
   }
 

@@ -439,7 +439,20 @@ class IbkrSyncManager {
   private async syncAccountSummary(integrationId: string, client: IbkrClient): Promise<void> {
     try {
       const reqId = this.acctSummaryReqCounter++;
-      const rawSummary = await client.fetchAccountSummary(reqId);
+      let rawSummary = await client.fetchAccountSummary(reqId);
+      let accountKeys = Object.keys(rawSummary).filter(k => k !== "All");
+
+      if (accountKeys.length === 0) {
+        console.log(`[IBKR Sync] reqAccountSummary empty, trying reqAccountUpdates fallback...`);
+        rawSummary = await client.fetchAccountValues();
+        accountKeys = Object.keys(rawSummary).filter(k => k !== "All");
+      }
+
+      if (accountKeys.length === 0) {
+        console.warn(`[IBKR Sync] Account summary returned empty for ${integrationId}`);
+      } else {
+        console.log(`[IBKR Sync] Account data for: ${accountKeys.join(", ")} (tags: ${accountKeys.map(k => Object.keys(rawSummary[k]).length).join(", ")})`);
+      }
       const accounts: AccountSummaryData[] = [];
 
       for (const [accountId, tags] of Object.entries(rawSummary)) {
