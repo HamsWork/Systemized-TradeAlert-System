@@ -23,6 +23,7 @@ import type { Signal, ConnectedApp, ActivityLogEntry, Integration, IbkrPosition,
 interface AccountSummaryData {
   accountId: string;
   netLiquidation: number | null;
+  totalCashValue: number | null;
   buyingPower: number | null;
   grossPositionValue: number | null;
   availableFunds: number | null;
@@ -397,8 +398,8 @@ function IbkrAccountCard({ accounts, ibkrStatus, integrations }: { accounts: Acc
                 <span className="font-medium">{fmt(acct.grossPositionValue)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Settled Cash</span>
-                <span className="font-medium">{fmt(acct.settledCash)}</span>
+                <span className="text-muted-foreground">Cash</span>
+                <span className="font-medium">{fmt(acct.totalCashValue ?? acct.settledCash)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Maint. Margin</span>
