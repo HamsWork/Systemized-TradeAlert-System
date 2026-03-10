@@ -1,7 +1,11 @@
 import type { Signal, ConnectedApp } from "@shared/schema";
 import { insertSignalSchema } from "@shared/schema";
 import { storage } from "../storage";
-import { getLETFLeverage, getLETFUnderlying, LETF_UNDERLYING } from "../constants/letf";
+import {
+  getLETFLeverage,
+  getLETFUnderlying,
+  LETF_UNDERLYING,
+} from "../constants/letf";
 import { executeIbkrTrade } from "./trade-executor";
 import { sendEntryDicordAlert } from "./discord";
 import { getCurrentInstrumentPrice } from "./trade-monitor";
@@ -40,7 +44,6 @@ const VALID_INSTRUMENT_TYPES = [
 ];
 const VALID_DIRECTIONS_OPTIONS = ["Call", "Put"];
 const VALID_DIRECTIONS_DEFAULT = ["Long", "Short"];
-
 
 const TDI_INSTRUMENT_MAP: Record<string, string> = {
   SHARES: "Shares",
@@ -94,7 +97,10 @@ function transformTdiSignal(body: Record<string, any>): Record<string, any> {
 
   const tickerRaw =
     body.instrument_ticker || body.instrument_symbol || body.symbol;
-  const ticker = tickerRaw != null && typeof tickerRaw === "string" ? tickerRaw.toUpperCase() : "";
+  const ticker =
+    tickerRaw != null && typeof tickerRaw === "string"
+      ? tickerRaw.toUpperCase()
+      : "";
 
   const result: Record<string, any> = {
     ticker,
@@ -309,7 +315,8 @@ async function buildSignalData(
   const errors: string[] = [];
 
   const isOpra = typeof ticker === "string" && ticker.startsWith("O:");
-  const stockSymbol: string | undefined = body.symbol ?? (isOpra ? undefined : ticker);
+  const stockSymbol: string | undefined =
+    body.symbol ?? (isOpra ? undefined : ticker);
 
   const signalDataObj: Record<string, any> = {
     ticker,
@@ -327,20 +334,20 @@ async function buildSignalData(
   if (instrumentType === "LETF" || instrumentType === "LETF Option") {
     const letfSymbol = stockSymbol ?? ticker;
     signalDataObj.letfTicker = letfSymbol;
-    signalDataObj.underlying_ticker = getLETFUnderlying(letfSymbol) ?? body.underlying_ticker ?? stockSymbol;
+    signalDataObj.underlying_ticker =
+      getLETFUnderlying(letfSymbol) ?? body.underlying_ticker ?? stockSymbol;
     signalDataObj.leverage = getLETFLeverage(letfSymbol);
 
-    const dirText = direction === "Short" || direction === "Put" ? "BEAR" : "BULL";
+    const dirText =
+      direction === "Short" || direction === "Put" ? "BEAR" : "BULL";
 
     signalDataObj.leverage_direction = dirText;
   } else {
     signalDataObj.underlying_ticker = stockSymbol ?? ticker;
   }
 
-  
-
   const bullish = direction === "Call" || direction === "Long";
-  
+
   if (targets && typeof targets === "object") {
     signalDataObj.targets = targets;
   }
@@ -354,24 +361,32 @@ async function buildSignalData(
     signalDataObj.time_stop = time_stop;
   }
 
-
   signalDataObj.auto_track = auto_track !== undefined ? auto_track : true;
-  
-  const underlyingPriceBased = underlying_price_based !== undefined ? underlying_price_based : false;
+
+  const underlyingPriceBased =
+    underlying_price_based !== undefined ? underlying_price_based : false;
   signalDataObj.underlying_price_based = underlyingPriceBased;
 
   if (underlyingPriceBased) {
-    const priceSymbol = signalDataObj.underlying_ticker ?? stockSymbol ?? ticker;
-    const instrumentPrice = await getCurrentInstrumentPrice(signalDataObj, priceSymbol);
+    const priceSymbol =
+      signalDataObj.underlying_ticker ?? stockSymbol ?? ticker;
+    const instrumentPrice = await getCurrentInstrumentPrice(
+      signalDataObj,
+      priceSymbol,
+    );
     if (instrumentPrice != null && instrumentPrice > 0) {
       signalDataObj.entry_instrument_price = instrumentPrice;
     } else {
-      console.warn(`[Signal] Could not fetch instrument price for ${ticker} (symbol: ${priceSymbol}), proceeding without it`);
+      console.warn(
+        `[Signal] Could not fetch instrument price for ${ticker} (symbol: ${priceSymbol}), proceeding without it`,
+      );
+      errors.push("Instrument price Error");
     }
     signalDataObj.entry_tracking_price = entryPrice;
     signalDataObj.entry_underlying_price = entryPrice;
   } else {
-    const symbolForPrice = signalDataObj.underlying_ticker ?? stockSymbol ?? ticker;
+    const symbolForPrice =
+      signalDataObj.underlying_ticker ?? stockSymbol ?? ticker;
     if (!symbolForPrice || typeof symbolForPrice !== "string") {
       errors.push("Ticker is required for Shares");
     } else {
@@ -387,7 +402,9 @@ async function buildSignalData(
   }
 
   if (instrumentType === "LETF Option") {
-    signalDataObj.entry_letf_price = await fetchStockPrice(signalDataObj.ticker)
+    signalDataObj.entry_letf_price = await fetchStockPrice(
+      signalDataObj.ticker,
+    );
   }
 
   signalDataObj.hit_targets = {};
@@ -396,7 +413,6 @@ async function buildSignalData(
   signalDataObj.remain_quantity = 100;
 
   signalDataObj.status = "submitted";
-  
 
   return { data: signalDataObj, errors };
 }
