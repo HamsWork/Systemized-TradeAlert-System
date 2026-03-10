@@ -631,7 +631,6 @@ Example:
         "tp2": { "price": 50, "take_off_percent": 50, "raise_stop_loss": { "price": 40 } }
       },
       "stop_loss": 25,
-      "trade_plan_type": "option_price_based",
       "time_stop": "2026-03-01"
     },
     "status": "active",
@@ -763,7 +762,6 @@ Example:
         "tp2": { "price": 50, "take_off_percent": 50, "raise_stop_loss": { "price": 40 } }
       },
       "stop_loss": 25,
-      "trade_plan_type": "option_price_based",
       "time_stop": "2026-03-01"
     },
     "status": "active",
@@ -793,7 +791,6 @@ Example:
       "tp2": { "price": 50, "take_off_percent": 50, "raise_stop_loss": { "price": 40 } }
     },
     "stop_loss": 25,
-    "trade_plan_type": "option_price_based",
     "auto_track": true
   },
   "status": "active",

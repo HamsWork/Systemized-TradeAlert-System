@@ -40,7 +40,7 @@ const VALID_INSTRUMENT_TYPES = [
 ];
 const VALID_DIRECTIONS_OPTIONS = ["Call", "Put"];
 const VALID_DIRECTIONS_DEFAULT = ["Long", "Short"];
-const VALID_TRADE_PLAN_TYPES = ["stock_price_based", "option_price_based"];
+
 
 const TDI_INSTRUMENT_MAP: Record<string, string> = {
   SHARES: "Shares",
@@ -145,7 +145,6 @@ function transformTdiSignal(body: Record<string, any>): Record<string, any> {
 
   if (body.underlying_symbol) result.underlying_symbol = body.underlying_symbol;
 
-  if (body.trade_plan_type) result.trade_plan_type = body.trade_plan_type;
   if (body.auto_track !== undefined) result.auto_track = body.auto_track;
   if (body.underlying_price_based !== undefined)
     result.underlying_price_based = body.underlying_price_based;
@@ -276,15 +275,6 @@ function validateIngestBody(body: Record<string, any>): string[] {
     }
   }
 
-  if (
-    body.trade_plan_type != null &&
-    !VALID_TRADE_PLAN_TYPES.includes(body.trade_plan_type)
-  ) {
-    errors.push(
-      `trade_plan_type must be one of: ${VALID_TRADE_PLAN_TYPES.join(", ")}`,
-    );
-  }
-
   if (body.auto_track != null && typeof body.auto_track !== "boolean") {
     errors.push("auto_track must be a boolean (true or false)");
   }
@@ -312,7 +302,6 @@ async function buildSignalData(
     targets,
     stop_loss,
     time_stop,
-    trade_plan_type,
     auto_track,
     underlying_price_based,
   } = body;

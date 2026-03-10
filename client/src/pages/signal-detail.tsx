@@ -456,7 +456,7 @@ function ActivityRow({ entry }: { entry: ActivityLogEntry }) {
   );
 }
 
-function OptionChartTabs({ symbol, strike, expiration, optionType, entryPrice, tpLevels, slLevels, direction, tradePlanType, underlyingPriceBased, underlyingSymbol }: {
+function OptionChartTabs({ symbol, strike, expiration, optionType, entryPrice, tpLevels, slLevels, direction, underlyingPriceBased, underlyingSymbol }: {
   symbol: string;
   strike?: string;
   expiration?: string;
@@ -465,11 +465,10 @@ function OptionChartTabs({ symbol, strike, expiration, optionType, entryPrice, t
   tpLevels: number[];
   slLevels: number[];
   direction?: string;
-  tradePlanType?: string;
   underlyingPriceBased?: boolean;
   underlyingSymbol?: string;
 }) {
-  const showTargetsOnUnderlying = underlyingPriceBased === true || tradePlanType === "stock_price_based";
+  const showTargetsOnUnderlying = underlyingPriceBased === true;
   const underlyingTicker = underlyingSymbol || symbol;
   const [activeTab, setActiveTab] = useState<"option" | "underlying">(showTargetsOnUnderlying ? "underlying" : "option");
 
@@ -1061,7 +1060,6 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
   const stopLoss = data.stop_loss !== undefined && data.stop_loss !== null ? Number(data.stop_loss) : undefined;
   const slLevels = stopLoss !== undefined ? [stopLoss] : [];
   const timeStop = data.time_stop || null;
-  const tradePlanType = data.trade_plan_type || null;
   const hitCount = targets.filter(t => t.isHit).length;
 
   const orders = ordersQuery.data ?? [];
@@ -1122,7 +1120,6 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                     tpLevels={tpLevels}
                     slLevels={slLevels}
                     direction={direction}
-                    tradePlanType={tradePlanType}
                     underlyingPriceBased={data.underlying_price_based === true}
                     underlyingSymbol={data.underlying_symbol}
                   />
