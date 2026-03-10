@@ -29,10 +29,10 @@ const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Signals", url: "/signals", icon: TrendingUp },
   { title: "Activity", url: "/activity", icon: Activity },
-  { title: "Integrations", url: "/integrations", icon: Radio },
-  { title: "Connected Apps", url: "/connected-apps", icon: Puzzle },
   { title: "IBKR", url: "/ibkr", icon: Landmark },
   { title: "Discord Templates", url: "/discord-templates", icon: MessageSquare },
+  { title: "Integrations", url: "/integrations", icon: Radio },
+  { title: "Connected Apps", url: "/connected-apps", icon: Puzzle },
   { title: "API Guide", url: "/api-guide", icon: BookOpen },
   { title: "System Audit", url: "/audit", icon: ClipboardCheck },
 ];
