@@ -243,62 +243,6 @@ interface SnapshotResponse {
   };
 }
 
-export async function fetchLastPrice(ticker: string): Promise<number | null> {
-  const apiKey = process.env.POLYGON_API_KEY;
-  if (!apiKey) return null;
-
-  const isOption = ticker.startsWith("O:");
-  if (isOption) {
-    const url = `${POLYGON_BASE}/v3/snapshot/options/${encodeURIComponent(ticker)}?apiKey=${apiKey}`;
-    try {
-      const res = await fetch(url);
-      if (!res.ok) {
-        return fetchLastPriceFallback(ticker);
-      }
-      const data = await res.json();
-      const raw = data.results;
-      const result = Array.isArray(raw) ? raw[0] : raw;
-      if (!result) return fetchLastPriceFallback(ticker);
-      const price = result.last_trade?.price ?? result.day?.close ?? result.prev_day?.close ?? null;
-      if (price === null) return fetchLastPriceFallback(ticker);
-      return price;
-    } catch {
-      return fetchLastPriceFallback(ticker);
-    }
-  }
-
-  const url = `${POLYGON_BASE}/v2/snapshot/locale/us/markets/stocks/tickers/${encodeURIComponent(ticker.toUpperCase())}?apiKey=${apiKey}`;
-  try {
-    const res = await fetch(url);
-    if (!res.ok) {
-      return fetchLastPriceFallback(ticker);
-    }
-    const data: SnapshotResponse = await res.json();
-    const snap = data.ticker;
-    if (!snap) return fetchLastPriceFallback(ticker);
-    const price = snap.lastTrade?.p ?? snap.min?.c ?? snap.day?.c ?? snap.prevDay?.c ?? null;
-    return price;
-  } catch {
-    return fetchLastPriceFallback(ticker);
-  }
-}
-
-async function fetchLastPriceFallback(ticker: string): Promise<number | null> {
-  const apiKey = process.env.POLYGON_API_KEY;
-  if (!apiKey) return null;
-
-  const url = `${POLYGON_BASE}/v2/aggs/ticker/${encodeURIComponent(ticker)}/prev?adjusted=true&apiKey=${apiKey}`;
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const data: PolygonAggResponse = await res.json();
-    if (!data.results || data.results.length === 0) return null;
-    return data.results[0].c;
-  } catch {
-    return null;
-  }
-}
-
 export async function fetchOptionContractPrice(
   symbol: string,
   expiration: string,
@@ -324,7 +268,29 @@ export async function fetchOptionContractPrice(
 }
 
 export async function fetchStockPrice(symbol: string): Promise<number | null> {
-  return fetchLastPrice(symbol.toUpperCase());
+  const apiKey = process.env.POLYGON_API_KEY;
+  if (!apiKey) return null;
+
+  // Use Massive snapshot API for US stocks (see docs/sample in user prompt)
+  const url = `${MASSIVE_API_BASE}/v2/snapshot/locale/us/markets/stocks/tickers/${encodeURIComponent(
+    symbol.toUpperCase(),
+  )}?apiKey=${apiKey}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data: SnapshotResponse = await res.json();
+    const snap = data.ticker;
+    if (!snap) return null;
+    const price =
+      snap.lastTrade?.p ??
+      snap.min?.c ??
+      snap.day?.c ??
+      snap.prevDay?.c ??
+      null;
+    return price;
+  } catch {
+    return null;
+  }
 }
 
 export function startPolygonRefresh(): void {
