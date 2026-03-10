@@ -19,6 +19,24 @@ import {
 import { SiDiscord } from "react-icons/si";
 import { Link } from "wouter";
 import type { Signal, ConnectedApp, ActivityLogEntry, Integration, IbkrPosition, IbkrOrder } from "@shared/schema";
+
+interface AccountSummaryData {
+  accountId: string;
+  netLiquidation: number | null;
+  buyingPower: number | null;
+  grossPositionValue: number | null;
+  availableFunds: number | null;
+  excessLiquidity: number | null;
+  settledCash: number | null;
+  accruedCash: number | null;
+  cushion: number | null;
+  maintMarginReq: number | null;
+  initMarginReq: number | null;
+  unrealizedPnL: number | null;
+  realizedPnL: number | null;
+  dailyPnL: number | null;
+  lastUpdated: string;
+}
 import { formatDistanceToNow } from "date-fns";
 import { PageHeader } from "@/components/page-header";
 
@@ -280,6 +298,125 @@ function ConnectionStatus({ apps, integrations }: { apps: ConnectedApp[]; integr
   );
 }
 
+function IbkrAccountCard({ accounts, ibkrStatus, integrations }: { accounts: AccountSummaryData[]; ibkrStatus: Record<string, boolean>; integrations: Integration[] }) {
+  const ibkrIntegrations = integrations.filter(i => i.type === "ibkr");
+  if (ibkrIntegrations.length === 0 && accounts.length === 0) return null;
+
+  const fmt = (v: number | null) => v != null ? "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
+  const pnlColor = (v: number | null) => v == null ? "text-muted-foreground" : v >= 0 ? "text-emerald-500" : "text-red-500";
+  const pnlFmt = (v: number | null) => v == null ? "—" : (v >= 0 ? "+" : "") + "$" + Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  return (
+    <Card data-testid="card-ibkr-account">
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Landmark className="h-4 w-4 text-purple-500" />
+            IBKR Account
+          </CardTitle>
+          <Link href="/ibkr">
+            <span className="text-xs text-primary hover:underline cursor-pointer" data-testid="link-ibkr-account">Manage</span>
+          </Link>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {ibkrIntegrations.map((integration) => {
+          const config = (integration.config || {}) as Record<string, any>;
+          const connected = ibkrStatus[integration.id] === true;
+          return (
+            <div key={integration.id} className="flex items-center justify-between gap-2 py-1.5 border-b last:border-b-0" data-testid={`ibkr-connection-${integration.id}`}>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={`h-2 w-2 rounded-full shrink-0 ${connected ? "bg-emerald-500" : "bg-red-500"}`} />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{integration.name || "IBKR Gateway"}</p>
+                  <p className="text-[10px] text-muted-foreground font-mono">{config.host || "127.0.0.1"}:{config.port || "7497"}</p>
+                </div>
+              </div>
+              <Badge variant={connected ? "default" : "destructive"} className={`text-[10px] shrink-0 ${connected ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : ""}`}>
+                {connected ? "Connected" : "Disconnected"}
+              </Badge>
+            </div>
+          );
+        })}
+
+        {accounts.length > 0 ? accounts.map((acct) => (
+          <div key={acct.accountId} className="space-y-3" data-testid={`ibkr-account-${acct.accountId}`}>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-[10px] font-mono">{acct.accountId}</Badge>
+              {acct.lastUpdated && (
+                <span className="text-[10px] text-muted-foreground">
+                  Updated {formatDistanceToNow(new Date(acct.lastUpdated), { addSuffix: true })}
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-md bg-muted/50 p-2.5">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Net Liquidation</p>
+                <p className="text-sm font-bold" data-testid="text-net-liquidation">{fmt(acct.netLiquidation)}</p>
+              </div>
+              <div className="rounded-md bg-muted/50 p-2.5">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Buying Power</p>
+                <p className="text-sm font-bold" data-testid="text-buying-power">{fmt(acct.buyingPower)}</p>
+              </div>
+              <div className="rounded-md bg-muted/50 p-2.5">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Available Funds</p>
+                <p className="text-sm font-bold" data-testid="text-available-funds">{fmt(acct.availableFunds)}</p>
+              </div>
+              <div className="rounded-md bg-muted/50 p-2.5">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Excess Liquidity</p>
+                <p className="text-sm font-bold" data-testid="text-excess-liquidity">{fmt(acct.excessLiquidity)}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <div className="text-center rounded-md bg-muted/50 p-2">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Daily P&L</p>
+                <p className={`text-sm font-bold ${pnlColor(acct.dailyPnL)}`} data-testid="text-daily-pnl">{pnlFmt(acct.dailyPnL)}</p>
+              </div>
+              <div className="text-center rounded-md bg-muted/50 p-2">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Unrealized</p>
+                <p className={`text-sm font-bold ${pnlColor(acct.unrealizedPnL)}`} data-testid="text-unrealized-pnl">{pnlFmt(acct.unrealizedPnL)}</p>
+              </div>
+              <div className="text-center rounded-md bg-muted/50 p-2">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Realized</p>
+                <p className={`text-sm font-bold ${pnlColor(acct.realizedPnL)}`} data-testid="text-realized-pnl">{pnlFmt(acct.realizedPnL)}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Position Value</span>
+                <span className="font-medium">{fmt(acct.grossPositionValue)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Settled Cash</span>
+                <span className="font-medium">{fmt(acct.settledCash)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Maint. Margin</span>
+                <span className="font-medium">{fmt(acct.maintMarginReq)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Init. Margin</span>
+                <span className="font-medium">{fmt(acct.initMarginReq)}</span>
+              </div>
+              {acct.cushion != null && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Cushion</span>
+                  <span className="font-medium">{(acct.cushion * 100).toFixed(1)}%</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )) : (
+          <p className="py-4 text-center text-sm text-muted-foreground">No account data available. Connect to IBKR Gateway to see account summary.</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function PositionsSummary({ positions }: { positions: IbkrPosition[] }) {
   if (positions.length === 0) return null;
   const totalValue = positions.reduce((sum, p) => sum + (p.marketValue || 0), 0);
@@ -349,6 +486,8 @@ export default function Dashboard() {
   const integrationsQuery = useQuery<Integration[]>({ queryKey: ["/api/integrations"] });
   const positionsQuery = useQuery<IbkrPosition[]>({ queryKey: ["/api/ibkr/positions"] });
   const ordersQuery = useQuery<IbkrOrder[]>({ queryKey: ["/api/ibkr/orders"] });
+  const accountSummaryQuery = useQuery<AccountSummaryData[]>({ queryKey: ["/api/ibkr/account-summary"] });
+  const ibkrStatusQuery = useQuery<Record<string, boolean>>({ queryKey: ["/api/ibkr/status"] });
 
   const isLoading = statsQuery.isLoading || signalsQuery.isLoading || activityQuery.isLoading;
 
@@ -376,6 +515,8 @@ export default function Dashboard() {
   const integrations = integrationsQuery.data ?? [];
   const positions = positionsQuery.data ?? [];
   const orders = ordersQuery.data ?? [];
+  const accountSummary = accountSummaryQuery.data ?? [];
+  const ibkrStatus = ibkrStatusQuery.data ?? {};
   const activeApps = apps.filter(a => a.status === "active").length;
   const ibkrAccounts = integrations.filter(i => i.type === "ibkr").length;
 
@@ -430,7 +571,11 @@ export default function Dashboard() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
+        <IbkrAccountCard accounts={accountSummary} ibkrStatus={ibkrStatus} integrations={integrations} />
         <ConnectionStatus apps={apps} integrations={integrations} />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
         <PositionsSummary positions={positions} />
       </div>
     </div>
