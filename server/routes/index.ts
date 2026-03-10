@@ -5,7 +5,7 @@ import { registerAlertRoutes } from "./alerts";
 import { registerSignalRoutes } from "./signals";
 import { registerActivityRoutes } from "./activity";
 import { registerAppRoutes } from "./apps";
-import { registerSettingsRoutes } from "./settings";
+
 import { registerIntegrationRoutes } from "./integrations";
 import { registerIbkrRoutes } from "./ibkr";
 import { registerTestRoutes } from "./test";
@@ -27,7 +27,7 @@ export async function registerRoutes(
   registerSignalRoutes(app);
   registerActivityRoutes(app);
   registerAppRoutes(app);
-  registerSettingsRoutes(app);
+
   registerIntegrationRoutes(app);
   registerIbkrRoutes(app);
   registerTestRoutes(app);

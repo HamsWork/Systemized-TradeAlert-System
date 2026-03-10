@@ -8,7 +8,6 @@ import {
   Radio,
   BookOpen,
   Landmark,
-  Settings2,
   ClipboardCheck,
   MessageSquare,
 } from "lucide-react";
@@ -35,7 +34,6 @@ const navItems = [
   { title: "IBKR", url: "/ibkr", icon: Landmark },
   { title: "Discord Templates", url: "/discord-templates", icon: MessageSquare },
   { title: "API Guide", url: "/api-guide", icon: BookOpen },
-  { title: "Settings", url: "/settings", icon: Settings2 },
   { title: "System Audit", url: "/audit", icon: ClipboardCheck },
 ];
 

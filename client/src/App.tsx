@@ -15,7 +15,6 @@ import IntegrationsPage from "@/pages/integrations";
 import ConnectedAppsPage from "@/pages/connected-apps";
 import ApiGuidePage from "@/pages/api-guide";
 import IbkrPage from "@/pages/ibkr";
-import SettingsPage from "@/pages/settings";
 import AuditPage from "@/pages/audit";
 import DiscordTemplatesPage from "@/pages/discord-templates";
 
@@ -29,7 +28,6 @@ function Router() {
       <Route path="/connected-apps" component={ConnectedAppsPage} />
       <Route path="/ibkr" component={IbkrPage} />
       <Route path="/api-guide" component={ApiGuidePage} />
-      <Route path="/settings" component={SettingsPage} />
       <Route path="/audit" component={AuditPage} />
       <Route path="/discord-templates" component={DiscordTemplatesPage} />
       <Route component={NotFound} />
