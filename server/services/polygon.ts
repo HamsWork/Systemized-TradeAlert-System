@@ -263,7 +263,9 @@ export async function fetchOptionContractPrice(
 
   const bid = result.last_quote?.bid;
   const ask = result.last_quote?.ask;
-  const price = bid && ask ? (bid + ask) / 2 : null;
+  const price = bid && ask
+    ? (bid + ask) / 2
+    : result.last_trade?.price ?? result.day?.close ?? null;
   return { exists: price !== null, price };
 }
 

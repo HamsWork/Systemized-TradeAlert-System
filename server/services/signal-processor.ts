@@ -357,26 +357,11 @@ async function buildSignalData(
   signalDataObj.underlying_price_based = underlyingPriceBased;
 
   if (underlyingPriceBased) {
-    const rawCandidate = body.entry_option_price != null
-      ? Number(body.entry_option_price)
-      : body.entry_instrument_price != null
-        ? Number(body.entry_instrument_price)
-        : null;
-    const rawInstrumentPrice = rawCandidate != null && Number.isFinite(rawCandidate) && rawCandidate > 0
-      ? rawCandidate
-      : null;
-
-    const fetchedInstrumentPrice = await getCurrentInstrumentPrice(signalDataObj, ticker);
-    const instrumentPrice = fetchedInstrumentPrice ?? rawInstrumentPrice;
-
+    const instrumentPrice = await getCurrentInstrumentPrice(signalDataObj, ticker);
     if (instrumentPrice == null || instrumentPrice <= 0) {
-      console.warn(`[Signal] Instrument price unavailable for ${ticker} (fetched: ${fetchedInstrumentPrice}, raw: ${rawInstrumentPrice})`);
       errors.push("Instrument price Error");
     } else {
       signalDataObj.entry_instrument_price = instrumentPrice;
-      if (fetchedInstrumentPrice == null) {
-        console.log(`[Signal] Used signal-provided instrument price for ${ticker}: ${instrumentPrice} (Polygon unavailable)`);
-      }
     }
     signalDataObj.entry_tracking_price = entryPrice;
     signalDataObj.entry_underlying_price = entryPrice;
