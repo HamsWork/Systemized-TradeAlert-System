@@ -80,7 +80,7 @@ Interactive REST API documentation with a Quick Start guide (3-step onboarding),
 
 ### System Audit
 
-A live self-documenting system overview that scans the actual codebase in real time. Shows architecture details, endpoint inventory, database tables, services, feature map with file locations, and file statistics. Three views: System Architecture, Feature File Map, and JSON Export.
+A live self-documenting system overview that scans the actual codebase in real time. Displays a "Last scanned" timestamp with file and line counts, tech stack breakdown, project statistics (source files, lines of code, endpoints, DB tables, services, features), backend services with descriptions, and the full feature map with file locations. Three views: System Architecture, Feature File Map, and JSON Export. Hit "Refresh" to rescan the codebase on demand.
 
 ![System Audit](docs/screenshots/09-system-audit.png)
 
