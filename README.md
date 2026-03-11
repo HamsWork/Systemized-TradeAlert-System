@@ -68,6 +68,22 @@ Register and manage external trading apps that send signals to TradeSync. Each a
 
 ![Connected Apps](docs/screenshots/07-connected-apps.png)
 
+#### Edit App Settings
+
+Click the settings icon on any app card to open the Edit App Settings modal. The modal has three sections:
+
+**General Info** — App name, slug (URL identifier), and description.
+
+![Edit App Settings](docs/screenshots/11-connected-app-edit.png)
+
+**Discord Settings** — Toggle Discord notifications on/off. When enabled, configure a separate Webhook URL and Message Content for each of the 5 instrument types: Shares, Options, Leveraged ETF, LETF Option, and Crypto. Each instrument type gets its own Discord channel via its webhook URL, and the message content (e.g. `@everyone`) is sent alongside the rich embed.
+
+![Discord Webhook Configuration](docs/screenshots/12-connected-app-edit-discord.png)
+
+**IBKR Settings** — Toggle IBKR trade execution on/off. When enabled, select which IBKR account to route orders through from a dropdown of configured IBKR integrations. Orders placed by this app will use the selected account's connection (host, port, client ID).
+
+![IBKR Account Configuration](docs/screenshots/13-connected-app-edit-ibkr.png)
+
 #### Currently Connected Apps
 
 | App | Description | IBKR Trades | Discord | Sync Signals |
