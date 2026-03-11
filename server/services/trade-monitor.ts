@@ -1,6 +1,6 @@
 import type { Signal, ConnectedApp } from "@shared/schema";
 import { storage } from "../storage";
-import { getLETFUnderlying } from "../constants/letf";
+import { getLETFUnderlyingSync } from "../constants/letf";
 import {
   sendTargetHitDiscordAlert,
   sendStopLossRaisedDiscord,
@@ -11,8 +11,9 @@ import { fetchStockPrice, fetchOptionContractPrice } from "./polygon";
 
 function getUnderlyingTicker(data: Record<string, any>): string {
   return (
+    data.underlying_ticker ||
     data.underlying_symbol ||
-    getLETFUnderlying(data.ticker) ||
+    getLETFUnderlyingSync(data.ticker) ||
     data.ticker ||
     ""
   );

@@ -39,12 +39,28 @@ export const LETF_UNDERLYING: Record<string, string> = {
   TSLQ: "TSLA",
 };
 
-export function getLETFUnderlying(ticker: string | null | undefined): string | undefined {
+/** Sync fallback: underlying from static map only. Use when signal data already has underlying_ticker. */
+export function getLETFUnderlyingSync(ticker: string | null | undefined): string | undefined {
   if (!ticker || typeof ticker !== "string") return undefined;
   return LETF_UNDERLYING[ticker.toUpperCase().trim()];
 }
 
-// Approximate leverage for common LETFs. Sign indicates bull (>0) vs bear (<0).
+/**
+ * Fetch LETF underlying from Polygon ETF profiles (primary_benchmark), with static map fallback.
+ */
+export async function getLETFUnderlying(
+  ticker: string | null | undefined,
+): Promise<string | undefined> {
+  if (!ticker || typeof ticker !== "string") return undefined;
+  const { fetchLETFUnderlyingFromPolygon } = await import("../services/polygon");
+  const fromPolygon = await fetchLETFUnderlyingFromPolygon(ticker.toUpperCase().trim());
+  if (fromPolygon) return fromPolygon;
+  return LETF_UNDERLYING[ticker.toUpperCase().trim()];
+}
+
+import { getCachedLETFLeverage } from "../services/polygon";
+
+// Approximate leverage for common LETFs (fallback when Polygon data missing). Sign indicates bull (>0) vs bear (<0).
 const LETF_LEVERAGE: Record<string, number> = {
   // Index / sector 3x pairs
   TQQQ: 3,
@@ -84,5 +100,10 @@ export function getLETFLeverage(
   ticker: string | null | undefined,
 ): number | undefined {
   if (!ticker || typeof ticker !== "string") return undefined;
-  return LETF_LEVERAGE[ticker.toUpperCase().trim()];
+  const upper = ticker.toUpperCase().trim();
+
+  const polygonLev = getCachedLETFLeverage(upper);
+  if (polygonLev != null) return polygonLev;
+
+  return LETF_LEVERAGE[upper];
 }

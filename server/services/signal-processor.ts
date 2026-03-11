@@ -4,7 +4,6 @@ import { storage } from "../storage";
 import {
   getLETFLeverage,
   getLETFUnderlying,
-  LETF_UNDERLYING,
 } from "../constants/letf";
 import { executeIbkrTrade } from "./trade-executor";
 import { sendEntryDicordAlert } from "./discord";
@@ -331,7 +330,7 @@ async function buildSignalData(
 
   if (instrumentType === "LETF" || instrumentType === "LETF Option") {
     signalDataObj.letfTicker = ticker;
-    signalDataObj.underlying_ticker = getLETFUnderlying(ticker);
+    signalDataObj.underlying_ticker = await getLETFUnderlying(ticker);
     signalDataObj.leverage = getLETFLeverage(ticker);
 
     const dirText =

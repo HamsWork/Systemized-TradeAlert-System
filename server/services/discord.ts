@@ -1,6 +1,6 @@
 import type { Signal, ConnectedApp } from "@shared/schema";
 import { storage } from "../storage";
-import { getLETFUnderlying, getLETFLeverage } from "../constants/letf";
+import { getLETFUnderlyingSync, getLETFLeverage } from "../constants/letf";
 import { fetchOptionContractPrice, fetchStockPrice } from "./polygon";
 import { getCurrentInstrumentPrice } from "./trade-monitor";
 
@@ -239,7 +239,12 @@ export function profitPctFromInstrument(
 }
 
 function getUnderlying(data: Record<string, any>, ticker: string): string {
-  return data.underlying_symbol || getLETFUnderlying(ticker) || ticker;
+  return (
+    data.underlying_ticker ||
+    data.underlying_symbol ||
+    getLETFUnderlyingSync(ticker) ||
+    ticker
+  );
 }
 
 /** Entry price of the instrument (option price for options, else entry_price). Used for profit % in Discord. */

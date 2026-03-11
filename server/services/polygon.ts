@@ -318,6 +318,95 @@ export async function fetchOptionContractPrice(
   return { exists: false, price: null };
 }
 
+/** Map Polygon ETF primary_benchmark (index name) to tradeable underlying ticker. */
+const ETF_BENCHMARK_TO_TICKER: Record<string, string> = {
+  "S&P 500 Index": "SPY",
+  "S&P 500": "SPY",
+  "Nasdaq-100": "QQQ",
+  "Nasdaq 100": "QQQ",
+  "Dow Jones Industrial Average": "DIA",
+  "Russell 2000 Index": "IWM",
+  "Russell 2000": "IWM",
+  "S&P 500 Financials": "XLF",
+  "Financial Select Sector": "XLF",
+  "PHLX Semiconductor Sector": "SOX",
+  "Semiconductor Sector": "SOX",
+  "S&P 500 Technology Sector": "XLK",
+  "Technology Select Sector": "XLK",
+  "S&P 500 Consumer Discretionary": "XLY",
+  "S&P 500 Health Care": "XLV",
+  "S&P 500 Energy": "XLE",
+  "S&P 500 Utilities": "XLU",
+  "S&P 500 Materials": "XLB",
+  "S&P 500 Industrials": "XLI",
+  "S&P 500 Real Estate": "XLRE",
+  "S&P 500 Communication Services": "XLC",
+  "S&P 500 Consumer Staples": "XLP",
+  "S&P Homebuilders Select Industry": "XHB",
+  "S&P Biotechnology Select Industry": "XBI",
+  "FTSE China 50": "FXI",
+  "Gold Miners": "GDX",
+  "NYSE Arca Gold Miners": "GDX",
+  "MVIS Junior Gold Miners": "GDXJ",
+};
+
+interface PolygonETFProfileResult {
+  composite_ticker?: string;
+  primary_benchmark?: string;
+  levered_amount?: number;
+}
+
+interface PolygonETFProfilesResponse {
+  results?: PolygonETFProfileResult[];
+  status?: string;
+}
+
+const LETF_LEVERAGE_CACHE: Record<string, number> = {};
+
+export function getCachedLETFLeverage(ticker: string): number | undefined {
+  return LETF_LEVERAGE_CACHE[ticker.toUpperCase().trim()];
+}
+
+/**
+ * Fetch LETF underlying ticker from Polygon ETF Global profiles (primary_benchmark).
+ * Also caches levered_amount (leverage) when present.
+ * Returns undefined if API fails or benchmark is not in our map.
+ */
+export async function fetchLETFUnderlyingFromPolygon(
+  ticker: string,
+): Promise<string | undefined> {
+  const apiKey = process.env.POLYGON_API_KEY;
+  if (!apiKey) return undefined;
+
+  const upper = ticker.toUpperCase().trim();
+  const url = `${POLYGON_BASE}/etf-global/v1/profiles?composite_ticker=${encodeURIComponent(
+    upper,
+  )}&limit=1&apiKey=${apiKey}`;
+
+  try {
+    const res = await fetchWithRetry(url, undefined, `ETF profile ${ticker}`);
+    if (!res?.ok) return undefined;
+    const data: PolygonETFProfilesResponse = await res.json();
+    const profile = data.results?.[0];
+    if (!profile) return undefined;
+
+    if (
+      typeof profile.levered_amount === "number" &&
+      !Number.isNaN(profile.levered_amount) &&
+      profile.levered_amount !== 0
+    ) {
+      LETF_LEVERAGE_CACHE[upper] = profile.levered_amount;
+    }
+
+    const bench = profile.primary_benchmark;
+    if (!bench || typeof bench !== "string") return undefined;
+    const trimmed = bench.trim();
+    return ETF_BENCHMARK_TO_TICKER[trimmed] ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function fetchStockPrice(symbol: string): Promise<number | null> {
   const apiKey = process.env.POLYGON_API_KEY;
   if (!apiKey) return null;

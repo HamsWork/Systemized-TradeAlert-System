@@ -1,4 +1,4 @@
-import { getLETFLeverage, getLETFUnderlying } from "../constants/letf";
+import { getLETFLeverage, getLETFUnderlyingSync } from "../constants/letf";
 
 export interface TemplateEmbed {
   description?: string;
@@ -329,7 +329,11 @@ export function buildSampleVariables(
   const isBullish = direction === "Call" || direction === "Long";
   const isOption = instrumentType === "Options" || instrumentType === "LETF Option";
   const isLETF = instrumentType === "LETF" || instrumentType === "LETF Option";
-  const underlying = data.underlying_symbol || getLETFUnderlying(ticker) || ticker;
+  const underlying =
+    data.underlying_ticker ||
+    data.underlying_symbol ||
+    getLETFUnderlyingSync(ticker) ||
+    ticker;
   const leverage = getLETFLeverage(ticker);
   const dirText = direction === "Short" || direction === "Put" ? "BEAR" : "BULL";
   const entryPrice = data.entry_instrument_price ?? data.entry_price ?? 0;
