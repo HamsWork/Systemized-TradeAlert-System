@@ -68,6 +68,16 @@ Register and manage external trading apps that send signals to TradeSync. Each a
 
 ![Connected Apps](docs/screenshots/07-connected-apps.png)
 
+#### Currently Connected Apps
+
+| App | Description | IBKR Trades | Discord | Sync Signals |
+|-----|-------------|:-----------:|:-------:|:------------:|
+| **Discord Scalper** | Discord Scalper signal integration | Yes | Yes | Yes |
+| **Crowned Trader** | Crowned Trader signal integration | Yes | Yes | Yes |
+| **TDI Trade** | TDI-based technical scanner — detects high-probability setups using RSI, price action, and volatility band analysis. Sends signals with quality grades and risk/reward targets. | Yes | Yes | Yes |
+| **TradeSync API** *(built-in)* | Built-in app for testing and manual signal ingestion | Yes | Yes | Yes |
+| **Situ Trader** | Advanced algorithmic trading platform with real-time market analysis and automated execution strategies | Yes | No | No |
+
 ---
 
 ### API Guide
