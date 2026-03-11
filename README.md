@@ -10,7 +10,7 @@ A modular trading dashboard where connected apps send signals via API, triggerin
 
 The main overview page showing active signals, connected apps, IBKR orders, and open positions at a glance. Includes the Signal Pipeline flow (Ingest > Execute > Notify), recent signals, and a live activity feed.
 
-![Dashboard](docs/screenshots/01-dashboard.png)
+![Dashboard](screenshots/01-dashboard.png)
 
 ---
 
@@ -18,7 +18,7 @@ The main overview page showing active signals, connected apps, IBKR orders, and 
 
 View and manage all trading signals with status filters (Active, All, Completed, Stopped Out, Closed, Expired). Each signal card shows the ticker, direction, instrument type, entry price, target/stop-loss progress, source app, and status. Click "+ New Signal" to create signals manually.
 
-![Signals](docs/screenshots/02-signals.png)
+![Signals](screenshots/02-signals.png)
 
 ---
 
@@ -26,7 +26,7 @@ View and manage all trading signals with status filters (Active, All, Completed,
 
 Click any signal card to open the detail view. Features a live candlestick chart (Polygon.io data with IBKR live price updates) with entry, target, and stop-loss price lines overlaid. The right panel shows signal details, trade status with target hit tracking, and related activity. Below the chart: Discord messages sent for this signal and IBKR order history.
 
-![Signal Detail](docs/screenshots/10-signal-detail.png)
+![Signal Detail](screenshots/10-signal-detail.png)
 
 ---
 
@@ -34,7 +34,7 @@ Click any signal card to open the detail view. Features a live candlestick chart
 
 A chronological feed of every system event: signal ingestion, Discord messages sent, IBKR orders placed, target hits, stop-loss triggers, and errors. Each entry shows the event type, description, source app, and timestamp.
 
-![Activity](docs/screenshots/03-activity.png)
+![Activity](screenshots/03-activity.png)
 
 ---
 
@@ -42,7 +42,7 @@ A chronological feed of every system event: signal ingestion, Discord messages s
 
 Dedicated Interactive Brokers page. Shows the connected IBKR account with connect/disconnect controls, position summary cards (Open, Stock, Option positions, Pending Orders), and tabbed views for Orders and Positions. Orders display symbol, app, side, type, quantity, fill status, market price, and status with color-coded badges.
 
-![IBKR](docs/screenshots/04-ibkr.png)
+![IBKR](screenshots/04-ibkr.png)
 
 ---
 
@@ -50,7 +50,7 @@ Dedicated Interactive Brokers page. Shows the connected IBKR account with connec
 
 Configure Discord webhook message templates per instrument type (Options, Shares, LETF, LETF Option, Crypto). Four message types per instrument: Entry Signal, Target Hit, SL Raised, and Stop Loss Hit. Select "Default Templates" to view built-in templates, or select a specific connected app to customize its templates with `{{variable}}` placeholders. Each template card shows a preview button, send button, and variable list.
 
-![Discord Templates](docs/screenshots/05-discord-templates.png)
+![Discord Templates](screenshots/05-discord-templates.png)
 
 ---
 
@@ -58,7 +58,7 @@ Configure Discord webhook message templates per instrument type (Options, Shares
 
 Manage Discord channels and IBKR trading accounts. Each integration card shows its type, connection status, and toggle switches for enabling/disabling notifications or trade execution. Add new integrations with the "+ Add Integration" button.
 
-![Integrations](docs/screenshots/06-integrations.png)
+![Integrations](screenshots/06-integrations.png)
 
 ---
 
@@ -66,7 +66,7 @@ Manage Discord channels and IBKR trading accounts. Each integration card shows i
 
 Register and manage external trading apps that send signals to TradeSync. Each app has an auto-generated API key (show/hide, copy, regenerate), per-instrument Discord webhook URLs, IBKR connection settings (client ID, host, port), and toggles for sync signals, Discord messages, and IBKR trade execution.
 
-![Connected Apps](docs/screenshots/07-connected-apps.png)
+![Connected Apps](screenshots/07-connected-apps.png)
 
 #### Edit App Settings
 
@@ -74,15 +74,15 @@ Click the settings icon on any app card to open the Edit App Settings modal. The
 
 **General Info** — App name, slug (URL identifier), and description.
 
-![Edit App Settings](docs/screenshots/11-connected-app-edit.png)
+![Edit App Settings](screenshots/11-connected-app-edit.png)
 
 **Discord Settings** — Toggle Discord notifications on/off. When enabled, configure a separate Webhook URL and Message Content for each of the 5 instrument types: Shares, Options, Leveraged ETF, LETF Option, and Crypto. Each instrument type gets its own Discord channel via its webhook URL, and the message content (e.g. `@everyone`) is sent alongside the rich embed.
 
-![Discord Webhook Configuration](docs/screenshots/12-connected-app-edit-discord.png)
+![Discord Webhook Configuration](screenshots/12-connected-app-edit-discord.png)
 
 **IBKR Settings** — Toggle IBKR trade execution on/off. When enabled, select which IBKR account to route orders through from a dropdown of configured IBKR integrations. Orders placed by this app will use the selected account's connection (host, port, client ID).
 
-![IBKR Account Configuration](docs/screenshots/13-connected-app-edit-ibkr.png)
+![IBKR Account Configuration](screenshots/13-connected-app-edit-ibkr.png)
 
 #### Currently Connected Apps
 
@@ -100,7 +100,7 @@ Click the settings icon on any app card to open the Edit App Settings modal. The
 
 Interactive REST API documentation with a Quick Start guide (3-step onboarding), live cURL examples, and endpoint reference. Covers the Signals API (ingest, list, update, delete) and Discord Templates API (get, update, reset). Includes authentication details, instrument type specifications, and request/response examples.
 
-![API Guide](docs/screenshots/08-api-guide.png)
+![API Guide](screenshots/08-api-guide.png)
 
 ---
 
@@ -108,7 +108,7 @@ Interactive REST API documentation with a Quick Start guide (3-step onboarding),
 
 A live self-documenting system overview that scans the actual codebase in real time. Displays a "Last scanned" timestamp with file and line counts, tech stack breakdown, project statistics (source files, lines of code, endpoints, DB tables, services, features), backend services with descriptions, and the full feature map with file locations. Three views: System Architecture, Feature File Map, and JSON Export. Hit "Refresh" to rescan the codebase on demand.
 
-![System Audit](docs/screenshots/09-system-audit.png)
+![System Audit](screenshots/09-system-audit.png)
 
 ---
 
