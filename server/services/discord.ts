@@ -1125,7 +1125,8 @@ export async function sendEntryDicordAlert(
   }
 
   // const expendName = app.name === "Discord Scalper" ? "Scalp Trade" : app.name;
-  const expendName = app.name === "Discord Scalper" ? "Scalp Trade" : "";
+  const expendName = app.name === "Discord Scalper" ? "Scalp Trade" : 
+     app.name === "TDI Trade" ? "Swing Trade" : "";
 
 
   const embed = buildEntryAlertEmbed(signal, expendName);

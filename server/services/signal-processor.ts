@@ -148,7 +148,8 @@ function transformTdiSignal(body: Record<string, any>): Record<string, any> {
     }
   }
 
-  if (body.underlying_symbol) result.underlying_symbol = body.underlying_symbol;
+  if (body.underlying_symbol) result.underlying_ticker = body.underlying_symbol;
+  if (body.leverage) result.leverage = body.leverage;
 
   if (body.auto_track !== undefined) result.auto_track = body.auto_track;
   if (body.underlying_price_based !== undefined)
@@ -330,8 +331,8 @@ async function buildSignalData(
 
   if (instrumentType === "LETF" || instrumentType === "LETF Option") {
     signalDataObj.letfTicker = ticker;
-    signalDataObj.underlying_ticker = await getLETFUnderlying(ticker);
-    signalDataObj.leverage = getLETFLeverage(ticker);
+    signalDataObj.underlying_ticker = body.underlying_ticker ?? await getLETFUnderlying(ticker);
+    signalDataObj.leverage = body.leverage ?? getLETFLeverage(ticker);
 
     const dirText =
       direction === "Short" || direction === "Put" ? "BEAR" : "BULL";
