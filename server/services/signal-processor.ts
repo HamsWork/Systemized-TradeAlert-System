@@ -314,9 +314,7 @@ async function buildSignalData(
 
   const errors: string[] = [];
 
-  const isOpra = typeof ticker === "string" && ticker.startsWith("O:");
-  const stockSymbol: string | undefined =
-    body.symbol ?? (isOpra ? undefined : ticker);
+  const stockSymbol: string | undefined = ticker;
 
   const signalDataObj: Record<string, any> = {
     ticker,
@@ -332,18 +330,16 @@ async function buildSignalData(
   }
 
   if (instrumentType === "LETF" || instrumentType === "LETF Option") {
-    const letfSymbol = stockSymbol ?? ticker;
-    signalDataObj.letfTicker = letfSymbol;
-    signalDataObj.underlying_ticker =
-      getLETFUnderlying(letfSymbol) ?? body.underlying_ticker ?? stockSymbol;
-    signalDataObj.leverage = getLETFLeverage(letfSymbol);
+    signalDataObj.letfTicker = ticker;
+    signalDataObj.underlying_ticker = getLETFUnderlying(ticker);
+    signalDataObj.leverage = getLETFLeverage(ticker);
 
     const dirText =
       direction === "Short" || direction === "Put" ? "BEAR" : "BULL";
 
     signalDataObj.leverage_direction = dirText;
   } else {
-    signalDataObj.underlying_ticker = stockSymbol ?? ticker;
+    signalDataObj.underlying_ticker = ticker;
   }
 
   const bullish = direction === "Call" || direction === "Long";
@@ -368,17 +364,15 @@ async function buildSignalData(
   signalDataObj.underlying_price_based = underlyingPriceBased;
 
   if (underlyingPriceBased) {
-    const priceSymbol =
-      signalDataObj.underlying_ticker ?? stockSymbol ?? ticker;
     const instrumentPrice = await getCurrentInstrumentPrice(
       signalDataObj,
-      priceSymbol,
+      ticker,
     );
     if (instrumentPrice != null && instrumentPrice > 0) {
       signalDataObj.entry_instrument_price = instrumentPrice;
     } else {
       console.warn(
-        `[Signal] Could not fetch instrument price for ${ticker} (symbol: ${priceSymbol}), proceeding without it`,
+        `[Signal] Could not fetch instrument price for ${ticker} , proceeding without it`,
       );
       errors.push("Instrument price Error");
     }

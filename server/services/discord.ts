@@ -401,7 +401,7 @@ export function buildEntryAlertEmbed(
 
 
 
-  const heading = `**\u{1F6A8} ${ticker} ${strSharesSymbol} Entry - ${appName}**`;
+  const heading = `**\u{1F6A8} ${ticker} ${strSharesSymbol} Entry${appName && appName.trim().length > 0 ? ` - ${appName}` : ""}**`;
   
   const fields = buildEmbedFields(signalData);
 
@@ -1119,7 +1119,8 @@ export async function sendEntryDicordAlert(
       .catch(() => {});
   }
 
-  const expendName = app.name === "Discord Scalper" ? "Scalp Trade" : app.name;
+  // const expendName = app.name === "Discord Scalper" ? "Scalp Trade" : app.name;
+  const expendName = app.name === "Discord Scalper" ? "Scalp Trade" : "";
 
 
   const embed = buildEntryAlertEmbed(signal, expendName);
