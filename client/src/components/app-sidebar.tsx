@@ -10,6 +10,7 @@ import {
   Landmark,
   ClipboardCheck,
   MessageSquare,
+  HelpCircle,
 } from "lucide-react";
 import {
   Sidebar,
@@ -35,6 +36,7 @@ const navItems = [
   { title: "Connected Apps", url: "/connected-apps", icon: Puzzle },
   { title: "API Guide", url: "/api-guide", icon: BookOpen },
   { title: "System Audit", url: "/audit", icon: ClipboardCheck },
+  { title: "Help", url: "/help", icon: HelpCircle },
 ];
 
 export function AppSidebar() {

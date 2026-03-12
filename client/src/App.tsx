@@ -17,6 +17,7 @@ import ApiGuidePage from "@/pages/api-guide";
 import IbkrPage from "@/pages/ibkr";
 import AuditPage from "@/pages/audit";
 import DiscordTemplatesPage from "@/pages/discord-templates";
+import HelpPage from "@/pages/help";
 
 function Router() {
   return (
@@ -30,6 +31,7 @@ function Router() {
       <Route path="/api-guide" component={ApiGuidePage} />
       <Route path="/audit" component={AuditPage} />
       <Route path="/discord-templates" component={DiscordTemplatesPage} />
+      <Route path="/help" component={HelpPage} />
       <Route component={NotFound} />
     </Switch>
   );
