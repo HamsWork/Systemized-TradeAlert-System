@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -17,12 +18,29 @@ import {
   TrendingUp,
   Eye,
   Zap,
+  Search,
+  X,
 } from "lucide-react";
 import type { ActivityLogEntry } from "@shared/schema";
 import { formatRelativeTime } from "@/lib/formatters";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
+import { Button } from "@/components/ui/button";
+
+const TYPE_LABELS: Record<string, string> = {
+  signal_ingested: "Signal Ingested",
+  signal_rejected: "Signal Rejected",
+  ingest_failed: "Ingest Failed",
+  discord_sent: "Discord Sent",
+  target_hit: "Target Hit",
+  stop_loss_hit: "Stop Loss Hit",
+  stop_loss_raised: "SL Raised",
+  trade_error: "Trade Error",
+  alert_triggered: "Alert Triggered",
+  alert_created: "Alert Created",
+  signal_created: "Signal Created",
+};
 
 function getActivityIcon(type: string) {
   switch (type) {
@@ -31,6 +49,7 @@ function getActivityIcon(type: string) {
     case "alert_created":
       return <Bell className="h-4 w-4 text-blue-500" />;
     case "signal_created":
+    case "signal_ingested":
       return <TrendingUp className="h-4 w-4 text-emerald-500" />;
     case "watchlist_added":
       return <Eye className="h-4 w-4 text-purple-500" />;
@@ -42,19 +61,24 @@ function getActivityIcon(type: string) {
 }
 
 function getActivityBadge(type: string) {
+  const label = TYPE_LABELS[type] ?? type;
   switch (type) {
     case "alert_triggered":
-      return <Badge variant="destructive" className="text-xs">Alert Triggered</Badge>;
+    case "stop_loss_hit":
+    case "ingest_failed":
+    case "signal_rejected":
+    case "trade_error":
+      return <Badge variant="destructive" className="text-xs">{label}</Badge>;
     case "alert_created":
-      return <Badge variant="default" className="text-xs">Alert Created</Badge>;
     case "signal_created":
-      return <Badge variant="default" className="text-xs">Signal Created</Badge>;
-    case "watchlist_added":
-      return <Badge variant="secondary" className="text-xs">Watchlist</Badge>;
-    case "system":
-      return <Badge variant="outline" className="text-xs">System</Badge>;
+    case "signal_ingested":
+    case "discord_sent":
+      return <Badge variant="default" className="text-xs">{label}</Badge>;
+    case "target_hit":
+    case "stop_loss_raised":
+      return <Badge variant="secondary" className="text-xs">{label}</Badge>;
     default:
-      return <Badge variant="secondary" className="text-xs">{type}</Badge>;
+      return <Badge variant="secondary" className="text-xs">{label}</Badge>;
   }
 }
 
@@ -62,6 +86,8 @@ export default function ActivityPage() {
   const activityQuery = useQuery<ActivityLogEntry[]>({ queryKey: ["/api/activity"] });
   const [selectedEntry, setSelectedEntry] = useState<ActivityLogEntry | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState<string>("all");
 
   const handleCardClick = (entry: ActivityLogEntry) => {
     setSelectedEntry(entry);
@@ -74,6 +100,37 @@ export default function ActivityPage() {
       setSelectedEntry(null);
     }
   };
+
+  const activities = activityQuery.data ?? [];
+
+  const availableTypes = useMemo(() => {
+    const typeCounts = new Map<string, number>();
+    for (const a of activities) {
+      typeCounts.set(a.type, (typeCounts.get(a.type) ?? 0) + 1);
+    }
+    return Array.from(typeCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([type, count]) => ({ type, count }));
+  }, [activities]);
+
+  const filteredActivities = useMemo(() => {
+    let result = activities;
+
+    if (activeFilter !== "all") {
+      result = result.filter((a) => a.type === activeFilter);
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      result = result.filter((a) =>
+        (a.symbol && a.symbol.toLowerCase().includes(q)) ||
+        (a.title && a.title.toLowerCase().includes(q)) ||
+        (a.description && a.description.toLowerCase().includes(q))
+      );
+    }
+
+    return result;
+  }, [activities, activeFilter, searchQuery]);
 
   if (activityQuery.isLoading) {
     return (
@@ -88,8 +145,6 @@ export default function ActivityPage() {
     );
   }
 
-  const activities = activityQuery.data ?? [];
-
   return (
     <div className="space-y-6 p-6" data-testid="page-activity">
       <PageHeader
@@ -99,19 +154,80 @@ export default function ActivityPage() {
         testId="heading-activity"
       />
 
-      {activities.length === 0 ? (
+      <div className="flex flex-col gap-3">
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by ticker or keyword..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 pr-9"
+            data-testid="input-search-activity"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              data-testid="button-clear-search"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant={activeFilter === "all" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setActiveFilter("all")}
+            data-testid="filter-all"
+          >
+            All
+            <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5">
+              {activities.length}
+            </Badge>
+          </Button>
+          {availableTypes.map(({ type, count }) => (
+            <Button
+              key={type}
+              variant={activeFilter === type ? "default" : "outline"}
+              size="sm"
+              onClick={() => setActiveFilter(activeFilter === type ? "all" : type)}
+              data-testid={`filter-${type}`}
+            >
+              {TYPE_LABELS[type] ?? type}
+              <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5">
+                {count}
+              </Badge>
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {filteredActivities.length === 0 ? (
         <Card>
           <CardContent className="py-16">
             <EmptyState
               icon={Activity}
-              title="No activity yet"
-              description="Activity will appear here as you use the system"
+              title={searchQuery || activeFilter !== "all" ? "No matching activity" : "No activity yet"}
+              description={
+                searchQuery || activeFilter !== "all"
+                  ? "Try adjusting your search or filters"
+                  : "Activity will appear here as you use the system"
+              }
             />
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-2">
-          {activities.map((entry) => (
+          {searchQuery || activeFilter !== "all" ? (
+            <p className="text-xs text-muted-foreground">
+              Showing {filteredActivities.length} of {activities.length} events
+            </p>
+          ) : null}
+          {filteredActivities.map((entry) => (
             <Card
               key={entry.id}
               className="hover-elevate cursor-pointer"
