@@ -287,7 +287,6 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
  */
 export async function recordManualTargetHit(
   signal: Signal,
-  targetKey: string,
   currentPrice?: number | null,
 ): Promise<{ signal: Signal; error?: string }> {
   const data = signal.data as Record<string, any>;
@@ -298,39 +297,27 @@ export async function recordManualTargetHit(
         "Manual target hit is only allowed when auto_track is false. Disable auto tracking for this signal first.",
     };
   }
-  const ticker = data.ticker || "UNKNOWN";
-  const bullish = isBullishTrade(data);
-  const targets = parseTargets(data, bullish);
-  const target = targets.find((t) => t.key === targetKey);
-  if (!target) {
-    return {
-      signal,
-      error: `Target "${targetKey}" not found. Valid keys: ${targets.map((t) => t.key).join(", ") || "none"}`,
-    };
-  }
-  const hitTargetsData =
-    data.hit_targets && typeof data.hit_targets === "object"
-      ? (data.hit_targets as Record<string, unknown>)
-      : {};
-  if (hitTargetsData[targetKey]) {
-    return { signal, error: `Target "${targetKey}" was already marked as hit` };
-  }
   if (signal.status !== "active") {
     return {
       signal,
       error: `Signal is not active (status: ${signal.status}). Only active signals can have targets marked as hit.`,
     };
   }
-  const targetIdx = targets.findIndex((t) => t.key === targetKey);
-  if (targetIdx > 0) {
-    const prevTarget = targets[targetIdx - 1];
-    if (!hitTargetsData[prevTarget.key]) {
-      return {
-        signal,
-        error: `Cannot hit ${targetKey.toUpperCase()} before ${prevTarget.key.toUpperCase()} is hit`,
-      };
-    }
+  const ticker = data.ticker || "UNKNOWN";
+  const bullish = isBullishTrade(data);
+  const targets = parseTargets(data, bullish);
+  if (targets.length === 0) {
+    return { signal, error: "Signal has no targets defined." };
   }
+  const hitTargetsData =
+    data.hit_targets && typeof data.hit_targets === "object"
+      ? (data.hit_targets as Record<string, unknown>)
+      : {};
+  const target = targets.find((t) => !hitTargetsData[t.key]);
+  if (!target) {
+    return { signal, error: "All targets have already been hit." };
+  }
+  const targetKey = target.key;
 
   let app: ConnectedApp | null = null;
   if (signal.sourceAppId) {

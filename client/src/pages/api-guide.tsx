@@ -673,11 +673,10 @@ Example:
       {
         method: "POST",
         path: "/api/signals/:id/target-hit",
-        description: "Manually mark a take-profit target as hit for an active signal when auto_track is false. Updates hit_targets, raises stop loss if the target defines raise_stop_loss, sends Discord alert, and creates activity. If all targets become hit, signal status is set to completed.",
+        description: "Manually mark the next take-profit target as hit for an active signal when auto_track is false. Automatically hits the current (next unhit) target level in order. Updates hit_targets, raises stop loss if the target defines raise_stop_loss, sends Discord alert, and creates activity. If all targets become hit, signal status is set to completed.",
         params: [
           { name: "id", type: "string", required: true, description: "The unique signal ID (UUID) of the active trade." },
-          { name: "targetKey", type: "string", required: true, description: "Target key to mark as hit (e.g. tp1, tp2). Must match a key in the signal's data.targets." },
-          { name: "currentPrice", type: "number", required: false, description: "Optional price at which the target was hit. If omitted, the target's price is used." },
+          { name: "currentPrice", type: "number", required: false, description: "Optional price at which the target was hit. If omitted, the target's defined price is used." },
         ],
         responseExample: `{
   "id": "abc-123",

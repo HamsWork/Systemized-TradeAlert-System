@@ -418,29 +418,13 @@ export function registerSignalRoutes(app: Express) {
       const signal = await storage.getSignal(getParam(req, "id"));
       if (!signal) return res.status(404).json({ message: "Signal not found" });
       const body = (req.body || {}) as Record<string, unknown>;
-      const targetKey =
-        typeof body.targetKey === "string"
-          ? body.targetKey.trim()
-          : typeof body.target_key === "string"
-            ? body.target_key.trim()
-            : null;
-      if (!targetKey) {
-        return res.status(400).json({
-          message:
-            "targetKey (or target_key) is required and must be a non-empty string (e.g. tp1, tp2)",
-        });
-      }
       const currentPrice =
         typeof body.currentPrice === "number" && body.currentPrice > 0
           ? body.currentPrice
           : typeof body.current_price === "number" && body.current_price > 0
             ? body.current_price
             : null;
-      const result = await recordManualTargetHit(
-        signal,
-        targetKey,
-        currentPrice,
-      );
+      const result = await recordManualTargetHit(signal, currentPrice);
       if (result.error) return res.status(400).json({ message: result.error });
       return res.json(result.signal);
     }),
