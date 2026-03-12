@@ -288,6 +288,7 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
 export async function recordManualTargetHit(
   signal: Signal,
   currentPrice?: number | null,
+  fullExit: boolean = false,
 ): Promise<{ signal: Signal; error?: string }> {
   const data = signal.data as Record<string, any>;
   if (data.auto_track !== false) {
@@ -313,121 +314,132 @@ export async function recordManualTargetHit(
     data.hit_targets && typeof data.hit_targets === "object"
       ? (data.hit_targets as Record<string, unknown>)
       : {};
-  const target = targets.find((t) => !hitTargetsData[t.key]);
-  if (!target) {
+  const remainingTargets = targets.filter((t) => !hitTargetsData[t.key]);
+  if (remainingTargets.length === 0) {
     return { signal, error: "All targets have already been hit." };
   }
-  const targetKey = target.key;
 
   let app: ConnectedApp | null = null;
   if (signal.sourceAppId) {
     app = (await storage.getConnectedApp(signal.sourceAppId)) || null;
   }
 
-  const priceAtHit =
-    currentPrice != null && currentPrice > 0 ? currentPrice : target.price;
+  const targetsToHit = fullExit ? remainingTargets : [remainingTargets[0]];
   const updatedData = { ...data };
   if (!updatedData.hit_targets) updatedData.hit_targets = {};
-  (updatedData.hit_targets as Record<string, any>)[targetKey] = {
-    hitAt: new Date().toISOString(),
-    price: priceAtHit,
-    manual: true,
-  };
 
-  if (target.raiseStopLoss) {
-    updatedData.stop_loss = target.raiseStopLoss;
-    console.log(
-      `[TradeMonitor] Stop loss raised to ${fmtPrice(target.raiseStopLoss)} for ${ticker} (manual target hit)`,
-    );
-  }
+  for (const target of targetsToHit) {
+    const targetKey = target.key;
+    const priceAtHit =
+      currentPrice != null && currentPrice > 0 ? currentPrice : target.price;
 
-  const updated = await storage.updateSignal(signal.id, { data: updatedData });
-  if (!updated) return { signal, error: "Failed to update signal" };
+    (updatedData.hit_targets as Record<string, any>)[targetKey] = {
+      hitAt: new Date().toISOString(),
+      price: priceAtHit,
+      manual: true,
+      ...(fullExit ? { fullExit: true } : {}),
+    };
 
-  if (target.raiseStopLoss) {
-    await sendStopLossRaisedDiscord(
+    if (target.raiseStopLoss && !fullExit) {
+      updatedData.stop_loss = target.raiseStopLoss;
+      console.log(
+        `[TradeMonitor] Stop loss raised to ${fmtPrice(target.raiseStopLoss)} for ${ticker} (manual target hit)`,
+      );
+    }
+
+    const saved = await storage.updateSignal(signal.id, { data: updatedData });
+    if (!saved) return { signal, error: "Failed to update signal" };
+
+    if (target.raiseStopLoss && !fullExit) {
+      await sendStopLossRaisedDiscord(
+        updatedData,
+        app,
+        { key: targetKey, raiseStopLoss: target.raiseStopLoss },
+        priceAtHit,
+        updatedData.current_instrument_price ?? priceAtHit,
+        saved.id,
+      );
+      await storage
+        .createActivity({
+          type: "stop_loss_raised",
+          title: `Stop loss raised to ${fmtPrice(target.raiseStopLoss)} for ${ticker}`,
+          description: `Stop loss raised to ${fmtPrice(target.raiseStopLoss)} after ${targetKey.toUpperCase()} hit (manual)`,
+          symbol: ticker,
+          signalId: signal.id,
+          metadata: {
+            newStopLoss: target.raiseStopLoss,
+            targetKey,
+            currentPrice: priceAtHit,
+            manual: true,
+            sourceApp: app?.name || null,
+          },
+        })
+        .catch(() => {});
+    }
+
+    const takeOff = fullExit ? 100 : target.takeOffPercent;
+    const targetForDiscord = {
+      key: target.key,
+      price: target.price,
+      takeOffPercent: takeOff,
+      raiseStopLoss: fullExit ? undefined : target.raiseStopLoss,
+    };
+    await sendTargetHitDiscordAlert(
       updatedData,
       app,
-      { key: targetKey, raiseStopLoss: target.raiseStopLoss },
+      targetForDiscord,
       priceAtHit,
       updatedData.current_instrument_price ?? priceAtHit,
-      updated.id,
+      saved.id,
     );
+
+    const desc = fullExit
+      ? `${targetKey.toUpperCase()} marked as hit at ${fmtPrice(priceAtHit)} — full exit (100% take-off)`
+      : `${targetKey.toUpperCase()} marked as hit at ${fmtPrice(priceAtHit)} (target: ${fmtPrice(target.price)})`;
     await storage
       .createActivity({
-        type: "stop_loss_raised",
-        title: `Stop loss raised to ${fmtPrice(target.raiseStopLoss)} for ${ticker}`,
-        description: `Stop loss raised to ${fmtPrice(target.raiseStopLoss)} after ${targetKey.toUpperCase()} hit (manual)`,
+        type: "target_hit",
+        title: `${targetKey.toUpperCase()} hit for ${ticker} (manual${fullExit ? ", full exit" : ""})`,
+        description: desc,
         symbol: ticker,
         signalId: signal.id,
         metadata: {
-          newStopLoss: target.raiseStopLoss,
           targetKey,
+          targetPrice: target.price,
           currentPrice: priceAtHit,
+          raiseStopLoss: target.raiseStopLoss ?? null,
           manual: true,
+          fullExit,
           sourceApp: app?.name || null,
         },
       })
       .catch(() => {});
   }
 
-  const targetForDiscord = {
-    key: target.key,
-    price: target.price,
-    takeOffPercent: target.takeOffPercent,
-    raiseStopLoss: target.raiseStopLoss,
-  };
-  await sendTargetHitDiscordAlert(
-    updatedData,
-    app,
-    targetForDiscord,
-    priceAtHit,
-    updatedData.current_instrument_price ?? priceAtHit,
-    updated.id,
-  );
-
-  await storage
-    .createActivity({
-      type: "target_hit",
-      title: `${targetKey.toUpperCase()} hit for ${ticker} (manual)`,
-      description: `${targetKey.toUpperCase()} marked as hit at ${fmtPrice(priceAtHit)} (target: ${fmtPrice(target.price)})`,
-      symbol: ticker,
-      signalId: signal.id,
-      metadata: {
-        targetKey,
-        targetPrice: target.price,
-        currentPrice: priceAtHit,
-        raiseStopLoss: target.raiseStopLoss ?? null,
-        manual: true,
-        sourceApp: app?.name || null,
-      },
-    })
-    .catch(() => {});
-
   const allTargetsHit = targets.every(
-    (t) =>
-      t.key === targetKey ||
-      !!(updatedData.hit_targets as Record<string, unknown>)?.[t.key],
+    (t) => !!(updatedData.hit_targets as Record<string, unknown>)?.[t.key],
   );
   if (allTargetsHit) {
     await storage.updateSignal(signal.id, { status: "completed" });
     const completedSignal = await storage.getSignal(signal.id);
+    const exitLabel = fullExit ? " (full exit)" : "";
     console.log(
-      `[TradeMonitor] All targets hit for ${ticker} (manual) — signal completed`,
+      `[TradeMonitor] All targets hit for ${ticker} (manual${exitLabel}) — signal completed`,
     );
     await storage
       .createActivity({
         type: "signal_completed",
         title: `All targets hit for ${ticker}`,
-        description: `Signal completed — all ${targets.length} target(s) reached (manual)`,
+        description: `Signal completed — all ${targets.length} target(s) reached (manual${exitLabel})`,
         symbol: ticker,
         signalId: signal.id,
       })
       .catch(() => {});
-    return { signal: completedSignal || updated };
+    return { signal: completedSignal || (await storage.getSignal(signal.id)) || signal };
   }
 
-  return { signal: updated };
+  const latest = await storage.getSignal(signal.id);
+  return { signal: latest || signal };
 }
 
 /**

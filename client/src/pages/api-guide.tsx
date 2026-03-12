@@ -677,6 +677,7 @@ Example:
         params: [
           { name: "id", type: "string", required: true, description: "The unique signal ID (UUID) of the active trade." },
           { name: "currentPrice", type: "number", required: false, description: "Optional price at which the target was hit. If omitted, the target's defined price is used." },
+          { name: "fullExit", type: "boolean", required: false, description: "If true, marks ALL remaining targets as hit with 100% take-off and completes the signal. Default is false (hits only the next target)." },
         ],
         responseExample: `{
   "id": "abc-123",

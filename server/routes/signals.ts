@@ -424,7 +424,8 @@ export function registerSignalRoutes(app: Express) {
           : typeof body.current_price === "number" && body.current_price > 0
             ? body.current_price
             : null;
-      const result = await recordManualTargetHit(signal, currentPrice);
+      const fullExit = body.fullExit === true || body.full_exit === true;
+      const result = await recordManualTargetHit(signal, currentPrice, fullExit);
       if (result.error) return res.status(400).json({ message: result.error });
       return res.json(result.signal);
     }),
