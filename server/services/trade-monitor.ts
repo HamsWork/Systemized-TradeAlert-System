@@ -155,6 +155,103 @@ function isAutoTrackEnabled(data: Record<string, any>): boolean {
   return true;
 }
 
+async function applyTargetHitAuto(
+  signal: Signal,
+  signalData: Record<string, any>,
+  app: ConnectedApp,
+  nextTarget: TargetInfo,
+  nextTargetIndex: number,
+  currentTrackingPrice: number,
+  currentInstrumentPrice: number,
+  isBullish: boolean,
+): Promise<void> {
+  const takeOffPct = nextTarget.takeOffPercent ?? 100;
+  const takeOffQty = signalData.remain_quantity * (takeOffPct / 100);
+  const targetKey = nextTarget.key ?? `tp${nextTargetIndex + 1}`;
+  signalData.hit_targets[targetKey] = {
+    hitAt: new Date().toISOString(),
+    trackingPrice: currentTrackingPrice,
+    instrumentPrice: currentInstrumentPrice,
+    profitPct: profitPctFromInstrument(
+      signalData.entry_instrument_price,
+      currentInstrumentPrice,
+      signalData.instrument_type,
+      signalData.direction,
+    ),
+    take_off_quantity: takeOffQty,
+  };
+  signalData.current_target_number = nextTargetIndex + 1;
+  signalData.next_target_number = nextTargetIndex + 1;
+  signalData.remain_quantity -= takeOffQty;
+
+  const allTargetsHit = nextTargetIndex + 1 >=
+    (parseTargets(signalData, isBullish).length || 0);
+  if (signalData.remain_quantity <= 0 || allTargetsHit) {
+    signalData.status = "completed";
+  }
+
+  if (takeOffPct > 0) {
+    signalData.current_tp_number = (signalData.current_tp_number ?? 0) + 1;
+    await sendTargetHitDiscordAlert(signalData, app, signal.id);
+  }
+
+  const keyLabel = (targetKey ?? "").toUpperCase();
+  storage.createActivity({
+    type: "target_hit",
+    title: `${keyLabel} hit for ${signalData.ticker}`,
+    description: `${keyLabel} reached at ${fmtPrice(currentTrackingPrice)} (target: ${fmtPrice(nextTarget.price)})`,
+    symbol: signalData.ticker,
+    signalId: signal.id,
+    metadata: {
+      target: nextTarget,
+      signalData: signalData,
+    },
+  }).catch(() => {});
+
+  const raiseStopLoss = nextTarget.raiseStopLoss ?? (nextTarget as any).raise_stop_loss;
+  if (raiseStopLoss != null) {
+    const slValue = typeof raiseStopLoss === "number"
+      ? raiseStopLoss
+      : (raiseStopLoss?.price != null ? Number(raiseStopLoss.price) : null);
+    if (slValue != null) {
+      const isValidRaiseStopLoss = isBullish
+        ? slValue >= signalData.stop_loss
+        : slValue <= signalData.stop_loss;
+      if (isValidRaiseStopLoss) {
+        signalData.current_stop_loss = slValue;
+
+        signalData.current_stop_loss_is_break_even =
+          Math.abs(slValue - signalData.entry_tracking_price) < 0.01;
+        signalData.risk_value = signalData.current_stop_loss_is_break_even
+          ? "0% (Risk-Free)"
+          : `${profitPctFromInstrument(
+            signalData.entry_tracking_price,
+            slValue,
+            signalData.instrument_type,
+            signalData.direction,
+          ).toFixed(1)}%`;
+        await sendStopLossRaisedDiscord(signalData, app, signal.id);
+        storage.createActivity({
+          type: "stop_loss_raised",
+          title: `Stop loss raised to ${fmtPrice(slValue)} for ${signalData.ticker}`,
+          description: `Stop loss raised to ${fmtPrice(slValue)} after ${keyLabel} hit (current price: ${fmtPrice(currentTrackingPrice)})`,
+          symbol: signalData.ticker,
+          signalId: signal.id,
+          metadata: {
+            target: nextTarget,
+            signalData: signalData,
+          },
+        }).catch(() => {});
+      }
+    }
+  }
+  const completed = signalData.status === "completed";
+  await storage.updateSignal(signal.id, {
+    data: signalData,
+    ...(completed ? { status: "completed" } : {}),
+  });
+}
+
 async function checkSignalTargets(signal: Signal): Promise<void> {
   if (signal.status !== "active") return;
   const signalData = signal.data as Record<string, any>;
@@ -189,71 +286,16 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
     const nextTarget = tpLevels[nextTargetIndex];
     const nextTargetHit = isBullish ? currentTrackingPrice >= nextTarget.price : currentTrackingPrice <= nextTarget.price;
     if (nextTargetHit) {
-      const takeOffPct = nextTarget.takeOffPercent ?? 100;
-      const takeOffQty = signalData.remain_quantity * (takeOffPct / 100);
-      const targetKey = nextTarget.key ?? `tp${nextTargetIndex + 1}`;
-      signalData.hit_targets[targetKey] = {
-        hitAt: new Date().toISOString(),
-        trackingPrice: currentTrackingPrice,
-        instrumentPrice: currentInstrumentPrice,
-        profitPct: profitPctFromInstrument(signalData.entry_instrument_price, currentInstrumentPrice, signalData.instrument_type, signalData.direction),
-        take_off_quantity: takeOffQty
-      };
-      signalData.current_target_number = nextTargetIndex + 1;
-      signalData.next_target_number = nextTargetIndex + 1;
-      signalData.remain_quantity -= takeOffQty;
-
-      const allTargetsHit = nextTargetIndex + 1 >= tpLevels.length;
-      if (signalData.remain_quantity <= 0 || allTargetsHit) {
-        signalData.status = "completed";
-      }
-
-      if (takeOffPct > 0) {
-        signalData.current_tp_number = (signalData.current_tp_number ?? 0) + 1;
-        await sendTargetHitDiscordAlert(signalData, app, signal.id);
-      }
-
-      const keyLabel = (targetKey ?? "").toUpperCase();
-      storage.createActivity({
-        type: "target_hit",
-        title: `${keyLabel} hit for ${signalData.ticker}`,
-        description: `${keyLabel} reached at ${fmtPrice(currentTrackingPrice)} (target: ${fmtPrice(nextTarget.price)})`,
-        symbol: signalData.ticker,
-        signalId: signal.id,
-        metadata: {
-          target: nextTarget,
-          signalData: signalData,
-        },
-      }).catch(() => {});
-
-      const raiseStopLoss = nextTarget.raiseStopLoss ?? (nextTarget as any).raise_stop_loss;
-      if (raiseStopLoss != null){
-        const slValue = typeof raiseStopLoss === "number" ? raiseStopLoss : (raiseStopLoss?.price != null ? Number(raiseStopLoss.price) : null);
-        if (slValue != null) {
-          const isValidRaiseStopLoss = isBullish ? slValue >= signalData.stop_loss : slValue <= signalData.stop_loss;
-          if (isValidRaiseStopLoss) {
-            signalData.current_stop_loss = slValue;
-
-            signalData.current_stop_loss_is_break_even = Math.abs(slValue - signalData.entry_tracking_price) < 0.01;
-            signalData.risk_value = signalData.current_stop_loss_is_break_even ? "0% (Risk-Free)" : 
-              `${profitPctFromInstrument(signalData.entry_tracking_price, slValue, signalData.instrument_type, signalData.direction).toFixed(1)}%`;
-            await sendStopLossRaisedDiscord(signalData, app, signal.id);
-            storage.createActivity({
-              type: "stop_loss_raised",
-              title: `Stop loss raised to ${fmtPrice(slValue)} for ${signalData.ticker}`,
-              description: `Stop loss raised to ${fmtPrice(slValue)} after ${keyLabel} hit (current price: ${fmtPrice(currentTrackingPrice)})`,
-              symbol: signalData.ticker,
-              signalId: signal.id,
-              metadata: {
-                target: nextTarget,
-                signalData: signalData,
-              },
-            }).catch(() => {});
-          }
-        }
-      }
-      const completed = signalData.status === "completed";
-      await storage.updateSignal(signal.id, { data: signalData, ...(completed ? { status: "completed" } : {}) });
+      await applyTargetHitAuto(
+        signal,
+        signalData,
+        app,
+        nextTarget,
+        nextTargetIndex,
+        currentTrackingPrice,
+        currentInstrumentPrice,
+        isBullish,
+      );
     }
   }
 
@@ -308,83 +350,37 @@ export async function recordManualTargetHit(
   const ticker = data.ticker || "UNKNOWN";
   const bullish = isBullishTrade(data);
   const targets = parseTargets(data, bullish);
+  console.log("targets", targets);
+  console.log("data", data);
   if (targets.length === 0) {
     return { signal, error: "Signal has no targets defined." };
   }
-  const hitTargetsData =
-    data.hit_targets && typeof data.hit_targets === "object"
-      ? (data.hit_targets as Record<string, unknown>)
-      : {};
-  const remainingTargets = targets.filter((t) => !hitTargetsData[t.key]);
-  if (remainingTargets.length === 0) {
+
+  // Determine the next target to hit based on the signal's current_target_number.
+  // This keeps manual hits aligned with the auto-tracking progression.
+  const current_target_number = data.current_target_number ?? 0;
+  const next_target_number = current_target_number + 1;
+  if (next_target_number > targets.length) {
     return { signal, error: "All targets have already been hit." };
   }
+  const nextTargetIndex = next_target_number - 1;
+  const nextTarget = targets[nextTargetIndex];
+  if (!nextTarget) {
+    return { signal, error: "No next target found." };
+  }
 
-  // Resolve current prices so Discord embeds and tracking fields have a real
-  // instrument price and (when underlying_price_based) tracking price.
+  const currentInstrumentPrice =
+    typeof currentPrice === "number" && currentPrice > 0
+      ? currentPrice
+      : await getCurrentInstrumentPrice(data, ticker);
+
   const underlyingTicker = getUnderlyingTicker(data) || ticker;
+  const currentTrackingPrice = data.underlying_price_based
+    ? await fetchStockPrice(underlyingTicker)
+    : currentInstrumentPrice;
 
-  let resolvedInstrumentPrice: number | null = null;
-  if (typeof currentPrice === "number" && currentPrice > 0) {
-    resolvedInstrumentPrice = currentPrice;
-  } else {
-    resolvedInstrumentPrice = await getCurrentInstrumentPrice(data, ticker);
-  }
-
-  let resolvedTrackingPrice: number | null = null;
-  if (data.underlying_price_based) {
-    resolvedTrackingPrice = await fetchStockPrice(underlyingTicker);
-  } else {
-    resolvedTrackingPrice = resolvedInstrumentPrice;
-  }
-
-  // Prefer using the signal's current/next target number status to decide which
-  // target(s) to mark as hit, so manual hits stay in sync with auto-tracking.
-  const nextTargetIndexFromStatus =
-    typeof data.next_target_number === "number" && data.next_target_number >= 0
-      ? (data.next_target_number as number)
-      : 1;
-
-  let targetsToHit: typeof targets = [];
-
-  const pickCandidateFromStatus = () => {
-    if (
-      nextTargetIndexFromStatus == null ||
-      nextTargetIndexFromStatus < 0 ||
-      nextTargetIndexFromStatus >= targets.length
-    ) {
-      return null;
-    }
-    const candidate = targets[nextTargetIndexFromStatus];
-    if (hitTargetsData[candidate.key]) return null;
-    return candidate;
-  };
-
-  if (fullExit) {
-    // For full exit, hit from the current "next target" onward when possible;
-    // otherwise fall back to all remaining targets.
-    if (
-      nextTargetIndexFromStatus != null &&
-      nextTargetIndexFromStatus >= 0 &&
-      nextTargetIndexFromStatus < targets.length
-    ) {
-      targetsToHit = targets
-        .slice(nextTargetIndexFromStatus)
-        .filter((t) => !hitTargetsData[t.key]);
-      if (targetsToHit.length === 0) {
-        targetsToHit = remainingTargets;
-      }
-    } else {
-      targetsToHit = remainingTargets;
-    }
-  } else {
-    // Non-full exit: mark only the next target as hit, based on current status.
-    const candidate = pickCandidateFromStatus();
-    if (candidate) {
-      targetsToHit = [candidate];
-    } else {
-      targetsToHit = [remainingTargets[0]];
-    }
+  if (!currentTrackingPrice || !currentInstrumentPrice) {
+    return { signal, error: "Failed to resolve current prices for manual target hit." };
   }
 
   let app: ConnectedApp | null = null;
@@ -394,141 +390,26 @@ export async function recordManualTargetHit(
 
   const updatedData = { ...data };
   if (!updatedData.hit_targets) updatedData.hit_targets = {};
+  updatedData.current_tracking_price = currentTrackingPrice;
+  updatedData.current_instrument_price = currentInstrumentPrice;
 
-  if (resolvedInstrumentPrice != null && resolvedInstrumentPrice > 0) {
-    updatedData.current_instrument_price = resolvedInstrumentPrice;
-  }
-  if (resolvedTrackingPrice != null && resolvedTrackingPrice > 0) {
-    updatedData.current_tracking_price = resolvedTrackingPrice;
-  }
-
-  // Track the last target index we mark as hit, so we can update
-  // current_target_number / next_target_number to stay aligned with tracking.
-  let lastTargetIndex = -1;
-
-  for (const target of targetsToHit) {
-    const targetKey = target.key;
-    const targetIndex = targets.findIndex((t) => t.key === targetKey);
-    if (targetIndex >= 0 && targetIndex > lastTargetIndex) {
-      lastTargetIndex = targetIndex;
-    }
-    const priceAtHit =
-      resolvedTrackingPrice != null && resolvedTrackingPrice > 0
-        ? resolvedTrackingPrice
-        : target.price;
-    const instrumentPriceAtHit =
-      resolvedInstrumentPrice != null && resolvedInstrumentPrice > 0
-        ? resolvedInstrumentPrice
-        : priceAtHit;
-
-    (updatedData.hit_targets as Record<string, any>)[targetKey] = {
-      hitAt: new Date().toISOString(),
-      price: priceAtHit,
-      manual: true,
-      ...(fullExit ? { fullExit: true } : {}),
-    };
-
-    if (target.raiseStopLoss && !fullExit) {
-      updatedData.stop_loss = target.raiseStopLoss;
-      console.log(
-        `[TradeMonitor] Stop loss raised to ${fmtPrice(target.raiseStopLoss)} for ${ticker} (manual target hit)`,
-      );
-    }
-
-    // Compute profit % based on instrument price so Discord can show it.
-    const profitPct = profitPctFromInstrument(
-      updatedData.entry_instrument_price,
-      instrumentPriceAtHit,
-      updatedData.instrument_type,
-      updatedData.direction,
-    );
-    (updatedData.hit_targets as Record<string, any>)[targetKey].profitPct =
-      profitPct;
-
-    const saved = await storage.updateSignal(signal.id, { data: updatedData });
-    if (!saved) return { signal, error: "Failed to update signal" };
-
-    if (target.raiseStopLoss && !fullExit) {
-      await sendStopLossRaisedDiscord(updatedData, app, saved.id);
-      await storage
-        .createActivity({
-          type: "stop_loss_raised",
-          title: `Stop loss raised to ${fmtPrice(target.raiseStopLoss)} for ${ticker}`,
-          description: `Stop loss raised to ${fmtPrice(target.raiseStopLoss)} after ${targetKey.toUpperCase()} hit (manual)`,
-          symbol: ticker,
-          signalId: signal.id,
-          metadata: {
-            newStopLoss: target.raiseStopLoss,
-            targetKey,
-            currentPrice: priceAtHit,
-            manual: true,
-            sourceApp: app?.name || null,
-          },
-        })
-        .catch(() => {});
-    }
-
-    const takeOff = fullExit ? 100 : target.takeOffPercent;
-    const targetForDiscord = {
-      key: target.key,
-      price: target.price,
-      takeOffPercent: takeOff,
-      raiseStopLoss: fullExit ? undefined : target.raiseStopLoss,
-    };
-    await sendTargetHitDiscordAlert(updatedData, app, saved.id);
-
-    const desc = fullExit
-      ? `${targetKey.toUpperCase()} marked as hit at ${fmtPrice(priceAtHit)} — full exit (100% take-off)`
-      : `${targetKey.toUpperCase()} marked as hit at ${fmtPrice(priceAtHit)} (target: ${fmtPrice(target.price)})`;
-    await storage
-      .createActivity({
-        type: "target_hit",
-        title: `${targetKey.toUpperCase()} hit for ${ticker} (manual${fullExit ? ", full exit" : ""})`,
-        description: desc,
-        symbol: ticker,
-        signalId: signal.id,
-        metadata: {
-          targetKey,
-          targetPrice: target.price,
-          currentPrice: priceAtHit,
-          raiseStopLoss: target.raiseStopLoss ?? null,
-          manual: true,
-          fullExit,
-          sourceApp: app?.name || null,
-        },
-      })
-      .catch(() => {});
-  }
-
-  if (lastTargetIndex >= 0) {
-    // Mirror the auto-tracker semantics: next_target_number is used as the
-    // index for the next target check, while also representing how many
-    // targets have been completed.
-    updatedData.current_target_number = lastTargetIndex + 1;
-    updatedData.next_target_number = lastTargetIndex + 1;
-  }
-
-  const allTargetsHit = targets.every(
-    (t) => !!(updatedData.hit_targets as Record<string, unknown>)?.[t.key],
+  // Reuse the same applyTargetHitAuto logic used by the auto-tracker so that
+  // manual hits behave identically.
+  await applyTargetHitAuto(
+    signal,
+    updatedData,
+    app as ConnectedApp,
+    {
+      key: nextTarget.key,
+      price: nextTarget.price,
+      takeOffPercent: nextTarget.takeOffPercent,
+      raiseStopLoss: nextTarget.raiseStopLoss,
+    } as TargetInfo,
+    nextTargetIndex,
+    currentTrackingPrice,
+    currentInstrumentPrice,
+    bullish,
   );
-  if (allTargetsHit) {
-    await storage.updateSignal(signal.id, { status: "completed" });
-    const completedSignal = await storage.getSignal(signal.id);
-    const exitLabel = fullExit ? " (full exit)" : "";
-    console.log(
-      `[TradeMonitor] All targets hit for ${ticker} (manual${exitLabel}) — signal completed`,
-    );
-    await storage
-      .createActivity({
-        type: "signal_completed",
-        title: `All targets hit for ${ticker}`,
-        description: `Signal completed — all ${targets.length} target(s) reached (manual${exitLabel})`,
-        symbol: ticker,
-        signalId: signal.id,
-      })
-      .catch(() => {});
-    return { signal: completedSignal || (await storage.getSignal(signal.id)) || signal };
-  }
 
   const latest = await storage.getSignal(signal.id);
   return { signal: latest || signal };
