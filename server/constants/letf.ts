@@ -40,7 +40,9 @@ export const LETF_UNDERLYING: Record<string, string> = {
 };
 
 /** Sync fallback: underlying from static map only. Use when signal data already has underlying_ticker. */
-export function getLETFUnderlyingSync(ticker: string | null | undefined): string | undefined {
+export function getLETFUnderlyingSync(
+  ticker: string | null | undefined,
+): string | undefined {
   if (!ticker || typeof ticker !== "string") return undefined;
   return LETF_UNDERLYING[ticker.toUpperCase().trim()];
 }
@@ -52,8 +54,12 @@ export async function getLETFUnderlying(
   ticker: string | null | undefined,
 ): Promise<string | undefined> {
   if (!ticker || typeof ticker !== "string") return undefined;
-  const { fetchLETFUnderlyingFromPolygon } = await import("../services/polygon");
-  const fromPolygon = await fetchLETFUnderlyingFromPolygon(ticker.toUpperCase().trim());
+  const { fetchLETFUnderlyingFromPolygon } = await import(
+    "../services/polygon"
+  );
+  const fromPolygon = await fetchLETFUnderlyingFromPolygon(
+    ticker.toUpperCase().trim(),
+  );
   if (fromPolygon) return fromPolygon;
   return LETF_UNDERLYING[ticker.toUpperCase().trim()];
 }
@@ -105,5 +111,5 @@ export function getLETFLeverage(
   const polygonLev = getCachedLETFLeverage(upper);
   if (polygonLev != null) return polygonLev;
 
-  return LETF_LEVERAGE[upper];
+  return LETF_LEVERAGE[upper] ?? 2;
 }
