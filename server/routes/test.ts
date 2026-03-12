@@ -167,12 +167,17 @@ export function registerTestRoutes(app: Express) {
       if (type === "stop_loss_raised") {
         const newStopLoss = body.newStopLoss ?? body.new_stop_loss ?? entryPrice;
         const targetKey = body.targetKey ?? body.target_key ?? "tp1";
+        const dataForSLRaised = {
+          ...data,
+          new_stop_loss: Number(newStopLoss),
+          sl_raised_target_key: targetKey,
+          current_tracking_price: currentPrice,
+          current_instrument_price:
+            data.current_instrument_price ?? currentPrice,
+        };
         await sendStopLossRaisedDiscord(
-          data,
+          dataForSLRaised,
           app,
-          { key: targetKey, raiseStopLoss: Number(newStopLoss) },
-          currentPrice,
-          data.current_instrument_price ?? currentPrice,
           signal?.id ?? "",
         );
         return res.json({
@@ -184,12 +189,15 @@ export function registerTestRoutes(app: Express) {
 
       if (type === "stop_loss_hit") {
         const sl = stopLoss ?? data.stop_loss ?? 95;
-        const slData = { ...data, stop_loss_hit: true, stop_loss_hit_price: currentPrice, stop_loss_hit_pct: -5.2 };
+        const slData = {
+          ...data,
+          stop_loss_hit: true,
+          stop_loss_hit_price: currentPrice,
+          stop_loss_hit_pct: -5.2,
+        };
         await sendStopLossHitDiscord(
           slData,
           app,
-          currentPrice,
-          slData.current_instrument_price ?? currentPrice,
           signal?.id ?? "",
         );
         return res.json({

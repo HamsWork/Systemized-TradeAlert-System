@@ -427,7 +427,28 @@ export function registerSignalRoutes(app: Express) {
       const fullExit = body.fullExit === true || body.full_exit === true;
       const result = await recordManualTargetHit(signal, currentPrice, fullExit);
       if (result.error) return res.status(400).json({ message: result.error });
-      return res.json(result.signal);
+
+      // When a manual target is marked as hit, optionally send a corresponding IBKR close
+      // trade if the source app has IBKR execution enabled and this is a full exit.
+      const updatedSignal = result.signal;
+      if (fullExit && updatedSignal.sourceAppId) {
+        const app = await storage.getConnectedApp(updatedSignal.sourceAppId);
+        if (app) {
+          const closeResult = await executeIbkrClose(updatedSignal, app);
+          if (
+            closeResult.error &&
+            closeResult.executed === false &&
+            closeResult.error !==
+              "No filled position to close for this signal"
+          ) {
+            console.warn(
+              `[TargetHit API] IBKR close skipped or failed for ${updatedSignal.id}: ${closeResult.error}`,
+            );
+          }
+        }
+      }
+
+      return res.json(updatedSignal);
     }),
   );
 
@@ -445,7 +466,28 @@ export function registerSignalRoutes(app: Express) {
             : null;
       const result = await recordManualStopLossHit(signal, currentPrice);
       if (result.error) return res.status(400).json({ message: result.error });
-      return res.json(result.signal);
+
+      // When a manual stop loss is marked as hit, attempt to close the IBKR position
+      // for this signal if IBKR execution is enabled for the source app.
+      const updatedSignal = result.signal;
+      if (updatedSignal.sourceAppId) {
+        const app = await storage.getConnectedApp(updatedSignal.sourceAppId);
+        if (app) {
+          const closeResult = await executeIbkrClose(updatedSignal, app);
+          if (
+            closeResult.error &&
+            closeResult.executed === false &&
+            closeResult.error !==
+              "No filled position to close for this signal"
+          ) {
+            console.warn(
+              `[StopLossHit API] IBKR close skipped or failed for ${updatedSignal.id}: ${closeResult.error}`,
+            );
+          }
+        }
+      }
+
+      return res.json(updatedSignal);
     }),
   );
 
