@@ -1036,6 +1036,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
   const isStoppedOut = signal.status === "stopped_out";
   const isCompleted = signal.status === "completed";
   const isClosed = signal.status === "closed";
+  const autoTrackEnabled = data.auto_track !== false;
 
   const targets: { key: string; price: number; takeOffPercent?: number; raiseStopLoss?: number; isHit: boolean; hitAt?: string; hitPrice?: number }[] = [];
   if (data.targets && typeof data.targets === "object") {
@@ -1246,6 +1247,20 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                       </Badge>
                     </div>
                   )}
+
+                  <div className="flex items-center justify-between" data-testid="detail-auto-track">
+                    <span className="text-xs text-muted-foreground">Auto Tracking</span>
+                    <Badge
+                      variant="outline"
+                      className={`text-[10px] ${
+                        autoTrackEnabled
+                          ? "text-emerald-500 border-emerald-500/30 bg-emerald-500/5"
+                          : "text-amber-500 border-amber-500/30 bg-amber-500/5"
+                      }`}
+                    >
+                      {autoTrackEnabled ? "Enabled" : "Disabled"}
+                    </Badge>
+                  </div>
 
                   <div className="flex items-center justify-between" data-testid="detail-created">
                     <span className="text-xs text-muted-foreground">Created</span>

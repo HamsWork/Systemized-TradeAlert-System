@@ -158,6 +158,7 @@ function isAutoTrackEnabled(data: Record<string, any>): boolean {
 async function checkSignalTargets(signal: Signal): Promise<void> {
   if (signal.status !== "active") return;
   const signalData = signal.data as Record<string, any>;
+  if (!isAutoTrackEnabled(signalData)) return;
   if (signal.sourceAppId == null) return;
   const app = (await storage.getConnectedApp(signal.sourceAppId)) || null;
   if (!app) return;
@@ -233,8 +234,8 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
           if (isValidRaiseStopLoss) {
             signalData.current_stop_loss = slValue;
 
-            signalData.stop_loss_is_break_even = Math.abs(slValue - signalData.entry_tracking_price) < 0.01;
-            signalData.risk_value = signalData.stop_loss_is_break_even ? "0% (Risk-Free)" : 
+            signalData.current_stop_loss_is_break_even = Math.abs(slValue - signalData.entry_tracking_price) < 0.01;
+            signalData.risk_value = signalData.current_stop_loss_is_break_even ? "0% (Risk-Free)" : 
               `${profitPctFromInstrument(signalData.entry_tracking_price, slValue, signalData.instrument_type, signalData.direction).toFixed(1)}%`;
             await sendStopLossRaisedDiscord(signalData, app, signal.id);
             storage.createActivity({
@@ -265,7 +266,7 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
       signalData.stop_loss_hit_tracking_price = currentTrackingPrice;
       signalData.stop_loss_hit_instrument_price = currentInstrumentPrice;
       signalData.remain_quantity = 0;
-      signalData.stop_loss_percent = profitPctFromInstrument(signalData.entry_instrument_price, currentInstrumentPrice, signalData.instrument_type, signalData.direction);
+      signalData.current_stop_loss_percent = profitPctFromInstrument(signalData.entry_instrument_price, currentInstrumentPrice, signalData.instrument_type, signalData.direction);
       await sendStopLossHitDiscord(signalData, app, signal.id);
       storage.createActivity({
         type: "stop_loss_hit",

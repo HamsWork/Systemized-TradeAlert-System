@@ -181,7 +181,7 @@ function buildPreviewsFromData(
       current_stop_loss: newStop,
       new_stop_loss: newStop,
       sl_raised_target_key: key,
-      stop_loss_is_break_even: isBreakEven,
+      current_stop_loss_is_break_even: isBreakEven,
       current_target_number: tpNumber,
       risk_value: riskValue,
     };
@@ -200,7 +200,7 @@ function buildPreviewsFromData(
     const slData = {
       ...data,
       current_instrument_price: stopLoss,
-      stop_loss_percent: slPct,
+      current_stop_loss_percent: slPct,
     };
     previews.push({
       type: "stop_loss_hit",

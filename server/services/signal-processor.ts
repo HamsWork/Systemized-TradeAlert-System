@@ -1,12 +1,17 @@
-import type { Signal, ConnectedApp } from "@shared/schema";
-import { insertSignalSchema } from "@shared/schema";
+import type {
+  Signal,
+  StoredSignalData,
+  SignalTargetEntry,
+  ConnectedApp,
+} from "@shared/schema";
+import { insertSignalSchema, ingestSignalBodySchema } from "@shared/schema";
 import { storage } from "../storage";
 import {
   getLETFLeverage,
   getLETFUnderlying,
 } from "../constants/letf";
 import { executeIbkrTrade } from "./trade-executor";
-import { sendEntryDicordAlert } from "./discord";
+import { sendEntryDicordAlert, profitPctFromInstrument } from "./discord";
 import { getCurrentInstrumentPrice } from "./trade-monitor";
 import {
   fetchPolygonBars,
@@ -34,16 +39,6 @@ interface ProcessResult {
   validationErrors: string[];
 }
 
-const VALID_INSTRUMENT_TYPES = [
-  "Options",
-  "Shares",
-  "LETF",
-  "LETF Option",
-  "Crypto",
-];
-const VALID_DIRECTIONS_OPTIONS = ["Call", "Put"];
-const VALID_DIRECTIONS_DEFAULT = ["Long", "Short"];
-
 const TDI_INSTRUMENT_MAP: Record<string, string> = {
   SHARES: "Shares",
   SHARE: "Shares",
@@ -70,6 +65,8 @@ const TDI_DIRECTION_MAP: Record<string, string> = {
   put: "Put",
   PUT: "Put",
 };
+
+const INGEST_INSTRUMENT_ENUM = ["Options", "Shares", "LETF", "LETF Option", "Crypto"] as const;
 
 function isTdiFormat(body: Record<string, any>): boolean {
   return !!(
@@ -172,6 +169,39 @@ function transformTdiSignal(body: Record<string, any>): Record<string, any> {
   return result;
 }
 
+/** TDI transform (if detected) + camelCase/enum normalization for ingest schema. */  //TODO should remove later
+function normalizeBodyForIngest(
+  body: Record<string, any>,
+  appName?: string,
+): Record<string, any> {
+  let out: Record<string, any> = body;
+  if (isTdiFormat(body)) {
+    if (appName) {
+      console.log(
+        `[Signal] Detected TDI format from ${appName}, transforming...`,
+      );
+    }
+    out = transformTdiSignal(body);
+  }
+  out = { ...out };
+  if (out.instrumentType == null && out.instrument_type != null) {
+    out.instrumentType = out.instrument_type;
+  }
+  if (out.entryPrice == null && out.entry_price != null) {
+    out.entryPrice = out.entry_price;
+  }
+  const raw = out.instrumentType ?? out.instrument_type ?? "";
+  const s = String(raw).trim();
+  if (s) {
+    const upperKey = s.toUpperCase().replace(/\s+/g, "_");
+    const mapped =
+      TDI_INSTRUMENT_MAP[upperKey] ??
+      (INGEST_INSTRUMENT_ENUM.includes(s as (typeof INGEST_INSTRUMENT_ENUM)[number]) ? s : "Shares");
+    out.instrumentType = mapped;
+  }
+  return out;
+}
+
 function parseOptionTicker(
   opra: string,
 ): { expiration: string; strike: string } | null {
@@ -183,121 +213,75 @@ function parseOptionTicker(
   return { expiration, strike };
 }
 
-function validateIngestBody(body: Record<string, any>): string[] {
-  const errors: string[] = [];
-  const { ticker, instrumentType, direction } = body;
+/** Normalize raw targets to Record<string, SignalTargetEntry>; compute percentage when underlying_price_based is false. */
+function normalizeTargets(
+  targets: Record<string, unknown>,
+  options: {
+    underlying_price_based?: boolean;
+    entryPrice: unknown;
+    direction: string;
+  },
+): Record<string, SignalTargetEntry> {
+  const underlyingPriceBased =
+    options.underlying_price_based !== undefined ? options.underlying_price_based : false;
+  const entryPriceNum =
+    options.entryPrice != null && options.entryPrice !== ""
+      ? Number(options.entryPrice)
+      : NaN;
+  const isBullish = options.direction !== "Short" && options.direction !== "Put";
 
-  if (!ticker) {
-    errors.push("ticker is required");
-  }
-
-  if (!instrumentType || !VALID_INSTRUMENT_TYPES.includes(instrumentType)) {
-    errors.push(
-      `instrumentType is required and must be one of: ${VALID_INSTRUMENT_TYPES.join(", ")}`,
-    );
-  }
-
-  const validDirections =
-    instrumentType === "Options" || instrumentType === "LETF Option"
-      ? VALID_DIRECTIONS_OPTIONS
-      : VALID_DIRECTIONS_DEFAULT;
-  if (!direction || !validDirections.includes(direction)) {
-    errors.push(
-      `direction is required and must be one of: ${validDirections.join(", ")}`,
-    );
-  }
-
-  if (instrumentType === "Options" || instrumentType === "LETF Option") {
-    if (!body.expiration)
-      errors.push(`expiration is required for ${instrumentType}`);
-    if (!body.strike) errors.push(`strike is required for ${instrumentType}`);
-  }
-
-  if (
-    body.entryPrice != null &&
-    (isNaN(Number(body.entryPrice)) || Number(body.entryPrice) <= 0)
-  ) {
-    errors.push("entryPrice must be a positive number");
-  }
-
-  if (body.targets != null) {
-    if (typeof body.targets !== "object" || Array.isArray(body.targets)) {
-      errors.push(
-        "targets must be an object (e.g. { tp1: { price: 100 }, tp2: { price: 110 } })",
-      );
-    } else {
-      for (const [key, val] of Object.entries(body.targets)) {
-        const t = val as any;
-        if (!t || typeof t !== "object") {
-          errors.push(`targets.${key} must be an object with a price field`);
-          continue;
-        }
-        if (t.price == null || isNaN(Number(t.price)) || Number(t.price) <= 0) {
-          errors.push(`targets.${key}.price must be a positive number`);
-        }
-        if (t.take_off_percent == null) {
-          errors.push(`targets.${key}.take_off_percent is required`);
-        } else if (
-          isNaN(Number(t.take_off_percent)) ||
-          Number(t.take_off_percent) < 0 ||
-          Number(t.take_off_percent) > 100
-        ) {
-          errors.push(
-            `targets.${key}.take_off_percent must be a number between 0 and 100`,
-          );
-        }
-        if (t.raise_stop_loss != null) {
-          if (typeof t.raise_stop_loss !== "object") {
-            errors.push(
-              `targets.${key}.raise_stop_loss must be an object with a price field`,
-            );
-          } else if (
-            t.raise_stop_loss.price == null ||
-            isNaN(Number(t.raise_stop_loss.price)) ||
-            Number(t.raise_stop_loss.price) <= 0
-          ) {
-            errors.push(
-              `targets.${key}.raise_stop_loss.price must be a positive number`,
-            );
-          }
-        }
+  const normalizedTargets: Record<string, SignalTargetEntry> = {};
+  for (const [key, val] of Object.entries(targets)) {
+    if (val == null || typeof val !== "object") continue;
+    const t = val as Record<string, unknown>;
+    const entry: SignalTargetEntry = {};
+    if (t.price != null && t.price !== "") {
+      const n = Number(t.price);
+      if (!Number.isNaN(n)) entry.price = n;
+    }
+    if (t.percentage != null && t.percentage !== "") {
+      const n = Number(t.percentage);
+      if (!Number.isNaN(n)) entry.percentage = n;
+    }
+    if (
+      !underlyingPriceBased &&
+      entry.percentage == null &&
+      entry.price != null &&
+      !Number.isNaN(entryPriceNum) &&
+      entryPriceNum > 0
+    ) {
+      const pct = isBullish
+        ? ((entry.price - entryPriceNum) / entryPriceNum) * 100
+        : ((entryPriceNum - entry.price) / entryPriceNum) * 100;
+      entry.percentage = Math.round(pct * 10) / 10;
+    }
+    if (t.take_off_percent != null && t.take_off_percent !== "") {
+      const n = Number(t.take_off_percent);
+      if (!Number.isNaN(n)) entry.take_off_percent = n;
+    }
+    if (t.raise_stop_loss != null && typeof t.raise_stop_loss === "object") {
+      const rsl = t.raise_stop_loss as Record<string, unknown>;
+      entry.raise_stop_loss = {};
+      if (rsl.price != null && rsl.price !== "") {
+        const n = Number(rsl.price);
+        if (!Number.isNaN(n)) entry.raise_stop_loss!.price = n;
+      }
+      if (rsl.percentage != null && rsl.percentage !== "") {
+        const n = Number(rsl.percentage);
+        if (!Number.isNaN(n)) entry.raise_stop_loss!.percentage = n;
+      }
+      if (Object.keys(entry.raise_stop_loss).length === 0) {
+        delete entry.raise_stop_loss;
       }
     }
+    if (Object.keys(entry).length > 0) normalizedTargets[key] = entry;
   }
-
-  if (
-    body.stop_loss != null &&
-    (isNaN(Number(body.stop_loss)) || Number(body.stop_loss) <= 0)
-  ) {
-    errors.push("stop_loss must be a positive number");
-  }
-
-  if (body.time_stop != null) {
-    if (
-      typeof body.time_stop !== "string" ||
-      !/^\d{4}-\d{2}-\d{2}$/.test(body.time_stop)
-    ) {
-      errors.push("time_stop must be a date string in YYYY-MM-DD format");
-    }
-  }
-
-  if (body.auto_track != null && typeof body.auto_track !== "boolean") {
-    errors.push("auto_track must be a boolean (true or false)");
-  }
-
-  if (
-    body.underlying_price_based != null &&
-    typeof body.underlying_price_based !== "boolean"
-  ) {
-    errors.push("underlying_price_based must be a boolean (true or false)");
-  }
-
-  return errors;
+  return normalizedTargets;
 }
 
 async function buildSignalData(
   body: Record<string, any>,
-): Promise<{ data: Record<string, any>; errors: string[] }> {
+): Promise<{ data: StoredSignalData; errors: string[] }> {
   const {
     ticker,
     instrumentType,
@@ -307,6 +291,7 @@ async function buildSignalData(
     strike,
     targets,
     stop_loss,
+    stop_loss_percentage,
     time_stop,
     auto_track,
     underlying_price_based,
@@ -314,73 +299,102 @@ async function buildSignalData(
 
   const errors: string[] = [];
 
-  const stockSymbol: string | undefined = ticker;
-
-  const signalDataObj: Record<string, any> = {
+  const signalData: StoredSignalData = {
     ticker,
     instrument_type: instrumentType,
     direction,
-    entry_price: entryPrice ? Number(entryPrice) : null,
+    entry_price: entryPrice != null ? Number(entryPrice) : 0.0,
+    underlying_ticker: ticker,
   };
 
   if (instrumentType === "Options" || instrumentType === "LETF Option") {
-    signalDataObj.expiration = expiration;
-    signalDataObj.strike = strike;
-    signalDataObj.right = direction === "Put" ? "P" : "C";
+    signalData.expiration = expiration;
+    signalData.strike = strike;
+    signalData.right = direction === "Put" ? "P" : "C";
   }
 
   if (instrumentType === "LETF" || instrumentType === "LETF Option") {
-    signalDataObj.letfTicker = ticker;
-    signalDataObj.underlying_ticker = body.underlying_ticker ?? await getLETFUnderlying(ticker);
-    signalDataObj.leverage = body.leverage ?? getLETFLeverage(ticker);
+    signalData.underlying_ticker = body.underlying_ticker ?? (await getLETFUnderlying(ticker)) ?? ticker;
+    signalData.leverage = body.leverage ?? getLETFLeverage(ticker);
 
     const dirText =
       direction === "Short" || direction === "Put" ? "BEAR" : "BULL";
 
-    signalDataObj.leverage_direction = dirText;
-  } else {
-    signalDataObj.underlying_ticker = ticker;
+    signalData.leverage_direction = dirText;
   }
 
-  const bullish = direction === "Call" || direction === "Long";
-
-  if (targets && typeof targets === "object") {
-    signalDataObj.targets = targets;
+  if (targets && typeof targets === "object" && !Array.isArray(targets)) {
+    signalData.targets = normalizeTargets(targets, {
+      underlying_price_based,
+      entryPrice,
+      direction,
+    });
   }
 
   if (stop_loss !== undefined && stop_loss !== null) {
-    signalDataObj.stop_loss = stop_loss;
-    signalDataObj.current_stop_loss = stop_loss;
+    const stopLossNum = Number(stop_loss);
+    signalData.stop_loss = Number.isNaN(stopLossNum) ? Number(stop_loss) : stopLossNum;
+    signalData.current_stop_loss = signalData.stop_loss;
+    const stopLossPercentageNum = Number(stop_loss_percentage);
+    if (!Number.isNaN(stopLossPercentageNum)) {
+      signalData.stop_loss_percentage = stopLossPercentageNum;
+      signalData.current_stop_loss_percent = signalData.stop_loss_percentage;
+    } else {
+      const entryNum =
+        entryPrice != null && entryPrice !== "" ? Number(entryPrice) : NaN;
+      if (
+        !Number.isNaN(entryNum) &&
+        entryNum > 0 &&
+        typeof signalData.current_stop_loss === "number" &&
+        !Number.isNaN(signalData.current_stop_loss)
+      ) {
+        const slPct = profitPctFromInstrument(
+          entryNum,
+          signalData.current_stop_loss,
+          instrumentType,
+          direction,
+        );
+        signalData.stop_loss_percentage = Math.round(slPct * 10) / 10;
+        signalData.current_stop_loss_percent = signalData.stop_loss_percentage;
+      }
+    }
   }
+
+
 
   if (time_stop) {
-    signalDataObj.time_stop = time_stop;
+    signalData.time_stop = time_stop;
   }
 
-  signalDataObj.auto_track = auto_track !== undefined ? auto_track : true;
+  signalData.auto_track = auto_track !== undefined && auto_track !== null ? auto_track : true;
+
+  const webhookFromBody =
+    typeof body.discord_webhook_url === "string"
+      ? body.discord_webhook_url.trim() || null
+      : null;
+  if (webhookFromBody) signalData.discord_webhook_url = webhookFromBody;
 
   const underlyingPriceBased =
     underlying_price_based !== undefined ? underlying_price_based : false;
-  signalDataObj.underlying_price_based = underlyingPriceBased;
+  signalData.underlying_price_based = underlyingPriceBased;
 
   if (underlyingPriceBased) {
     const instrumentPrice = await getCurrentInstrumentPrice(
-      signalDataObj,
+      signalData,
       ticker,
     );
     if (instrumentPrice != null && instrumentPrice > 0) {
-      signalDataObj.entry_instrument_price = instrumentPrice;
+      signalData.entry_instrument_price = instrumentPrice;
     } else {
       console.warn(
         `[Signal] Could not fetch instrument price for ${ticker} , proceeding without it`,
       );
       errors.push("Instrument price Error");
     }
-    signalDataObj.entry_tracking_price = entryPrice;
-    signalDataObj.entry_underlying_price = entryPrice;
+    signalData.entry_tracking_price = entryPrice ?? null;
+    signalData.entry_underlying_price = entryPrice ?? null;
   } else {
-    const symbolForPrice =
-      signalDataObj.underlying_ticker ?? stockSymbol ?? ticker;
+    const symbolForPrice = signalData.underlying_ticker ?? ticker;
     if (!symbolForPrice || typeof symbolForPrice !== "string") {
       errors.push("Ticker is required for Shares");
     } else {
@@ -388,27 +402,25 @@ async function buildSignalData(
       if (underlyingPrice == null || underlyingPrice <= 0) {
         errors.push("Underlying price Error");
       } else {
-        signalDataObj.entry_underlying_price = underlyingPrice;
+        signalData.entry_underlying_price = underlyingPrice;
       }
     }
-    signalDataObj.entry_tracking_price = entryPrice;
-    signalDataObj.entry_instrument_price = entryPrice;
+    signalData.entry_tracking_price = entryPrice ?? null;
+    signalData.entry_instrument_price = entryPrice ?? null;
   }
 
   if (instrumentType === "LETF Option") {
-    signalDataObj.entry_letf_price = await fetchStockPrice(
-      signalDataObj.ticker,
-    );
+    signalData.entry_letf_price = await fetchStockPrice(signalData.ticker) ?? null;
   }
 
-  signalDataObj.hit_targets = {};
-  signalDataObj.current_target_number = 0;
-  signalDataObj.current_tp_number = 0;
-  signalDataObj.remain_quantity = 100;
+  signalData.hit_targets = {};
+  signalData.current_target_number = 0;
+  signalData.current_tp_number = 0;
+  signalData.remain_quantity = 100;
 
-  signalDataObj.status = "submitted";
+  signalData.status = "submitted";
 
-  return { data: signalDataObj, errors };
+  return { data: signalData, errors };
 }
 
 export async function processSignal(
@@ -422,16 +434,16 @@ export async function processSignal(
     validationErrors: [],
   };
 
-  let normalizedBody = body;
-  if (isTdiFormat(body)) {
-    console.log(
-      `[Signal] Detected TDI format from ${app.name}, transforming...`,
-    );
-    normalizedBody = transformTdiSignal(body);
-  }
+  console.log(`[Signal] Processing signal for ${body.ticker}`, body);
+  const normalizedBody = normalizeBodyForIngest(body, app.name);
 
-  const validationErrors = validateIngestBody(normalizedBody);
-  if (validationErrors.length > 0) {
+  console.log(`[Signal] Normalized body for ${body.ticker}`, normalizedBody);
+
+  const ingestParsed = ingestSignalBodySchema.safeParse(normalizedBody);
+  if (!ingestParsed.success) {
+    const validationErrors = ingestParsed.error.issues.map(
+      (issue) => issue.path.length > 0 ? `${issue.path.join(".")}: ${issue.message}` : issue.message,
+    );
     result.validationErrors = validationErrors;
     const ticker = normalizedBody.ticker || normalizedBody.symbol || "unknown";
     storage
@@ -451,13 +463,16 @@ export async function processSignal(
       .catch(() => {});
     return result;
   }
+  const validatedBody = ingestParsed.data;
 
-  const buildResult = await buildSignalData(normalizedBody);
-  const signalDataObj = buildResult.data;
+  console.log(`[Signal] Validated body for ${body.ticker}`, validatedBody);
+
+  const buildResult = await buildSignalData(validatedBody);
+  const signalData = buildResult.data;
 
   if (buildResult.errors.length > 0) {
     result.validationErrors = buildResult.errors;
-    const ticker = normalizedBody.ticker || normalizedBody.symbol || "unknown";
+    const ticker = validatedBody.ticker || "unknown";
     storage
       .createActivity({
         type: "signal_rejected",
@@ -482,19 +497,19 @@ export async function processSignal(
     direction,
     expiration,
     strike,
-  } = signalDataObj;
+  } = signalData;
   const sourceName = app.name;
   const sourceId = app.id;
 
   const signalPayload = {
-    data: signalDataObj,
+    data: signalData,
     status: "active",
     sourceAppId: sourceId,
     sourceAppName: sourceName,
   };
 
-  const parsed = insertSignalSchema.parse(signalPayload);
-  const signal = await storage.createSignal(parsed);
+  const insertParsed = insertSignalSchema.parse(signalPayload);
+  const signal = await storage.createSignal(insertParsed);
   result.signal = signal;
 
   storage
@@ -536,17 +551,17 @@ export async function processSignal(
     fetchPolygonBars({ symbol: ticker, secType: "STK" }).catch(() => {});
   }
 
-  const discordChannelWebhook =
-    typeof body.discord_channel_webhook === "string"
-      ? body.discord_channel_webhook.trim() || null
-      : null;
+  const discordWebhookUrl =
+    signalData.discord_webhook_url ??
+    (typeof body.discord_webhook_url === "string" ? body.discord_webhook_url.trim() || null : null) ??
+    (typeof body.discord_channel_webhook === "string" ? body.discord_channel_webhook.trim() || null : null);
   console.log(
-    `[Signal] Sending discord alert to ${discordChannelWebhook} for ${ticker}`,
+    `[Signal] Sending discord alert to ${discordWebhookUrl ?? "(app default)"} for ${ticker}`,
   );
   const discordResult = await sendEntryDicordAlert(
     signal,
     app,
-    discordChannelWebhook,
+    discordWebhookUrl,
   );
   result.discord.sent = discordResult.sent;
   if (discordResult.error) {

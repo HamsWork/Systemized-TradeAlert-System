@@ -104,7 +104,6 @@ export function registerTestRoutes(app: Express) {
           data.currentPrice = body.optionPrice ?? entryPrice;
         }
         if (instrumentType === "LETF") {
-          data.letfTicker = ticker;
           data.underlyingStockPrice = body.entry_underlying_price ?? 5200;
         }
         return data;

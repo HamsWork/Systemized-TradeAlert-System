@@ -72,6 +72,8 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
   const [raiseValue, setRaiseValue] = useState("");
   const [notes, setNotes] = useState("");
   const [underlyingPriceBased, setUnderlyingPriceBased] = useState(false);
+  const [tradeType, setTradeType] = useState<"scalp" | "swing" | "leap">("scalp");
+  const [timeStop, setTimeStop] = useState("");
 
   const resetForm = () => {
     setTicker(""); setInstrumentType(""); setDirection("");
@@ -80,6 +82,8 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
     setSl1(""); setSl2(""); setSl3("");
     setRaiseMethod(""); setRaiseValue(""); setNotes("");
     setUnderlyingPriceBased(false);
+    setTradeType("scalp");
+    setTimeStop("");
   };
 
   const createMutation = useMutation({
@@ -127,6 +131,7 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
     }
     if (notes) data.trade_plan = notes;
     if (underlyingPriceBased) data.underlying_price_based = true;
+    if (timeStop && (tradeType === "swing" || tradeType === "leap")) data.time_stop = timeStop;
 
     createMutation.mutate({
       data,
@@ -208,6 +213,33 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                 data-testid="input-signal-entryPrice"
               />
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-sm font-medium mb-1.5 block">Trade Type</Label>
+              <Select value={tradeType} onValueChange={(v: "scalp" | "swing" | "leap") => setTradeType(v)}>
+                <SelectTrigger data-testid="select-signal-tradeType">
+                  <SelectValue placeholder="Select..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="scalp">Scalp</SelectItem>
+                  <SelectItem value="swing">Swing</SelectItem>
+                  <SelectItem value="leap">Leap</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {(tradeType === "swing" || tradeType === "leap") && (
+              <div>
+                <Label className="text-sm font-medium mb-1.5 block">Time Horizon</Label>
+                <Input
+                  type="date"
+                  value={timeStop}
+                  onChange={(e) => setTimeStop(e.target.value)}
+                  data-testid="input-signal-timeStop"
+                />
+              </div>
+            )}
           </div>
 
           {(instrumentType === "Options" || instrumentType === "LETF Option") && (

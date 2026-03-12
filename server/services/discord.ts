@@ -173,27 +173,29 @@ function getWebhookForInstrument(
   app: ConnectedApp,
   instrumentType: string,
 ): string | null {
-  switch (instrumentType) {
-    case "Options":
-      return app.discordWebhookOptions || null;
-    case "Shares":
-      return app.discordWebhookShares || null;
-    case "LETF":
-      return app.discordWebhookLetf || null;
-    case "LETF Option":
-      return app.discordWebhookLetfOption || null;
-    case "Crypto":
-      return app.discordWebhookCrypto || null;
-    default:
-      return (
-        app.discordWebhookOptions ||
-        app.discordWebhookShares ||
-        app.discordWebhookLetf ||
-        app.discordWebhookLetfOption ||
-        app.discordWebhookCrypto ||
-        null
-      );
-  }
+  const byType =
+    instrumentType === "Options"
+      ? app.discordWebhookOptions
+      : instrumentType === "Shares"
+        ? app.discordWebhookShares
+        : instrumentType === "LETF"
+          ? app.discordWebhookLetf
+          : instrumentType === "LETF Option"
+            ? app.discordWebhookLetfOption
+            : instrumentType === "Crypto"
+              ? app.discordWebhookCrypto
+              : null;
+  if (byType && byType.trim()) return byType.trim();
+
+  const fallback =
+    app.webhookUrl?.trim() ||
+    app.discordWebhookOptions?.trim() ||
+    app.discordWebhookShares?.trim() ||
+    app.discordWebhookLetf?.trim() ||
+    app.discordWebhookLetfOption?.trim() ||
+    app.discordWebhookCrypto?.trim() ||
+    null;
+  return fallback || null;
 }
 
 function resolveWebhookUrl(
@@ -450,10 +452,9 @@ export function buildEntryAlertEmbed(
         if (signalData.underlying_price_based) {
           return fmtPrice(price);
         }
-        const pct = signalData.entry_tracking_price
-          ? fmtPct(signalData.entry_tracking_price, price)
-          : null;
-        return pct ? `${fmtPrice(price)} (${pct})` : fmtPrice(price);
+        const t = val as any;
+        const pct = t.percentage != null ? Number(t.percentage) : NaN;
+        return pct ? `${fmtPrice(price)} (${pct}%)` : fmtPrice(price);
       });
     if (targetPrices.length > 0) {
       tradePlanParts.push(`🎯 Targets: ${targetPrices.join(", ")}`);
@@ -461,34 +462,40 @@ export function buildEntryAlertEmbed(
   }
 
   if (signalData.stop_loss != null) {
-    const formatStopLossPrice = (price: number) =>
+    const formatStopLossPrice = (price: number, pct: number) =>
       signalData.underlying_price_based
         ? fmtPrice(price)
         : (() => {
-            const pct = signalData.entry_tracking_price
-              ? fmtPct(signalData.entry_tracking_price, price)
-              : null;
-            return pct ? `${fmtPrice(price)} (${pct})` : fmtPrice(price);
+            return pct ? `${fmtPrice(price)} (${pct}%)` : fmtPrice(price);
           })();
 
-    const initialSL = formatStopLossPrice(Number(signalData.stop_loss));
-    const targets =
-      signalData.targets && typeof signalData.targets === "object"
-        ? Object.entries(signalData.targets)
-            .filter(([, val]) => (val as any)?.raise_stop_loss?.price)
-            .sort(([, a], [, b]) =>
-              signalData.underlying_price_based
-                ? isBullish
-                  ? Number((a as any).price) - Number((b as any).price)
-                  : Number((b as any).price) - Number((a as any).price)
-                : direction === "Short"
-                  ? Number((b as any).price) - Number((a as any).price)
-                  : Number((a as any).price) - Number((b as any).price),
-            )
-        : [];
-    const raiseStopLossFormatted = targets.map(([, val]) =>
-      formatStopLossPrice(Number((val as any).raise_stop_loss?.price)),
-    );
+    const initialSL = formatStopLossPrice(Number(signalData.stop_loss), Number(signalData.stop_loss_percentage));
+    const targets = signalData.targets && typeof signalData.targets === "object"
+      ? Object.entries(signalData.targets)
+          .filter(([, val]) => (val as any)?.raise_stop_loss?.price)
+          .sort(([, a], [, b]) =>
+            signalData.underlying_price_based
+              ? isBullish
+                ? Number((a as any).price) - Number((b as any).price)
+                : Number((b as any).price) - Number((a as any).price)
+              : direction === "Short"
+                ? Number((b as any).price) - Number((a as any).price)
+                : Number((a as any).price) - Number((b as any).price),
+          )
+      : [];
+    const raiseStopLossFormatted = targets.map(([, val]) => {
+      const t = val as any;
+      const rsl = t.raise_stop_loss || {};
+      const pct = rsl.percentage != null
+        ? Number(rsl.percentage)
+        : t.percentage != null
+          ? Number(t.percentage)
+          : NaN;
+      return formatStopLossPrice(
+        Number(rsl.price),
+        pct,
+      );
+    });
     const stopLossLine = [initialSL, ...raiseStopLossFormatted].join(", ");
     tradePlanParts.push(`🛑 Stop loss: ${stopLossLine}`);
   }
@@ -703,14 +710,14 @@ export function buildStopLossRaisedEmbed(
       ? `**\u{1F6E1}\uFE0F ${signalData.ticker} Crypto Stop Loss Raised**`
       : `**\u{1F6E1}\uFE0F ${signalData.ticker} ${isSharesSymbol} Stop Loss Raised**`;
 
-  const newStopLabel = signalData.stop_loss_is_break_even
+  const newStopLabel = signalData.current_stop_loss_is_break_even
     ? `${fmtPrice(signalData.current_stop_loss)} (Break Even)`
     : fmtPrice(signalData.current_stop_loss);
-  const statusLabel = signalData.stop_loss_is_break_even
+  const statusLabel = signalData.current_stop_loss_is_break_even
     ? "\u{1F6A8} Status: Stop Loss Raised to Break Even \u{1F6A8}"
     : "\u{1F6A8} Status: Stop Loss Raised \u{1F6A8}";
   const riskMgmtLines = [
-    signalData.stop_loss_is_break_even
+    signalData.current_stop_loss_is_break_even
       ? `Stop loss raised to ${fmtPrice(signalData.current_stop_loss)} (break even).\nTrade is now risk-free on remaining position.`
       : `Stop loss raised to ${fmtPrice(signalData.current_stop_loss)} on remaining position.`,
   ];
@@ -784,10 +791,7 @@ export function buildStopLossHitEmbed(
     },
     {
       name: "\u{1F4B8} Result",
-      value:
-        signalData.stop_loss_percent != null
-          ? `${signalData.stop_loss_percent.toFixed(1)}%`
-          : "\u2014",
+      value: signalData.current_stop_loss_percent != null ? `${signalData.current_stop_loss_percent.toFixed(1)}%` : "\u2014",
       inline: true,
     },
     { ...SPACER },
