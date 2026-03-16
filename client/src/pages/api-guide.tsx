@@ -199,6 +199,9 @@ function EndpointInteractive({ endpoint, baseUrl, defaultApiKey }: { endpoint: E
   const [loading, setLoading] = useState(false);
   const [apiKeyValue, setApiKeyValue] = useState(defaultApiKey || "");
   const [showApiKey, setShowApiKey] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setApiKeyValue(defaultApiKey || "");
@@ -214,6 +217,7 @@ function EndpointInteractive({ endpoint, baseUrl, defaultApiKey }: { endpoint: E
     setParamValues({});
     setQueryResponse(null);
     setQueryStatus(null);
+    setSelectedFile(null);
   };
 
   const codeOutput = useMemo(() =>
@@ -296,7 +300,7 @@ function EndpointInteractive({ endpoint, baseUrl, defaultApiKey }: { endpoint: E
           <p className="text-sm text-muted-foreground py-4">No parameters for this endpoint.</p>
         ) : (
           <div className="space-y-4">
-            {params.filter(p => p.type !== "json").map((param) => (
+            {params.filter(p => p.type !== "json" && p.type !== "file").map((param) => (
               <div key={param.name} data-testid={`param-${param.name}`} className="group">
                 <div className="flex items-center justify-between gap-3 mb-1">
                   <div className="flex items-center gap-2">
@@ -357,6 +361,109 @@ function EndpointInteractive({ endpoint, baseUrl, defaultApiKey }: { endpoint: E
                         <pre className="text-[11px] text-muted-foreground/70 leading-relaxed whitespace-pre-wrap font-sans">{param.explanation}</pre>
                       </div>
                     )}
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {params.filter(p => p.type === "file").map((param) => (
+              <div key={param.name} data-testid={`param-${param.name}`} className="mt-2">
+                <div className="rounded-lg border border-zinc-700/40 bg-zinc-900/30 dark:bg-zinc-900/50 overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-700/30 bg-zinc-800/20">
+                    <div className="flex items-center gap-2">
+                      <Paperclip className="h-3.5 w-3.5 text-blue-400/70" />
+                      <code className="text-sm font-mono font-semibold text-foreground/90">{param.name}</code>
+                      <Badge variant="secondary" className="text-[10px] font-normal px-1.5 py-0 bg-blue-500/10 text-blue-400/80 border-blue-500/20">file</Badge>
+                    </div>
+                    {selectedFile && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => { setSelectedFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
+                        className="h-6 px-2 text-[10px] text-muted-foreground hover:text-red-400"
+                        data-testid="button-remove-file"
+                      >
+                        <X className="h-3 w-3 mr-1" />
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                  <div className="p-3">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*,video/*"
+                      className="hidden"
+                      data-testid={`input-file-${param.name}`}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          if (file.size > 10 * 1024 * 1024) {
+                            alert("File size exceeds 10 MB limit");
+                            return;
+                          }
+                          setSelectedFile(file);
+                        }
+                      }}
+                    />
+                    {selectedFile ? (
+                      <div className="flex items-center gap-3 rounded-md border border-blue-500/30 bg-blue-500/5 px-4 py-3">
+                        <div className="flex items-center justify-center h-10 w-10 rounded-md bg-blue-500/10 border border-blue-500/20 shrink-0">
+                          {selectedFile.type.startsWith("video/") ? (
+                            <svg className="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" /></svg>
+                          ) : (
+                            <ImageIcon className="h-5 w-5 text-blue-400" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate" data-testid="text-file-name">{selectedFile.name}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {(selectedFile.size / 1024).toFixed(0)} KB &middot; {selectedFile.type || "unknown type"}
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        className={`relative flex flex-col items-center justify-center rounded-md border-2 border-dashed px-4 py-6 text-center cursor-pointer transition-colors ${
+                          dragOver
+                            ? "border-blue-400 bg-blue-500/10"
+                            : "border-zinc-700/50 bg-zinc-950/40 hover:border-zinc-600/60 hover:bg-zinc-900/40"
+                        }`}
+                        data-testid="dropzone-chartMedia"
+                        onClick={() => fileInputRef.current?.click()}
+                        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOver(true); }}
+                        onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setDragOver(false); }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setDragOver(false);
+                          const file = e.dataTransfer.files?.[0];
+                          if (file) {
+                            if (file.size > 10 * 1024 * 1024) {
+                              alert("File size exceeds 10 MB limit");
+                              return;
+                            }
+                            setSelectedFile(file);
+                          }
+                        }}
+                      >
+                        <div className={`flex items-center justify-center h-10 w-10 rounded-full mb-3 ${dragOver ? "bg-blue-500/20" : "bg-zinc-800/60"}`}>
+                          <ImageIcon className={`h-5 w-5 ${dragOver ? "text-blue-400" : "text-zinc-500"}`} />
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-1">
+                          <span className="text-blue-400 font-medium">Click to upload</span> or drag and drop
+                        </p>
+                        <p className="text-[11px] text-muted-foreground/60">
+                          PNG, JPG, GIF, WebP, MP4, MOV &middot; Max 10 MB
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="px-4 py-2 border-t border-zinc-700/20 bg-zinc-800/10">
+                    <div className="flex items-start gap-1.5">
+                      <Info className="h-3 w-3 text-muted-foreground/50 mt-0.5 shrink-0" />
+                      <p className="text-[11px] text-muted-foreground/60 leading-relaxed">{param.description}</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -595,17 +702,6 @@ const sections: SectionDef[] = [
           { name: "underlying_price_based", type: "boolean", required: false, description: "When true, targets and stop loss are compared against the underlying stock price instead of the option/LETF price. Applies to Options, LETF, and LETF Option instrument types. Defaults to false." },
           { name: "time_stop", type: "string", required: false, description: "Time-based stop -- exit the trade by this date (e.g., '2026-03-01')." },
           { name: "discord_channel_webhook", type: "string", required: false, description: "Optional Discord webhook URL. When set, the signal alert is sent to this channel instead of the app's configured webhooks." },
-          { name: "chartMedia", type: "file", required: false, description: "Image or video file to attach to the Discord embed (max 10 MB). When included, the request must use multipart/form-data instead of JSON. All other fields are sent as form fields. The file appears as the embed image in the Discord alert.", explanation: `When you attach a chartMedia file, the request format changes from JSON to multipart/form-data. Each signal field becomes a separate form field, and the file is sent as the "chartMedia" field.
-
-Supported formats: PNG, JPG, GIF, WebP, MP4, MOV — any format Discord supports.
-Max file size: 10 MB.
-
-Important notes for multipart requests:
-  - Do NOT set Content-Type header manually — curl sets it automatically with the boundary.
-  - Numeric fields (entryPrice, stop_loss, strike, leverage) are auto-converted from strings.
-  - Boolean fields (auto_track, underlying_price_based) are auto-converted ("true"/"false" strings).
-  - The targets field must be sent as a JSON string (it will be parsed automatically).
-  - The file is forwarded to Discord as an attachment and displayed as the embed image.` },
           { name: "targets", type: "json", required: false, description: "Take-profit targets. Target prices must be in the same space as entry_price (option / LETF / stock).", explanation: `The targets object defines your profit-taking strategy. Each key (tp1, tp2, etc.) maps to a target with a price (option contract price for Options, LETF price for LETF, stock price for Shares), a take_off_percent indicating how much of the position to close, and an optional raise_stop_loss that adjusts your stop loss when the target is hit.
 
 Structure:
@@ -631,6 +727,7 @@ Example:
     "trailing_stop_percent": 5
   }
 }` },
+          { name: "chartMedia", type: "file", required: false, description: "Image or video file to attach to the Discord embed (max 10 MB). When included, the request must use multipart/form-data instead of JSON. All other fields are sent as form fields. The file appears as the embed image in the Discord alert." },
         ],
         responseExample: `{
   "success": true,
