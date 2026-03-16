@@ -8,6 +8,7 @@ import {
   renderTemplate,
   type TemplateEmbed,
 } from "./discord-templates";
+import type { ChartFile } from "./signal-processor";
 
 /**
  * Price terminology (see server/docs/PRICE_TERMINOLOGY.md):
@@ -329,6 +330,7 @@ async function sendWebhook(
   content: string,
   embeds: DiscordEmbed[],
   isRetry = false,
+  chartFile?: ChartFile | null,
 ): Promise<boolean> {
   if (!url) {
     console.log("[Discord] Webhook URL not configured");
@@ -336,18 +338,38 @@ async function sendWebhook(
   }
 
   try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content, embeds }),
-    });
+    let res: Response;
+
+    if (chartFile) {
+      const filename = chartFile.originalname || "chart.png";
+      const embedsWithImage = embeds.map((e) => ({
+        ...e,
+        image: { url: `attachment://${filename}` },
+      }));
+
+      const formData = new FormData();
+      formData.append(
+        "payload_json",
+        JSON.stringify({ content, embeds: embedsWithImage }),
+      );
+      const blob = new Blob([chartFile.buffer], { type: chartFile.mimetype });
+      formData.append("files[0]", blob, filename);
+
+      res = await fetch(url, { method: "POST", body: formData });
+    } else {
+      res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, embeds }),
+      });
+    }
 
     if (res.status === 429 && !isRetry) {
       const body = await res.json().catch(() => ({}));
       const retryAfter = (body as { retry_after?: number }).retry_after ?? 1;
       console.log(`[Discord] Rate limited, retrying after ${retryAfter}s`);
       await new Promise((r) => setTimeout(r, retryAfter * 1000));
-      return sendWebhook(url, content, embeds, true);
+      return sendWebhook(url, content, embeds, true, chartFile);
     }
 
     if (!res.ok) {
@@ -356,7 +378,7 @@ async function sendWebhook(
       return false;
     }
 
-    console.log(`[Discord] Webhook sent successfully`);
+    console.log(`[Discord] Webhook sent successfully${chartFile ? " (with chart media)" : ""}`);
     return true;
   } catch (err: any) {
     console.warn(`[Discord] Webhook error: ${err.message}`);
@@ -1454,6 +1476,7 @@ export async function sendEntryDicordAlert(
   signal: Signal,
   app: ConnectedApp | null,
   overrideWebhookUrl?: string | null,
+  chartFile?: ChartFile | null,
 ): Promise<DiscordSendResult> {
   if (!app) {
     return { sent: false, error: "No connected app provided" };
@@ -1513,17 +1536,11 @@ export async function sendEntryDicordAlert(
     "signal_alert",
   );
   const embed = template?.embed ?? buildEntryAlertEmbed(signal, expendName);
-  if (data.image_url && typeof data.image_url === "string") {
-    embed.image = { url: data.image_url };
-  }
-  if (data.video_url && typeof data.video_url === "string") {
-    embed.video = { url: data.video_url };
-  }
   const content = template?.content ?? getContentForInstrument(app, instrumentType);
   let sent = false;
   let error: string | null = null;
   try {
-    sent = await sendWebhook(webhookUrl, content, [embed]);
+    sent = await sendWebhook(webhookUrl, content, [embed], false, chartFile);
     if (!sent) error = "Webhook request failed";
   } catch (err: any) {
     error = err.message;

@@ -1,4 +1,5 @@
 import type { Express, Request, Response, NextFunction } from "express";
+import multer from "multer";
 import { storage } from "../storage";
 import { insertSignalSchema } from "@shared/schema";
 import { asyncHandler } from "../lib/async-handler";
@@ -121,6 +122,7 @@ async function authenticateApiKey(
 }
 
 const partialSignalSchema = insertSignalSchema.partial();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 export function registerSignalRoutes(app: Express) {
   app.get(
@@ -607,10 +609,37 @@ export function registerSignalRoutes(app: Express) {
   app.post(
     "/api/ingest/signals",
     authenticateApiKey,
+    upload.single("chartMedia"),
     asyncHandler(async (req, res) => {
       const connectedApp = req.connectedApp!;
 
-      const processResult = await processSignal(req.body, connectedApp);
+      let body = { ...req.body };
+
+      if (typeof body.data === "string") {
+        try {
+          body = { ...body, data: JSON.parse(body.data) };
+        } catch {
+          // keep as-is
+        }
+      }
+
+      if (req.file) {
+        if (typeof body.entryPrice === "string") body.entryPrice = Number(body.entryPrice);
+        if (typeof body.stop_loss === "string") body.stop_loss = Number(body.stop_loss);
+        if (typeof body.strike === "string" && body.strike) body.strike = Number(body.strike);
+        if (typeof body.leverage === "string" && body.leverage) body.leverage = Number(body.leverage);
+        if (typeof body.auto_track === "string") body.auto_track = body.auto_track === "true";
+        if (typeof body.underlying_price_based === "string") body.underlying_price_based = body.underlying_price_based === "true";
+        if (typeof body.targets === "string") {
+          try { body.targets = JSON.parse(body.targets); } catch { /* keep as-is */ }
+        }
+      }
+
+      const chartFile = req.file
+        ? { buffer: req.file.buffer, originalname: req.file.originalname, mimetype: req.file.mimetype }
+        : null;
+
+      const processResult = await processSignal(body, connectedApp, chartFile);
 
       if (processResult.validationErrors.length > 0) {
         return res

@@ -36,8 +36,6 @@ export const signalDataSchema = z.object({
   entry_letf_price: z.number().nullable().optional(),
   entry_option_price: z.number().nullable().optional(),
   discord_webhook_url: z.string().nullable().optional(),
-  image_url: z.string().nullable().optional(),
-  video_url: z.string().nullable().optional(),
 });
 
 const signalHitTargetEntrySchema = z.object({
@@ -86,8 +84,6 @@ export const ingestSignalBodySchema = z
     underlying_price_based: z.boolean().optional(),
     underlying_ticker: z.string().nullable().optional(),
     leverage: z.union([z.number(), z.string()]).optional(),
-    image_url: z.string().url().optional().nullable(),
-    video_url: z.string().url().optional().nullable(),
   })
   .superRefine((data, ctx) => {
     const validDirections =
@@ -249,8 +245,6 @@ export interface SignalData {
   entry_letf_price?: number | null;
   entry_option_price?: number | null;
   discord_webhook_url?: string | null;
-  image_url?: string | null;
-  video_url?: string | null;
 }
 
 /**
