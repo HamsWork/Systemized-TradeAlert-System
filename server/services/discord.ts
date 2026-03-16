@@ -28,6 +28,8 @@ export interface DiscordEmbed {
   fields?: DiscordField[];
   footer?: { text: string };
   timestamp?: string;
+  image?: { url: string };
+  video?: { url: string };
 }
 
 const GREEN = 0x22c55e;
@@ -1511,6 +1513,12 @@ export async function sendEntryDicordAlert(
     "signal_alert",
   );
   const embed = template?.embed ?? buildEntryAlertEmbed(signal, expendName);
+  if (data.image_url && typeof data.image_url === "string") {
+    embed.image = { url: data.image_url };
+  }
+  if (data.video_url && typeof data.video_url === "string") {
+    embed.video = { url: data.video_url };
+  }
   const content = template?.content ?? getContentForInstrument(app, instrumentType);
   let sent = false;
   let error: string | null = null;

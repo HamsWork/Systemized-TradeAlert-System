@@ -152,6 +152,9 @@ function transformTdiSignal(body: Record<string, any>): Record<string, any> {
   if (body.underlying_price_based !== undefined)
     result.underlying_price_based = body.underlying_price_based;
 
+  if (body.image_url) result.image_url = body.image_url;
+  if (body.video_url) result.video_url = body.video_url;
+
   result.tdi_metadata = {
     strategy_mode: body.strategy_mode || null,
     timeframe: body.timeframe || null,
@@ -373,6 +376,13 @@ async function buildSignalData(
       ? body.discord_webhook_url.trim() || null
       : null;
   if (webhookFromBody) signalData.discord_webhook_url = webhookFromBody;
+
+  if (typeof body.image_url === "string" && body.image_url.trim()) {
+    signalData.image_url = body.image_url.trim();
+  }
+  if (typeof body.video_url === "string" && body.video_url.trim()) {
+    signalData.video_url = body.video_url.trim();
+  }
 
   const underlyingPriceBased =
     underlying_price_based !== undefined ? underlying_price_based : false;

@@ -39,6 +39,7 @@ Plugged-in apps → Send signals via API → Signal Processor checks connected a
 Connected apps push signals to TradeSync via `POST /api/ingest/signals` using their API key:
 - Auth: `Authorization: Bearer <api_key>` header
 - Body: `{ ticker, instrumentType, direction, entryPrice?, tradePlan?, ... }`
+- Optional media: `image_url` (string URL) and/or `video_url` (string URL) — attached to Discord embed as image/video when sending entry alerts
 - App must be active and have syncSignals enabled
 - Each signal is tagged with sourceAppId and sourceAppName
 
