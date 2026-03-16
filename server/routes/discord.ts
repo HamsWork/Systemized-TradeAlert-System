@@ -49,24 +49,38 @@ export function registerDiscordRoutes(app: Express) {
   app.get(
     "/api/discord-templates/var-templates",
     asyncHandler(async (_req, res) => {
+      const overrides = await storage.getDiscordTemplatesByApp("__default__");
+      const overrideMap = new Map<string, typeof overrides[0]>();
+      for (const o of overrides) {
+        overrideMap.set(`${o.instrumentType}::${o.messageType}`, o);
+      }
+
       const groups = generateAllTemplateGroups();
       const result = groups.map(g => ({
         instrumentType: g.instrumentType,
         ticker: g.ticker,
         templates: g.templates.map(t => {
+          const key = `${g.instrumentType}::${t.type}`;
+          const override = overrideMap.get(key);
+          const templateEmbed = override
+            ? (override.embedJson as TemplateEmbed)
+            : t.embed;
+          const content = override ? (override.content ?? t.content) : t.content;
+          const label = override ? (override.label || t.label) : t.label;
+
           const sampleVars = buildSampleVariables(g.instrumentType, t.type);
-          const rendered = renderTemplate(t.embed, sampleVars);
+          const rendered = renderTemplate(templateEmbed, sampleVars);
           return {
             type: t.type,
-            label: t.label,
-            content: t.content,
-            template: t.embed,
+            label,
+            content,
+            template: templateEmbed,
             sampleVars,
             preview: {
-              content: t.content,
+              content,
               embed: rendered,
             },
-            isCustom: false,
+            isCustom: !!override,
           };
         }),
       }));
@@ -128,8 +142,10 @@ export function registerDiscordRoutes(app: Express) {
     asyncHandler(async (req, res) => {
       const appId = getParam(req, "appId");
 
-      const connectedApp = await storage.getConnectedApp(appId);
-      if (!connectedApp) return res.status(404).json({ message: "App not found" });
+      if (appId !== "__default__") {
+        const connectedApp = await storage.getConnectedApp(appId);
+        if (!connectedApp) return res.status(404).json({ message: "App not found" });
+      }
 
       const { instrumentType, messageType, label, content, embedJson } = req.body;
       if (!instrumentType || !messageType) {

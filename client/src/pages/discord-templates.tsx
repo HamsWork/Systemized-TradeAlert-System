@@ -455,7 +455,11 @@ function EditTemplateModal({ template, appId, instrumentType, open, onOpenChange
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/discord-templates/app", appId] });
+      if (appId === "__default__") {
+        queryClient.invalidateQueries({ queryKey: ["/api/discord-templates/var-templates"] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["/api/discord-templates/app", appId] });
+      }
       toast({ title: "Template saved", description: `${template.label} template updated` });
       onOpenChange(false);
     },
@@ -747,11 +751,16 @@ export default function DiscordTemplatesPage() {
 
   const resetMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("DELETE", `/api/discord-templates/app/${selectedAppId}?instrumentType=${encodeURIComponent(activeInstrument)}`);
+      const resetAppId = isDefault ? "__default__" : selectedAppId;
+      await apiRequest("DELETE", `/api/discord-templates/app/${resetAppId}?instrumentType=${encodeURIComponent(activeInstrument)}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/discord-templates/app", selectedAppId] });
-      toast({ title: "Reset to defaults", description: `${activeInstrument} templates reset for this app` });
+      if (isDefault) {
+        queryClient.invalidateQueries({ queryKey: ["/api/discord-templates/var-templates"] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["/api/discord-templates/app", selectedAppId] });
+      }
+      toast({ title: "Reset to defaults", description: `${activeInstrument} templates reset${isDefault ? "" : " for this app"}` });
     },
     onError: (err: Error) => {
       toast({ title: "Reset failed", description: err.message, variant: "destructive" });
@@ -852,7 +861,7 @@ export default function DiscordTemplatesPage() {
             </Button>
           ))}
         </div>
-        {!isDefault && hasCustomTemplates && (
+        {hasCustomTemplates && (
           <Button
             variant="outline"
             size="sm"
@@ -922,18 +931,16 @@ export default function DiscordTemplatesPage() {
                         >
                           <Eye className="h-3.5 w-3.5" />
                         </Button>
-                        {!isDefault && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs px-2"
-                            onClick={() => setEditModal({ open: true, template, instrumentType: activeGroup.instrumentType })}
-                            data-testid={`button-edit-template-${idx}`}
-                          >
-                            <Pencil className="h-3 w-3 mr-1" />
-                            Edit
-                          </Button>
-                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs px-2"
+                          onClick={() => setEditModal({ open: true, template, instrumentType: activeGroup.instrumentType })}
+                          data-testid={`button-edit-template-${idx}`}
+                        >
+                          <Pencil className="h-3 w-3 mr-1" />
+                          Edit
+                        </Button>
                         <Button
                           size="icon"
                           className="h-7 w-7 bg-[#5865F2] hover:bg-[#4752C4] text-white"
@@ -989,10 +996,10 @@ export default function DiscordTemplatesPage() {
         />
       )}
 
-      {editModal.template && !isDefault && (
+      {editModal.template && (
         <EditTemplateModal
           template={editModal.template}
-          appId={selectedAppId}
+          appId={isDefault ? "__default__" : selectedAppId}
           instrumentType={editModal.instrumentType}
           open={editModal.open}
           onOpenChange={(open) => setEditModal(prev => ({ ...prev, open }))}
