@@ -401,7 +401,9 @@ function VariablesPanel({ messageType, sampleVars }: { messageType: string; samp
 
 function buildTemplateJson(template: TemplateEmbed): string {
   const raw = JSON.stringify(template, null, 2);
-  return raw.replace(/\u200b/g, "\\u200b");
+  return raw
+    .replace(/\u200b/g, "\\u200b")
+    .replace(/\\\\u200b/g, "\\u200b");
 }
 
 function parseTemplateJson(json: string): TemplateEmbed | null {
