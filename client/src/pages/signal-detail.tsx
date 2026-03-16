@@ -661,7 +661,7 @@ function DiscordEmbed({ msg }: { msg: DiscordPreviewMsg }) {
           )}
 
           {inlineFields.length > 0 && (
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {inlineFields.map((field, i) => (
                 <div key={i} className="min-w-0">
                   <p className="text-[11px] font-semibold text-[#b5bac1] uppercase tracking-wide">{field.name}</p>
@@ -1068,7 +1068,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto" data-testid="dialog-signal-detail">
+      <DialogContent className="max-w-5xl w-[95vw] sm:w-full max-h-[90vh] overflow-y-auto" data-testid="dialog-signal-detail">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 flex-wrap">
             <BarChart3 className="h-5 w-5 text-primary" />

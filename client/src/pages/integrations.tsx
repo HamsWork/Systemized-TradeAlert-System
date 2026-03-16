@@ -284,7 +284,7 @@ function CreateIbkrDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
                 </FormItem>
               )}
             />
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <FormField
                 control={form.control}
                 name="host"
@@ -729,7 +729,7 @@ function EditIntegrationDialog({ integration, open, onOpenChange }: { integratio
                   </FormItem>
                 )}
               />
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <FormField
                   control={ibkrForm.control}
                   name="host"
@@ -807,7 +807,7 @@ export default function IntegrationsPage() {
 
   if (integrationsQuery.isLoading) {
     return (
-      <div className="space-y-4 p-6">
+      <div className="space-y-4 p-4 sm:p-6">
         <Skeleton className="h-8 w-48" />
         <div className="grid gap-4 lg:grid-cols-2">
           {[...Array(4)].map((_, i) => (
@@ -829,7 +829,7 @@ export default function IntegrationsPage() {
       : ibkrIntegrations;
 
   return (
-    <div className="space-y-6 p-6" data-testid="page-integrations">
+    <div className="space-y-4 sm:space-y-6 p-4 sm:p-6" data-testid="page-integrations">
       <PageHeader
         icon={Radio}
         title="Integrations"
@@ -849,7 +849,7 @@ export default function IntegrationsPage() {
         }
       />
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Card className="border-indigo-500/20 bg-indigo-500/5">
           <CardContent className="p-4 flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10">

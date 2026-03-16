@@ -298,7 +298,7 @@ function DiscordEmbed({ embed }: { embed: RenderedEmbed }) {
             }
             if (section.type === "inline") {
               return (
-                <div key={si} className="grid grid-cols-3 gap-2">
+                <div key={si} className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {section.fields.map((field, fi) => (
                     <div key={fi} className="min-w-0">
                       <p className="text-[11px] font-semibold text-[#b5bac1] uppercase tracking-wide">{field.name}</p>
@@ -828,7 +828,7 @@ export default function DiscordTemplatesPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6 space-y-4">
+      <div className="p-4 sm:p-6 space-y-4">
         <Skeleton className="h-8 w-64" />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-64" />)}
@@ -839,8 +839,8 @@ export default function DiscordTemplatesPage() {
 
   if (isError) {
     return (
-      <div className="p-6">
-        <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-6 text-center space-y-2" data-testid="error-templates">
+      <div className="p-4 sm:p-6">
+        <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-4 sm:p-6 text-center space-y-2" data-testid="error-templates">
           <AlertCircle className="h-8 w-8 text-red-500 mx-auto" />
           <p className="text-sm font-medium text-red-500">Failed to load templates</p>
           <p className="text-xs text-muted-foreground">{(error as Error)?.message || "Unknown error"}</p>
@@ -856,7 +856,7 @@ export default function DiscordTemplatesPage() {
   const selectedApp = connectedApps.find(a => a.id === selectedAppId);
 
   return (
-    <div className="p-6 space-y-6" data-testid="page-discord-templates">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6" data-testid="page-discord-templates">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2" data-testid="text-page-title">
@@ -872,7 +872,7 @@ export default function DiscordTemplatesPage() {
         </div>
         <div className="flex items-center gap-2">
           <Select value={selectedAppId} onValueChange={(v) => { setSelectedAppId(v); setExpandedTemplate(null); }}>
-            <SelectTrigger className="w-[220px] h-9 text-sm" data-testid="select-app-templates">
+            <SelectTrigger className="w-full sm:w-[220px] h-9 text-sm" data-testid="select-app-templates">
               <SelectValue placeholder="Select App" />
             </SelectTrigger>
             <SelectContent>

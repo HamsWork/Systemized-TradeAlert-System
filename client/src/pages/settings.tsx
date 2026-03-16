@@ -129,7 +129,7 @@ export default function SettingsPage() {
 
   if (settingsQuery.isLoading) {
     return (
-      <div className="p-6 space-y-6" data-testid="page-settings">
+      <div className="p-4 sm:p-6 space-y-4 sm:space-y-6" data-testid="page-settings">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-4 w-80" />
         <div className="grid gap-4 lg:grid-cols-2">
@@ -142,7 +142,7 @@ export default function SettingsPage() {
   const settings = settingsQuery.data ?? [];
 
   return (
-    <div className="p-6 space-y-6" data-testid="page-settings">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6" data-testid="page-settings">
       <PageHeader
         icon={Settings2}
         title="Settings"

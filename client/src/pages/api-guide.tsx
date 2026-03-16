@@ -283,7 +283,7 @@ function EndpointInteractive({ endpoint, baseUrl, defaultApiKey }: { endpoint: E
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-0" data-testid={`endpoint-${endpoint.method.toLowerCase()}-${endpoint.path.replace(/[/:]/g, "-")}`}>
-      <div className="p-6 lg:border-r border-border/60">
+      <div className="p-4 sm:p-6 lg:border-r border-border/60">
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-lg font-semibold" data-testid="heading-query-params">
             {hasBody ? "Body Parameters" : "Query Parameters"}
@@ -310,7 +310,7 @@ function EndpointInteractive({ endpoint, baseUrl, defaultApiKey }: { endpoint: E
                   </div>
                   {param.enumValues ? (
                     <Select value={paramValues[param.name] || ""} onValueChange={(v) => setParam(param.name, v)}>
-                      <SelectTrigger className="w-[180px] h-8 bg-zinc-900/40 dark:bg-zinc-900/60 border-zinc-700/40 text-sm focus:ring-1 focus:ring-primary/30 transition-colors" data-testid={`select-param-${param.name}`}>
+                      <SelectTrigger className="w-full sm:w-[180px] h-8 bg-zinc-900/40 dark:bg-zinc-900/60 border-zinc-700/40 text-sm focus:ring-1 focus:ring-primary/30 transition-colors" data-testid={`select-param-${param.name}`}>
                         <SelectValue placeholder="Select..." />
                       </SelectTrigger>
                       <SelectContent>
@@ -321,7 +321,7 @@ function EndpointInteractive({ endpoint, baseUrl, defaultApiKey }: { endpoint: E
                     <Input
                       value={paramValues[param.name] || ""}
                       onChange={(e) => setParam(param.name, e.target.value)}
-                      className="w-[180px] h-8 bg-zinc-900/40 dark:bg-zinc-900/60 border-zinc-700/40 text-sm focus:ring-1 focus:ring-primary/30 transition-colors"
+                      className="w-full sm:w-[180px] h-8 bg-zinc-900/40 dark:bg-zinc-900/60 border-zinc-700/40 text-sm focus:ring-1 focus:ring-primary/30 transition-colors"
                       placeholder=""
                       data-testid={`input-param-${param.name}`}
                     />
@@ -481,7 +481,7 @@ function EndpointInteractive({ endpoint, baseUrl, defaultApiKey }: { endpoint: E
         )}
       </div>
 
-      <div className="p-6 bg-zinc-950/40 dark:bg-zinc-950/60 space-y-5">
+      <div className="p-4 sm:p-6 bg-zinc-950/40 dark:bg-zinc-950/60 space-y-5">
         <div>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-base font-semibold" data-testid="heading-code-examples">Code Examples</h3>
@@ -1119,17 +1119,17 @@ Example:
 function QuickStartContent({ baseUrl }: { baseUrl: string }) {
   return (
     <div data-testid="section-quick-start">
-      <div className="p-6 border-b border-border/60">
+      <div className="p-4 sm:p-6 border-b border-border/60">
         <div className="flex items-center gap-2 mb-1">
           <Rocket className="h-5 w-5 text-primary" />
-          <h1 className="text-2xl font-bold tracking-tight" data-testid="heading-quick-start">Quick Start</h1>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight" data-testid="heading-quick-start">Quick Start</h1>
         </div>
         <p className="text-sm text-muted-foreground mt-1">
-          Get up and running with TradeSync in 3 steps. Base URL: <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">{baseUrl}</code>
+          Get up and running with TradeSync in 3 steps. Base URL: <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono break-all">{baseUrl}</code>
         </p>
       </div>
 
-      <div className="p-6 space-y-8">
+      <div className="p-4 sm:p-6 space-y-6 sm:space-y-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="rounded-xl border border-border/60 bg-muted/20 dark:bg-zinc-900/30 p-5" data-testid="card-step-1">
             <div className="flex items-center gap-3 mb-3">
@@ -1367,7 +1367,7 @@ export default function ApiGuidePage() {
         <div className="w-[260px] border-r p-4 space-y-3 hidden md:block">
           {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
         </div>
-        <div className="flex-1 p-6 space-y-4">
+        <div className="flex-1 p-4 sm:p-6 space-y-4">
           <Skeleton className="h-8 w-64" />
           <Skeleton className="h-4 w-96" />
           {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-32 w-full" />)}
@@ -1477,10 +1477,10 @@ export default function ApiGuidePage() {
 
         {currentSection && currentEndpoint && (
           <div>
-            <div className="p-6 border-b border-border/60">
-              <div className="flex items-center gap-3 mb-1">
+            <div className="p-4 sm:p-6 border-b border-border/60">
+              <div className="flex items-center gap-2 sm:gap-3 mb-1 flex-wrap">
                 <MethodBadge method={currentEndpoint.method} />
-                <code className="text-lg font-mono font-semibold">{currentEndpoint.path}</code>
+                <code className="text-sm sm:text-lg font-mono font-semibold break-all">{currentEndpoint.path}</code>
               </div>
               <p className="text-sm text-muted-foreground mt-2">{currentEndpoint.description}</p>
               {currentEndpoint.path === "/api/ingest/signals" && (

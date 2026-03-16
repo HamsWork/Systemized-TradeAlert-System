@@ -743,7 +743,7 @@ export default function IbkrPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6 space-y-6" data-testid="page-ibkr">
+      <div className="p-4 sm:p-6 space-y-4 sm:space-y-6" data-testid="page-ibkr">
         <div className="flex items-center gap-3">
           <Skeleton className="h-9 w-9 rounded-lg" />
           <Skeleton className="h-7 w-48" />
@@ -757,7 +757,7 @@ export default function IbkrPage() {
   }
 
   return (
-    <div className="p-6 space-y-6" data-testid="page-ibkr">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6" data-testid="page-ibkr">
       <PageHeader
         icon={Landmark}
         title="IBKR"
@@ -769,7 +769,7 @@ export default function IbkrPage() {
             <div className="flex items-center gap-1.5">
               <Landmark className="h-3.5 w-3.5 text-muted-foreground" />
               <Select value={selectedAccount} onValueChange={(v) => { setSelectedAccount(v); setOrdersAppFilter("all"); setPositionsAppFilter("all"); setOrdersPage(1); setPositionsPage(1); }}>
-                <SelectTrigger className="w-[220px] h-9 text-sm" data-testid="select-account-filter">
+                <SelectTrigger className="w-full sm:w-[220px] h-9 text-sm" data-testid="select-account-filter">
                   <SelectValue placeholder="All Accounts" />
                 </SelectTrigger>
                 <SelectContent>
@@ -812,12 +812,12 @@ export default function IbkrPage() {
         <TabsContent value="orders" className="space-y-4">
           <Card>
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <CardTitle className="text-base">Orders</CardTitle>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   {orderSourceApps.length > 0 && (
                     <Select value={ordersAppFilter} onValueChange={(v) => { setOrdersAppFilter(v); setOrdersPage(1); }}>
-                      <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="select-orders-app-filter">
+                      <SelectTrigger className="w-[120px] sm:w-[140px] h-8 text-xs" data-testid="select-orders-app-filter">
                         <SelectValue placeholder="All Apps" />
                       </SelectTrigger>
                       <SelectContent>
@@ -829,7 +829,7 @@ export default function IbkrPage() {
                     </Select>
                   )}
                   <Select value={orderStatusFilter} onValueChange={(v) => { setOrderStatusFilter(v); setOrdersPage(1); }}>
-                    <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="select-order-status-filter">
+                    <SelectTrigger className="w-[120px] sm:w-[140px] h-8 text-xs" data-testid="select-order-status-filter">
                       <SelectValue placeholder="All Statuses" />
                     </SelectTrigger>
                     <SelectContent>
@@ -853,11 +853,11 @@ export default function IbkrPage() {
         <TabsContent value="positions" className="space-y-4">
           <Card>
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <CardTitle className="text-base">Open Positions</CardTitle>
                 {positionSourceApps.length > 0 && (
                   <Select value={positionsAppFilter} onValueChange={(v) => { setPositionsAppFilter(v); setPositionsPage(1); }}>
-                    <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="select-positions-app-filter">
+                    <SelectTrigger className="w-[120px] sm:w-[140px] h-8 text-xs" data-testid="select-positions-app-filter">
                       <SelectValue placeholder="All Apps" />
                     </SelectTrigger>
                     <SelectContent>

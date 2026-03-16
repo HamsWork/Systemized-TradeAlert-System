@@ -316,9 +316,9 @@ function SectionCard({
           {section.subsections && section.subsections.length > 0 && (
             <>
               <Separator />
-              <div className="p-6 space-y-6">
+              <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
                 {section.subsections.map((sub, idx) => (
-                  <div key={idx} className="flex flex-col lg:flex-row gap-6">
+                  <div key={idx} className="flex flex-col lg:flex-row gap-4 sm:gap-6">
                     <div className="flex-1 min-w-0 space-y-3">
                       <h3 className="text-sm font-semibold">{sub.title}</h3>
                       <p className="text-sm text-muted-foreground">{sub.description}</p>
@@ -383,7 +383,7 @@ export default function HelpPage() {
   };
 
   return (
-    <div className="space-y-6 p-6" data-testid="page-help">
+    <div className="space-y-4 sm:space-y-6 p-4 sm:p-6" data-testid="page-help">
       <PageHeader
         icon={HelpCircle}
         title="Help & Walkthrough"

@@ -501,10 +501,10 @@ export default function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="p-6 space-y-6" data-testid="page-dashboard">
+      <div className="p-4 sm:p-6 space-y-4 sm:space-y-6" data-testid="page-dashboard">
         <div>
           <Skeleton className="mb-2 h-8 w-64" />
-          <Skeleton className="h-4 w-96" />
+          <Skeleton className="h-4 w-full max-w-96" />
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-24 rounded-lg" />)}
@@ -529,7 +529,7 @@ export default function Dashboard() {
   const ibkrAccounts = integrations.filter(i => i.type === "ibkr").length;
 
   return (
-    <div className="p-6 space-y-6" data-testid="page-dashboard">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6" data-testid="page-dashboard">
       <PageHeader
         icon={Zap}
         title="Dashboard"

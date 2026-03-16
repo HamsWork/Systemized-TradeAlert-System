@@ -134,7 +134,7 @@ export default function ActivityPage() {
 
   if (activityQuery.isLoading) {
     return (
-      <div className="space-y-4 p-6">
+      <div className="space-y-4 p-4 sm:p-6">
         <Skeleton className="h-8 w-32" />
         <div className="space-y-3">
           {[...Array(6)].map((_, i) => (
@@ -146,7 +146,7 @@ export default function ActivityPage() {
   }
 
   return (
-    <div className="space-y-6 p-6" data-testid="page-activity">
+    <div className="space-y-4 sm:space-y-6 p-4 sm:p-6" data-testid="page-activity">
       <PageHeader
         icon={Activity}
         title="Activity"

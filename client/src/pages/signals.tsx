@@ -491,7 +491,7 @@ function SignalCard({ signal, onDelete, onOpen }: { signal: Signal; onDelete: (i
     <Card className="hover-elevate overflow-hidden cursor-pointer" onClick={() => onOpen(signal)} data-testid={`card-signal-${signal.id}`}>
       <CardContent className="p-0">
         <div className="p-4">
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 {getSignalIcon(instrumentType)}
@@ -699,7 +699,7 @@ export default function SignalsPage() {
 
   if (signalsQuery.isLoading) {
     return (
-      <div className="space-y-4 p-6">
+      <div className="space-y-4 p-4 sm:p-6">
         <Skeleton className="h-8 w-32" />
         <div className="space-y-3">
           {[...Array(4)].map((_, i) => (
@@ -711,7 +711,7 @@ export default function SignalsPage() {
   }
 
   return (
-    <div className="space-y-6 p-6" data-testid="page-signals">
+    <div className="space-y-4 sm:space-y-6 p-4 sm:p-6" data-testid="page-signals">
       <PageHeader
         icon={TrendingUp}
         title="Signals"

@@ -206,7 +206,7 @@ function CreateAppDialog({ open, onOpenChange, ibkrAccounts }: { open: boolean; 
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit((data) => createMutation.mutate(data))} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <FormField
                 control={form.control}
                 name="name"
@@ -362,7 +362,7 @@ function EditAppDialog({ app, open, onOpenChange, ibkrAccounts }: { app: Connect
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit((data) => updateMutation.mutate(data))} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <FormField
                 control={form.control}
                 name="name"
@@ -680,7 +680,7 @@ export default function ConnectedAppsPage() {
 
   if (appsQuery.isLoading) {
     return (
-      <div className="space-y-4 p-6">
+      <div className="space-y-4 p-4 sm:p-6">
         <Skeleton className="h-8 w-48" />
         <div className="space-y-3">
           {[...Array(2)].map((_, i) => (
@@ -695,7 +695,7 @@ export default function ConnectedAppsPage() {
   const filtered = filter === "all" ? apps : apps.filter((a) => a.status === filter);
 
   return (
-    <div className="space-y-6 p-6" data-testid="page-connected-apps">
+    <div className="space-y-4 sm:space-y-6 p-4 sm:p-6" data-testid="page-connected-apps">
       <PageHeader
         icon={Puzzle}
         title="Connected Apps"
