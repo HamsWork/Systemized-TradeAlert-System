@@ -246,11 +246,38 @@ const TYPE_COLORS: Record<string, string> = {
   stop_loss_hit: "bg-red-500/10 text-red-500 border-red-500/20",
 };
 
+function isSpacerField(f: { name: string; value: string; inline?: boolean }): boolean {
+  const n = f.name.trim();
+  const v = f.value.trim();
+  return (n === "\u200b" || n === "") && (v === "" || v === "\u200b") && !f.inline;
+}
+
 function DiscordEmbed({ embed }: { embed: RenderedEmbed }) {
   const borderColor = colorToHex(embed.color);
-  const fields = embed.fields?.filter(f => f.name !== "\u200b") || [];
-  const inlineFields = fields.filter(f => f.inline);
-  const blockFields = fields.filter(f => !f.inline);
+  const allFields = embed.fields || [];
+
+  const sections: { type: "spacer" | "inline" | "block"; fields: typeof allFields }[] = [];
+  let currentInline: typeof allFields = [];
+
+  const flushInline = () => {
+    if (currentInline.length > 0) {
+      sections.push({ type: "inline", fields: [...currentInline] });
+      currentInline = [];
+    }
+  };
+
+  for (const f of allFields) {
+    if (isSpacerField(f)) {
+      flushInline();
+      sections.push({ type: "spacer", fields: [] });
+    } else if (f.inline) {
+      currentInline.push(f);
+    } else {
+      flushInline();
+      sections.push({ type: "block", fields: [f] });
+    }
+  }
+  flushInline();
 
   return (
     <div className="rounded-md overflow-hidden bg-[#2b2d31] border border-[#1e1f22]">
@@ -265,23 +292,30 @@ function DiscordEmbed({ embed }: { embed: RenderedEmbed }) {
             </p>
           )}
 
-          {inlineFields.length > 0 && (
-            <div className="grid grid-cols-3 gap-2">
-              {inlineFields.map((field, i) => (
-                <div key={i} className="min-w-0">
-                  <p className="text-[11px] font-semibold text-[#b5bac1] uppercase tracking-wide">{field.name}</p>
-                  <p className="text-[12px] text-[#dbdee1] whitespace-pre-wrap break-words">{field.value || "\u200b"}</p>
+          {sections.map((section, si) => {
+            if (section.type === "spacer") {
+              return <div key={si} className="h-1" />;
+            }
+            if (section.type === "inline") {
+              return (
+                <div key={si} className="grid grid-cols-3 gap-2">
+                  {section.fields.map((field, fi) => (
+                    <div key={fi} className="min-w-0">
+                      <p className="text-[11px] font-semibold text-[#b5bac1] uppercase tracking-wide">{field.name}</p>
+                      <p className="text-[12px] text-[#dbdee1] whitespace-pre-wrap break-words">{field.value || "\u200b"}</p>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
-
-          {blockFields.map((field, i) => (
-            <div key={i}>
-              <p className="text-[11px] font-semibold text-[#b5bac1] uppercase tracking-wide">{field.name}</p>
-              <p className="text-[12px] text-[#dbdee1] whitespace-pre-wrap break-words leading-relaxed">{field.value || "\u200b"}</p>
-            </div>
-          ))}
+              );
+            }
+            const field = section.fields[0];
+            return (
+              <div key={si}>
+                <p className="text-[11px] font-semibold text-[#b5bac1] uppercase tracking-wide">{field.name}</p>
+                <p className="text-[12px] text-[#dbdee1] whitespace-pre-wrap break-words leading-relaxed">{field.value || "\u200b"}</p>
+              </div>
+            );
+          })}
 
           {embed.footer && (
             <p className="text-[10px] text-[#949ba4] pt-1 border-t border-[#3f4147]">{embed.footer.text}</p>
@@ -366,12 +400,14 @@ function VariablesPanel({ messageType, sampleVars }: { messageType: string; samp
 }
 
 function buildTemplateJson(template: TemplateEmbed): string {
-  return JSON.stringify(template, null, 2);
+  const raw = JSON.stringify(template, null, 2);
+  return raw.replace(/\u200b/g, "\\u200b");
 }
 
 function parseTemplateJson(json: string): TemplateEmbed | null {
   try {
-    const parsed = JSON.parse(json);
+    const normalized = json.replace(/\\u200b/gi, "\u200b");
+    const parsed = JSON.parse(normalized);
     if (!parsed.color) return null;
     return parsed as TemplateEmbed;
   } catch {
