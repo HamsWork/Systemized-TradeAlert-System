@@ -101,11 +101,26 @@ export function registerDiscordRoutes(app: Express) {
         return res.status(404).json({ message: "App not found" });
       }
 
-      const overrides = await storage.getDiscordTemplatesByApp(appId);
-      const overrideMap = new Map<string, typeof overrides[0]>();
-      for (const o of overrides) {
-        overrideMap.set(`${o.instrumentType}::${o.messageType}`, o);
+      // 1) App-specific overrides (highest priority)
+      const appOverrides = await storage.getDiscordTemplatesByApp(appId);
+      const appOverrideMap = new Map<string, (typeof appOverrides)[number]>();
+      for (const o of appOverrides) {
+        appOverrideMap.set(`${o.instrumentType}::${o.messageType}`, o);
       }
+
+
+      // 2) Global default overrides (appId="__default__") used when app has no override
+      const globalOverrides = await storage.getDiscordTemplatesByApp(
+        "__default__",
+      );
+      const globalOverrideMap = new Map<
+        string,
+        (typeof globalOverrides)[number]
+      >();
+      for (const o of globalOverrides) {
+        globalOverrideMap.set(`${o.instrumentType}::${o.messageType}`, o);
+      }
+
 
       const groups = generateAllTemplateGroups();
       const result = groups.map(g => ({
@@ -113,12 +128,22 @@ export function registerDiscordRoutes(app: Express) {
         ticker: g.ticker,
         templates: g.templates.map(t => {
           const key = `${g.instrumentType}::${t.type}`;
-          const override = overrideMap.get(key);
-          const templateEmbed = override
-            ? (override.embedJson as TemplateEmbed)
+          const appOverride = appOverrideMap.get(key);
+          const globalOverride = globalOverrideMap.get(key);
+
+          const effective =
+            appOverride ??
+            // If we are already on the global "__default__" app, do not reapply
+            (!isDefaultApp ? globalOverride : undefined) ??
+            null;
+
+          const templateEmbed = effective
+            ? (effective.embedJson as TemplateEmbed)
             : t.embed;
-          const content = override ? (override.content ?? t.content) : t.content;
-          const label = override ? (override.label || t.label) : t.label;
+          const content = effective
+            ? effective.content ?? t.content
+            : t.content;
+          const label = effective ? (effective.label || t.label) : t.label;
 
           const sampleVars = buildSampleVariables(g.instrumentType, t.type);
           const rendered = renderTemplate(templateEmbed, sampleVars);
@@ -133,11 +158,10 @@ export function registerDiscordRoutes(app: Express) {
               content,
               embed: rendered,
             },
-            isCustom: !!override,
+            isCustom: !!effective,
           };
         }),
       }));
-
       res.json(result);
     }),
   );

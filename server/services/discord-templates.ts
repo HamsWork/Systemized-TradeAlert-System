@@ -8,7 +8,9 @@ export interface TemplateEmbed {
   timestamp?: boolean;
 }
 
-const ZWS = "\u200b";
+// Store the literal escape sequence so it shows as "\u200b" in JSON,
+// and convert it back to a real zero-width space only when rendering.
+const ZWS = "\\u200b";
 const SPACER_FIELD = { name: ZWS, value: "", inline: false } as const;
 
 export interface MessageTemplate {
@@ -31,7 +33,7 @@ const GRAY = "#6b7280";
 const DISCLAIMER = "Disclaimer: Not financial advice. Trade at your own risk.";
 
 function optionsEntryTemplate(): TemplateEmbed {
-  return {
+  const result: TemplateEmbed = {
     description: "**🚨 {{ticker}} Options Entry - {{app_name}}**",
     color: GREEN,
     fields: [
@@ -50,6 +52,8 @@ function optionsEntryTemplate(): TemplateEmbed {
     ],
     footer: DISCLAIMER,
   };
+  console.log("result", JSON.stringify(result, null, 2));
+  return result;
 }
 
 function sharesEntryTemplate(): TemplateEmbed {
@@ -465,12 +469,22 @@ export function buildSampleVariables(
 export function renderTemplate(
   template: TemplateEmbed,
   vars: Record<string, string>,
-): { description?: string; color: number; fields?: { name: string; value: string; inline?: boolean }[]; footer?: { text: string }; timestamp?: string } {
-  const sub = (s: string): string => {
-    return s.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
+): {
+  description?: string;
+  color: number;
+  fields?: { name: string; value: string; inline?: boolean }[];
+  footer?: { text: string };
+  timestamp?: string;
+} {
+  const applyVarsAndEscapes = (s: string): string => {
+    // Replace {{var}} placeholders
+    let out = s.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
+    // Turn the literal "\u200b" sequence into an actual zero‑width space
+    out = out.replace(/\\u200b/g, "\u200b");
+    return out;
   };
 
-  const colorHex = sub(template.color);
+  const colorHex = applyVarsAndEscapes(template.color);
   let colorNum: number;
   if (colorHex.startsWith("#")) {
     colorNum = parseInt(colorHex.slice(1), 16);
@@ -479,14 +493,18 @@ export function renderTemplate(
   }
 
   return {
-    description: template.description ? sub(template.description) : undefined,
+    description: template.description
+      ? applyVarsAndEscapes(template.description)
+      : undefined,
     color: colorNum,
-    fields: template.fields?.map(f => ({
-      name: sub(f.name),
-      value: sub(f.value),
+    fields: template.fields?.map((f) => ({
+      name: applyVarsAndEscapes(f.name),
+      value: applyVarsAndEscapes(f.value),
       inline: f.inline,
     })),
-    footer: template.footer ? { text: sub(template.footer) } : undefined,
+    footer: template.footer
+      ? { text: applyVarsAndEscapes(template.footer) }
+      : undefined,
     timestamp: template.timestamp ? new Date().toISOString() : undefined,
   };
 }
