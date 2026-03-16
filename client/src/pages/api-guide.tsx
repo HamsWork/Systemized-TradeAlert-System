@@ -36,6 +36,8 @@ import {
   MessageSquare,
   Terminal,
   CheckCircle2,
+  ImageIcon,
+  Paperclip,
 } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import type { ConnectedApp } from "@shared/schema";
@@ -593,6 +595,17 @@ const sections: SectionDef[] = [
           { name: "underlying_price_based", type: "boolean", required: false, description: "When true, targets and stop loss are compared against the underlying stock price instead of the option/LETF price. Applies to Options, LETF, and LETF Option instrument types. Defaults to false." },
           { name: "time_stop", type: "string", required: false, description: "Time-based stop -- exit the trade by this date (e.g., '2026-03-01')." },
           { name: "discord_channel_webhook", type: "string", required: false, description: "Optional Discord webhook URL. When set, the signal alert is sent to this channel instead of the app's configured webhooks." },
+          { name: "chartMedia", type: "file", required: false, description: "Image or video file to attach to the Discord embed (max 10 MB). When included, the request must use multipart/form-data instead of JSON. All other fields are sent as form fields. The file appears as the embed image in the Discord alert.", explanation: `When you attach a chartMedia file, the request format changes from JSON to multipart/form-data. Each signal field becomes a separate form field, and the file is sent as the "chartMedia" field.
+
+Supported formats: PNG, JPG, GIF, WebP, MP4, MOV — any format Discord supports.
+Max file size: 10 MB.
+
+Important notes for multipart requests:
+  - Do NOT set Content-Type header manually — curl sets it automatically with the boundary.
+  - Numeric fields (entryPrice, stop_loss, strike, leverage) are auto-converted from strings.
+  - Boolean fields (auto_track, underlying_price_based) are auto-converted ("true"/"false" strings).
+  - The targets field must be sent as a JSON string (it will be parsed automatically).
+  - The file is forwarded to Discord as an attachment and displayed as the embed image.` },
           { name: "targets", type: "json", required: false, description: "Take-profit targets. Target prices must be in the same space as entry_price (option / LETF / stock).", explanation: `The targets object defines your profit-taking strategy. Each key (tp1, tp2, etc.) maps to a target with a price (option contract price for Options, LETF price for LETF, stock price for Shares), a take_off_percent indicating how much of the position to close, and an optional raise_stop_loss that adjusts your stop loss when the target is hit.
 
 Structure:
@@ -1066,6 +1079,65 @@ function QuickStartContent({ baseUrl }: { baseUrl: string }) {
     }
   }'`}</code>
             </pre>
+          </div>
+        </div>
+
+        <Separator />
+
+        <div>
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Paperclip className="h-4 w-4 text-muted-foreground" />
+            Sending with Chart Media
+          </h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            You can attach an image or video file (chart screenshot, trade setup, etc.) to your signal. The file is embedded in the Discord alert as the embed image. When sending a file, the request uses <code className="text-xs bg-muted px-1 py-0.5 rounded">multipart/form-data</code> instead of JSON — each field is sent as a separate form field.
+          </p>
+
+          <div className="rounded-lg bg-zinc-950/60 dark:bg-zinc-950/80 border border-zinc-800/60 overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-800/40 bg-zinc-900/50">
+              <span className="text-xs text-muted-foreground font-mono">cURL — with chart image</span>
+              <CopyButton text={`curl -X POST ${baseUrl}/api/ingest/signals \\\n  -H "Authorization: Bearer YOUR_API_KEY" \\\n  -F "ticker=AAPL" \\\n  -F "instrumentType=Options" \\\n  -F "direction=Call" \\\n  -F "expiration=2026-04-17" \\\n  -F "strike=190" \\\n  -F "entryPrice=5.20" \\\n  -F "stop_loss=3.50" \\\n  -F 'targets={"tp1":{"price":7.00,"take_off_percent":50,"raise_stop_loss":{"price":5.20}},"tp2":{"price":10.00,"take_off_percent":50,"trailing_stop_percent":5}}' \\\n  -F "chartMedia=@/path/to/chart.png"`} />
+            </div>
+            <pre className="p-4 overflow-x-auto text-[13px] font-mono text-zinc-300 leading-relaxed whitespace-pre-wrap">
+              <code>{`curl -X POST ${baseUrl}/api/ingest/signals \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -F "ticker=AAPL" \\
+  -F "instrumentType=Options" \\
+  -F "direction=Call" \\
+  -F "expiration=2026-04-17" \\
+  -F "strike=190" \\
+  -F "entryPrice=5.20" \\
+  -F "stop_loss=3.50" \\
+  -F 'targets={"tp1":{"price":7.00,"take_off_percent":50,"raise_stop_loss":{"price":5.20}},"tp2":{"price":10.00,"take_off_percent":50,"trailing_stop_percent":5}}' \\
+  -F "chartMedia=@/path/to/chart.png"`}</code>
+            </pre>
+          </div>
+
+          <div className="mt-4 space-y-2">
+            <div className="flex items-start gap-2">
+              <ImageIcon className="h-3.5 w-3.5 text-blue-400 mt-0.5 shrink-0" />
+              <p className="text-xs text-muted-foreground">
+                <span className="text-foreground font-medium">Supported formats:</span> PNG, JPG, GIF, WebP, MP4, MOV — any format Discord supports. Max file size: 10 MB.
+              </p>
+            </div>
+            <div className="flex items-start gap-2">
+              <Info className="h-3.5 w-3.5 text-amber-400 mt-0.5 shrink-0" />
+              <p className="text-xs text-muted-foreground">
+                <span className="text-foreground font-medium">Do not set Content-Type header</span> — curl sets it automatically with the multipart boundary when using <code className="text-[10px] bg-muted px-1 py-0.5 rounded">-F</code> flags.
+              </p>
+            </div>
+            <div className="flex items-start gap-2">
+              <Braces className="h-3.5 w-3.5 text-purple-400 mt-0.5 shrink-0" />
+              <p className="text-xs text-muted-foreground">
+                <span className="text-foreground font-medium">targets field:</span> Send as a JSON string (not a file). Numeric and boolean fields are auto-converted from strings.
+              </p>
+            </div>
+            <div className="flex items-start gap-2">
+              <SiDiscord className="h-3.5 w-3.5 text-[#5865F2] mt-0.5 shrink-0" />
+              <p className="text-xs text-muted-foreground">
+                <span className="text-foreground font-medium">Discord result:</span> The file appears as the embed image in the signal alert. JSON-only requests (without a file) still work exactly as before.
+              </p>
+            </div>
           </div>
         </div>
 
