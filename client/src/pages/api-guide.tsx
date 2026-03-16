@@ -697,33 +697,48 @@ const sections: SectionDef[] = [
           { name: "expiration", type: "string", required: false, description: "Expiration date (e.g., '2026-03-01'). Required for Options and LETF Option." },
           { name: "strike", type: "string", required: false, description: "Option strike price (e.g., '190'). Required for Options and LETF Option." },
           { name: "entryPrice", type: "string", required: false, description: "Entry price. Must match instrument: option contract price for Options, LETF price for LETF, stock price for Shares." },
-          { name: "stop_loss", type: "number", required: false, description: "Stop loss price in the same space as entry_price (option / LETF / stock)." },
+          { name: "stop_loss", type: "number", required: false, description: "Stop loss price in the same space as entry_price (option / LETF / stock). You can send either the price or stop_loss_percentage — if both are sent, both are stored." },
+          { name: "stop_loss_percentage", type: "number", required: false, description: "Stop loss as a percentage from entry. Negative value (e.g. -5 means 5% below entry for longs). If omitted but stop_loss price and entryPrice are provided, the percentage is auto-calculated." },
           { name: "tradeType", type: "string", required: false, description: "Trade type classification.", enumValues: ["Scalp", "Swing", "Leap"] },
           { name: "auto_track", type: "boolean", required: false, description: "Enable automatic tracking of target hits and stop loss against live price. Defaults to true." },
           { name: "underlying_price_based", type: "boolean", required: false, description: "When true, targets and stop loss are compared against the underlying stock price instead of the option/LETF price. Applies to Options, LETF, and LETF Option instrument types. Defaults to false." },
           { name: "time_stop", type: "string", required: false, description: "Time-based stop -- exit the trade by this date (e.g., '2026-03-01')." },
           { name: "discord_channel_webhook", type: "string", required: false, description: "Optional Discord webhook URL. When set, the signal alert is sent to this channel instead of the app's configured webhooks." },
-          { name: "targets", type: "json", required: false, description: "Take-profit targets. Target prices must be in the same space as entry_price (option / LETF / stock).", explanation: `The targets object defines your profit-taking strategy. Each key (tp1, tp2, etc.) maps to a target with a price (option contract price for Options, LETF price for LETF, stock price for Shares), a take_off_percent indicating how much of the position to close, and an optional raise_stop_loss that adjusts your stop loss when the target is hit.
+          { name: "targets", type: "json", required: false, description: "Take-profit targets. Each target can use a price or percentage (from entry). Target prices must be in the same space as entry_price.", explanation: `The targets object defines your profit-taking strategy. Each key (tp1, tp2, etc.) maps to a target. You can specify the target level as a price or as a percentage from entry — if you send price and entryPrice, the percentage is auto-calculated.
 
 Structure:
   tp1, tp2, ...           Target labels (you can use any key names)
-    price                  Target price level
+    price                  Target price level (use price or percentage)
+    percentage             Target as % gain from entry (e.g. 10 = +10%). Auto-calculated from price if omitted.
     take_off_percent       Percentage of position to take off at this target (0-100)
-    raise_stop_loss
-      price                New stop loss price when this target is hit
+    raise_stop_loss        Adjust stop loss when this target is hit
+      price                New stop loss price
+      percentage           New stop loss as % from entry (alternative to price)
     trailing_stop_percent  Optional trailing stop (0.1-100). When target is hit, activates a trailing stop that follows price at this % distance.
 
-Example:
+Example using prices:
 {
   "tp1": {
     "price": 100,
     "take_off_percent": 50,
-    "raise_stop_loss": {
-      "price": 90
-    }
+    "raise_stop_loss": { "price": 90 }
   },
   "tp2": {
     "price": 110,
+    "take_off_percent": 50,
+    "trailing_stop_percent": 5
+  }
+}
+
+Example using percentages:
+{
+  "tp1": {
+    "percentage": 10,
+    "take_off_percent": 50,
+    "raise_stop_loss": { "percentage": -2 }
+  },
+  "tp2": {
+    "percentage": 20,
     "take_off_percent": 50,
     "trailing_stop_percent": 5
   }

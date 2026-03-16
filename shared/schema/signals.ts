@@ -85,6 +85,7 @@ export const ingestSignalBodySchema = z
     strike: z.union([z.number(), z.string()]).optional(),
     targets: z.record(signalTargetEntrySchema).optional(),
     stop_loss: z.union([z.number(), z.string()]).optional(),
+    stop_loss_percentage: z.union([z.number(), z.string()]).optional(),
     time_stop: z.string().optional(),
     auto_track: z.boolean().optional(),
     underlying_price_based: z.boolean().optional(),
