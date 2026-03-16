@@ -36,6 +36,7 @@ export const signalDataSchema = z.object({
   entry_underlying_price: z.number().nullable().optional(),
   entry_letf_price: z.number().nullable().optional(),
   entry_option_price: z.number().nullable().optional(),
+  trade_type: z.enum(["Scalp", "Swing", "Leap"]).optional(),
   discord_webhook_url: z.string().nullable().optional(),
 });
 
@@ -89,6 +90,7 @@ export const ingestSignalBodySchema = z
     underlying_price_based: z.boolean().optional(),
     underlying_ticker: z.string().nullable().optional(),
     leverage: z.union([z.number(), z.string()]).optional(),
+    tradeType: z.enum(["Scalp", "Swing", "Leap"]).optional(),
   })
   .superRefine((data, ctx) => {
     const validDirections =
@@ -250,6 +252,7 @@ export interface SignalData {
   entry_underlying_price?: number | null;
   entry_letf_price?: number | null;
   entry_option_price?: number | null;
+  trade_type?: "Scalp" | "Swing" | "Leap";
   discord_webhook_url?: string | null;
 }
 

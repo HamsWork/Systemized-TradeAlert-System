@@ -1084,6 +1084,11 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                 {instrumentType}
               </Badge>
             )}
+            {data.trade_type && (
+              <Badge variant="outline" className="text-xs text-blue-400 border-blue-500/30 bg-blue-500/10" data-testid="badge-trade-type">
+                {data.trade_type}
+              </Badge>
+            )}
             <Badge
               variant={signal.status === "active" ? "outline" : "secondary"}
               className={`text-xs ${

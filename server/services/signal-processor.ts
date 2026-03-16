@@ -190,6 +190,9 @@ function normalizeBodyForIngest(
   if (out.entryPrice == null && out.entry_price != null) {
     out.entryPrice = out.entry_price;
   }
+  if (out.tradeType == null && out.trade_type != null) {
+    out.tradeType = out.trade_type;
+  }
   const raw = out.instrumentType ?? out.instrument_type ?? "";
   const s = String(raw).trim();
   if (s) {
@@ -305,6 +308,7 @@ async function buildSignalData(
     direction,
     entry_price: entryPrice != null ? Number(entryPrice) : 0.0,
     underlying_ticker: ticker,
+    trade_type: body.tradeType,
   };
 
   if (instrumentType === "Options" || instrumentType === "LETF Option") {

@@ -502,6 +502,11 @@ function SignalCard({ signal, onDelete, onOpen }: { signal: Signal; onDelete: (i
                     {instrumentType}
                   </Badge>
                 )}
+                {data?.trade_type && (
+                  <Badge variant="outline" className="text-[10px] text-blue-400 border-blue-500/30 bg-blue-500/10" data-testid="badge-trade-type">
+                    {data.trade_type}
+                  </Badge>
+                )}
               </div>
 
               <div className="mt-3 flex items-center gap-4 flex-wrap text-sm">

@@ -360,6 +360,7 @@ export function buildSampleVariables(
     letf_entry: fmtPrice(data.entry_instrument_price),
     stop_loss: fmtPrice(data.stop_loss),
     time_stop: data.time_stop || "—",
+    trade_type: data.trade_type || "—",
   };
 
   const targets = data.targets as Record<string, any> || {};

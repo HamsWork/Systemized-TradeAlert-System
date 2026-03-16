@@ -698,6 +698,7 @@ const sections: SectionDef[] = [
           { name: "strike", type: "string", required: false, description: "Option strike price (e.g., '190'). Required for Options and LETF Option." },
           { name: "entryPrice", type: "string", required: false, description: "Entry price. Must match instrument: option contract price for Options, LETF price for LETF, stock price for Shares." },
           { name: "stop_loss", type: "number", required: false, description: "Stop loss price in the same space as entry_price (option / LETF / stock)." },
+          { name: "tradeType", type: "string", required: false, description: "Trade type classification.", enumValues: ["Scalp", "Swing", "Leap"] },
           { name: "auto_track", type: "boolean", required: false, description: "Enable automatic tracking of target hits and stop loss against live price. Defaults to true." },
           { name: "underlying_price_based", type: "boolean", required: false, description: "When true, targets and stop loss are compared against the underlying stock price instead of the option/LETF price. Applies to Options, LETF, and LETF Option instrument types. Defaults to false." },
           { name: "time_stop", type: "string", required: false, description: "Time-based stop -- exit the trade by this date (e.g., '2026-03-01')." },
