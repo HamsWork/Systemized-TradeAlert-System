@@ -38,6 +38,8 @@ import {
   CheckCircle2,
   ImageIcon,
   Paperclip,
+  Upload,
+  Settings,
 } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import type { ConnectedApp } from "@shared/schema";
@@ -95,6 +97,7 @@ interface SectionDef {
   icon: typeof TrendingUp;
   description: string;
   endpoints: EndpointDef[];
+  category?: "external" | "internal";
 }
 
 function parseParamValue(key: string, value: string, paramDefs?: ParamDef[]): any {
@@ -680,10 +683,11 @@ function NavItem({ section, activeSection, activePath, onClick, onEndpointClick 
 
 const sections: SectionDef[] = [
   {
-    id: "signals",
-    title: "Signals",
-    icon: TrendingUp,
-    description: "Manage trading signals. The ingestion endpoint allows connected apps to push signals into TradeSync using their API key.",
+    id: "signal-ingestion",
+    title: "Signal Ingestion",
+    icon: Upload,
+    category: "external",
+    description: "The ingestion endpoint is used by external connected apps to push trading signals into TradeSync. Requires a Bearer API key from a connected app.",
     endpoints: [
       {
         method: "POST",
@@ -757,6 +761,15 @@ Example:
   }
 }`,
       },
+    ],
+  },
+  {
+    id: "signals",
+    title: "Signal Management",
+    icon: TrendingUp,
+    category: "internal",
+    description: "Internal endpoints for managing signals within the TradeSync dashboard. Used by the UI and internal systems — no API key required.",
+    endpoints: [
       {
         method: "POST",
         path: "/api/signals/:id/close",
@@ -953,6 +966,7 @@ Example:
     id: "discord-templates",
     title: "Discord Templates",
     icon: MessageSquare,
+    category: "internal",
     description: "Manage per-app Discord notification templates. Each connected app can have custom templates per instrument type and message type, using {{variable}} placeholders.",
     endpoints: [
       {
@@ -1393,7 +1407,30 @@ export default function ApiGuidePage() {
         <span>Quick Start</span>
       </button>
       <Separator className="my-2" />
-      {sections.map((section) => (
+      <div className="px-3 pt-2 pb-1">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-400/80 flex items-center gap-1.5">
+          <Upload className="h-3 w-3" />
+          Third-Party API
+        </p>
+      </div>
+      {sections.filter(s => s.category === "external").map((section) => (
+        <NavItem
+          key={section.id}
+          section={section}
+          activeSection={activeSection}
+          activePath={activePath}
+          onClick={handleSectionClick}
+          onEndpointClick={handleEndpointClick}
+        />
+      ))}
+      <Separator className="my-2" />
+      <div className="px-3 pt-2 pb-1">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 flex items-center gap-1.5">
+          <Settings className="h-3 w-3" />
+          Internal API
+        </p>
+      </div>
+      {sections.filter(s => s.category === "internal").map((section) => (
         <NavItem
           key={section.id}
           section={section}
@@ -1462,6 +1499,20 @@ export default function ApiGuidePage() {
         {currentSection && currentEndpoint && (
           <div>
             <div className="p-6 border-b border-border/60">
+              <div className="flex items-center gap-2 mb-3">
+                {currentSection.category === "external" ? (
+                  <Badge className="text-[10px] px-2 py-0.5 bg-blue-500/15 text-blue-400 border-blue-500/30 hover:bg-blue-500/15 font-medium uppercase tracking-wider gap-1">
+                    <Upload className="h-2.5 w-2.5" />
+                    Third-Party API
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-[10px] px-2 py-0.5 text-muted-foreground border-border/60 font-medium uppercase tracking-wider gap-1">
+                    <Settings className="h-2.5 w-2.5" />
+                    Internal API
+                  </Badge>
+                )}
+                <span className="text-[10px] text-muted-foreground/50">{currentSection.title}</span>
+              </div>
               <div className="flex items-center gap-3 mb-1">
                 <MethodBadge method={currentEndpoint.method} />
                 <code className="text-lg font-mono font-semibold">{currentEndpoint.path}</code>
