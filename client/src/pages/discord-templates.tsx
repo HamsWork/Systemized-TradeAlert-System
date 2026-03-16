@@ -594,16 +594,21 @@ function SendFromTemplateModal({ template, open, onOpenChange }: {
   const [addChannelOpen, setAddChannelOpen] = useState(false);
 
   const renderedEmbed = template.preview.embed;
-  const payloadJson = useMemo(() => JSON.stringify({
-    content: template.content || undefined,
-    embeds: [{
-      description: renderedEmbed.description,
-      color: renderedEmbed.color,
-      fields: renderedEmbed.fields,
-      footer: renderedEmbed.footer,
-      ...(renderedEmbed.timestamp ? { timestamp: renderedEmbed.timestamp } : {}),
-    }],
-  }, null, 2), [template, renderedEmbed]);
+  const payloadJson = useMemo(() => {
+    const raw = JSON.stringify({
+      content: template.content || undefined,
+      embeds: [{
+        description: renderedEmbed.description,
+        color: renderedEmbed.color,
+        fields: renderedEmbed.fields,
+        footer: renderedEmbed.footer,
+        ...(renderedEmbed.timestamp ? { timestamp: renderedEmbed.timestamp } : {}),
+      }],
+    }, null, 2);
+    return raw
+      .replace(/\u200b/g, "\\u200b")
+      .replace(/\\\\u200b/g, "\\u200b");
+  }, [template, renderedEmbed]);
 
   const [jsonText, setJsonText] = useState(payloadJson);
   const [jsonError, setJsonError] = useState<string | null>(null);
@@ -617,7 +622,8 @@ function SendFromTemplateModal({ template, open, onOpenChange }: {
   const handleJsonChange = (value: string) => {
     setJsonText(value);
     try {
-      const parsed = JSON.parse(value);
+      const normalized = value.replace(/\\u200b/gi, "\u200b");
+      const parsed = JSON.parse(normalized);
       if (!parsed.embeds?.[0]) {
         setJsonError("Missing embeds[0]");
       } else {
@@ -645,9 +651,10 @@ function SendFromTemplateModal({ template, open, onOpenChange }: {
   const sendMutation = useMutation({
     mutationFn: async () => {
       if (!selectedChannelId) throw new Error("Select a Discord channel first");
+      const normalized = jsonText.replace(/\\u200b/gi, "\u200b");
       const body = {
         channelId: selectedChannelId,
-        payload: JSON.parse(jsonText),
+        payload: JSON.parse(normalized),
       };
       const res = await apiRequest("POST", "/api/discord/send-manual", body);
       const result = await res.json();
