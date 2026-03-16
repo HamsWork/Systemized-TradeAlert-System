@@ -3,6 +3,11 @@ import { storage } from "../storage";
 import { getLETFUnderlyingSync, getLETFLeverage } from "../constants/letf";
 import { fetchOptionContractPrice, fetchStockPrice } from "./polygon";
 import { getCurrentInstrumentPrice } from "./trade-monitor";
+import {
+  getDefaultTemplates,
+  renderTemplate,
+  type TemplateEmbed,
+} from "./discord-templates";
 
 /**
  * Price terminology (see server/docs/PRICE_TERMINOLOGY.md):
@@ -35,6 +40,281 @@ const ORANGE = 0xf59e0b;
 function fmtPrice(p: number | null | undefined): string {
   if (p == null) return "\u2014";
   return `$${Number(p).toFixed(2)}`;
+}
+
+function instrumentLabel(instrumentType: string): string {
+  if (instrumentType === "LETF" || instrumentType === "Shares") return "Shares";
+  if (instrumentType === "Crypto") return "Crypto";
+  return "Options";
+}
+
+function buildTakeProfitPlan(signalData: Record<string, any>): string {
+  if (!signalData.targets || typeof signalData.targets !== "object") return "\u2014";
+  const direction = signalData.direction || "Long";
+  const isBullish = direction === "Call" || direction === "Long";
+  const entryTracking =
+    typeof signalData.entry_tracking_price === "number"
+      ? signalData.entry_tracking_price
+      : typeof signalData.entry_instrument_price === "number"
+        ? signalData.entry_instrument_price
+        : typeof signalData.entry_price === "number"
+          ? signalData.entry_price
+          : 0;
+
+  const entries = Object.entries(signalData.targets)
+    .filter(([, v]) => (v as any)?.price != null)
+    .sort(([, a], [, b]) =>
+      isBullish
+        ? Number((a as any).price) - Number((b as any).price)
+        : Number((b as any).price) - Number((a as any).price),
+    );
+
+  let tpIndex = 0;
+  const lines: string[] = [];
+  for (const [, v] of entries) {
+    const t = v as any;
+    if (Number(t.take_off_percent) === 0) continue;
+    tpIndex++;
+    const price = Number(t.price);
+    const priceLabel =
+      signalData.underlying_price_based && entryTracking
+        ? `${fmtPrice(price)} (${fmtPct(entryTracking, price)})`
+        : entryTracking
+          ? `${fmtPrice(price)} (${fmtPct(entryTracking, price)})`
+          : fmtPrice(price);
+    const takeOff = t.take_off_percent != null ? `${t.take_off_percent}%` : "100%";
+    const positionLabel = tpIndex === 1 ? "of position" : "of remaining position";
+    let line = `Take Profit (${tpIndex}): At ${priceLabel} take off ${takeOff} ${positionLabel}`;
+    if (t.raise_stop_loss?.price != null) {
+      const rslPrice = Number(t.raise_stop_loss.price);
+      const isBreakEven = entryTracking > 0 && Math.abs(rslPrice - entryTracking) < 0.01;
+      line += isBreakEven
+        ? " and raise stop loss to break even."
+        : ` and raise stop loss to ${fmtPrice(rslPrice)}.`;
+    } else {
+      line += ".";
+    }
+    lines.push(line);
+  }
+  return lines.join("\n") || "\u2014";
+}
+
+function buildTradePlan(signalData: Record<string, any>): string {
+  const parts: string[] = [];
+  if (signalData.trade_plan) {
+    parts.push(String(signalData.trade_plan));
+  }
+  // If no explicit plan, generate a compact plan line like the entry embed.
+  if (!signalData.trade_plan) {
+    const tps: string[] = [];
+    if (signalData.targets && typeof signalData.targets === "object") {
+      const direction = signalData.direction || "Long";
+      const isBullish = direction === "Call" || direction === "Long";
+      const targets = Object.entries(signalData.targets)
+        .filter(([, v]) => (v as any)?.price != null)
+        .sort(([, a], [, b]) =>
+          isBullish
+            ? Number((a as any).price) - Number((b as any).price)
+            : Number((b as any).price) - Number((a as any).price),
+        )
+        .map(([, v]) => fmtPrice(Number((v as any).price)));
+      if (targets.length) tps.push(`🎯 Targets: ${targets.join(", ")}`);
+    }
+    if (tps.length) parts.push(tps.join("\n"));
+  }
+  return parts.join("\n").trim() || "\u2014";
+}
+
+function buildTemplateVars(
+  signalData: Record<string, any>,
+  app: ConnectedApp | null,
+  messageType: string,
+): Record<string, string> {
+  const instrumentType = signalData.instrument_type || "Shares";
+  const ticker = signalData.ticker || "UNKNOWN";
+  const direction = signalData.direction || "Long";
+  const isLETF = instrumentType === "LETF" || instrumentType === "LETF Option";
+  const underlying =
+    signalData.underlying_ticker ||
+    signalData.underlying_symbol ||
+    getLETFUnderlyingSync(ticker) ||
+    ticker;
+  const leverage = getLETFLeverage(ticker);
+  const dirText = direction === "Short" || direction === "Put" ? "BEAR" : "BULL";
+  const right = direction === "Put" ? "PUT" : "CALL";
+
+  const entryPrice =
+    typeof signalData.entry_instrument_price === "number"
+      ? signalData.entry_instrument_price
+      : typeof signalData.entry_price === "number"
+        ? signalData.entry_price
+        : null;
+
+  const vars: Record<string, string> = {
+    ticker,
+    instrument_type: instrumentType,
+    instrument_label: instrumentLabel(instrumentType),
+    direction,
+    app_name: app?.name || "TradeSync",
+    entry_price: fmtPrice(entryPrice),
+    stock_price: fmtPrice(
+      signalData.entry_underlying_price ??
+        signalData.entry_tracking_price ??
+        signalData.current_tracking_price ??
+        signalData.current_instrument_price ??
+        null,
+    ),
+    expiry: signalData.expiration ? String(signalData.expiration) : "\u2014",
+    strike:
+      signalData.strike != null && !isNaN(Number(signalData.strike))
+        ? String(signalData.strike)
+        : "\u2014",
+    right,
+    option_price: fmtPrice(
+      signalData.entry_option_price ??
+        signalData.entry_instrument_price ??
+        signalData.current_instrument_price ??
+        null,
+    ),
+    letf_ticker: isLETF ? ticker : "\u2014",
+    underlying: isLETF ? underlying : ticker,
+    leverage: leverage != null ? String(Math.abs(leverage)) : "\u2014",
+    letf_direction: dirText,
+    letf_entry: fmtPrice(signalData.entry_instrument_price),
+    stop_loss: fmtPrice(signalData.stop_loss),
+    time_stop: signalData.time_stop ? String(signalData.time_stop) : "\u2014",
+    trade_plan: buildTradePlan(signalData),
+    take_profit_plan: buildTakeProfitPlan(signalData),
+    new_stop_loss: "\u2014",
+    risk_value: signalData.risk_value ? String(signalData.risk_value) : "\u2014",
+    risk_mgmt: "\u2014",
+    position_mgmt: "\u2014",
+    tp_number: String(signalData.current_tp_number ?? signalData.current_target_number ?? 1),
+    tp_price: fmtPrice(signalData.current_instrument_price),
+    profit_pct:
+      typeof signalData.hit_targets?.[`tp${signalData.current_target_number}`]
+        ?.profitPct === "number"
+        ? `${signalData.hit_targets[`tp${signalData.current_target_number}`].profitPct.toFixed(1)}%`
+        : "\u2014",
+    exit_price: fmtPrice(
+      signalData.stop_loss_hit_instrument_price ??
+        signalData.stop_loss_hit_price ??
+        signalData.current_instrument_price ??
+        null,
+    ),
+  };
+
+  if (messageType === "target_hit") {
+    const takeOffPct =
+      signalData.targets?.[`tp${signalData.current_target_number}`]
+        ?.take_off_percent ?? 50;
+    const nextTargets = signalData.targets && typeof signalData.targets === "object"
+      ? Object.entries(signalData.targets)
+          .filter(([, v]) => (v as any)?.price != null)
+          .sort(([, a], [, b]) => Number((a as any).price) - Number((b as any).price))
+      : [];
+    let nextTpPrice: number | null = null;
+    if (nextTargets.length > 0) {
+      const idx = Math.min(
+        (signalData.current_target_number ?? 1),
+        nextTargets.length - 1,
+      );
+      const maybe = nextTargets[idx]?.[1] as any;
+      nextTpPrice = maybe?.price != null ? Number(maybe.price) : null;
+    }
+    vars.position_mgmt =
+      `✅ Reduce position by ${takeOffPct}% (lock in profit)` +
+      (nextTpPrice != null
+        ? `\n🎯 Let remaining ${100 - takeOffPct}% ride to TP${Number(vars.tp_number) + 1} (${fmtPrice(nextTpPrice)})`
+        : "");
+
+    const currentTarget = signalData.targets?.[`tp${signalData.current_target_number}`] as any;
+    const newStopLoss =
+      currentTarget?.raise_stop_loss?.price != null
+        ? Number(currentTarget.raise_stop_loss.price)
+        : null;
+    if (newStopLoss != null) {
+      const isBreakEven =
+        entryPrice != null && Math.abs(newStopLoss - entryPrice) < 0.01;
+      vars.new_stop_loss = isBreakEven
+        ? `${fmtPrice(newStopLoss)} (Break Even)`
+        : fmtPrice(newStopLoss);
+      vars.risk_mgmt = isBreakEven
+        ? `Raising stop loss to ${fmtPrice(newStopLoss)} (break even) on remaining position to secure gains while allowing room to run.`
+        : `Raising stop loss to ${fmtPrice(newStopLoss)} on remaining position to secure gains while allowing room to run.`;
+    } else {
+      vars.risk_mgmt = "No stop adjustment on this target.";
+    }
+  }
+
+  if (messageType === "stop_loss_raised") {
+    vars.new_stop_loss = fmtPrice(signalData.current_stop_loss ?? signalData.stop_loss);
+    vars.risk_value = signalData.risk_value ? String(signalData.risk_value) : "\u2014";
+    vars.risk_mgmt =
+      vars.new_stop_loss !== "\u2014"
+        ? `Stop loss raised to ${vars.new_stop_loss} on remaining position.`
+        : "\u2014";
+  }
+
+  if (messageType === "stop_loss_hit") {
+    const exit = signalData.stop_loss_hit_instrument_price ?? signalData.current_instrument_price ?? null;
+    vars.exit_price = fmtPrice(exit);
+    const pct =
+      entryPrice != null && exit != null
+        ? `${(((exit - entryPrice) / entryPrice) * 100).toFixed(1)}%`
+        : "\u2014";
+    vars.profit_pct = pct;
+  }
+
+  return vars;
+}
+
+async function getRenderedTemplateEmbed(
+  signalData: Record<string, any>,
+  app: ConnectedApp | null,
+  messageType: string,
+): Promise<{ content: string; embed: DiscordEmbed } | null> {
+  const instrumentType = signalData.instrument_type || "Shares";
+  const defaults = getDefaultTemplates(instrumentType);
+  const defaultTemplate = defaults.find((t) => t.type === messageType) || null;
+  if (!defaultTemplate) return null;
+
+  let embedTemplate: TemplateEmbed = defaultTemplate.embed;
+  let content = defaultTemplate.content || "";
+
+  try {
+    // 1) App-specific override
+    let override = app
+      ? (await storage.getDiscordTemplatesByApp(app.id)).find(
+          (t) =>
+            t.instrumentType === instrumentType &&
+            t.messageType === messageType,
+        )
+      : undefined;
+
+    // 2) Global default override (appId="__default__") if no app-specific override
+    if (!override) {
+      const globalOverrides = await storage.getDiscordTemplatesByApp(
+        "__default__",
+      );
+      override = globalOverrides.find(
+        (t) =>
+          t.instrumentType === instrumentType &&
+          t.messageType === messageType,
+      );
+    }
+
+    if (override) {
+      embedTemplate = override.embedJson as unknown as TemplateEmbed;
+      content = override.content ?? content;
+    }
+  } catch {
+    // ignore template load failures; fall back to defaults
+  }
+
+  const vars = buildTemplateVars(signalData, app, messageType);
+  const rendered = renderTemplate(embedTemplate, vars);
+  return { content, embed: rendered as unknown as DiscordEmbed };
 }
 
 function fmtPnl(p: number): string {
@@ -859,7 +1139,7 @@ export function buildTradeClosedEmbed(
   }
   const rMultiple = data.r_multiple != null ? Number(data.r_multiple) : null;
   const fields: DiscordField[] = [];
-  pushInstrumentFields(fields, instrumentType, data);
+  pushInstrumentFields(fields, data);
   fields.push(
     {
       name: "\u2705 Entry",
@@ -939,10 +1219,17 @@ export async function sendTargetHitDiscordAlert(
   const discordWebhookUrl = getDiscordWebhookUrl(signalData, app);
   if (!discordWebhookUrl) return;
 
-  const embed = buildTargetHitEmbed(signalData, app);
-  const content = app
-    ? getContentForInstrument(app, signalData.instrument_type || "Shares")
-    : "@everyone";
+  const template = await getRenderedTemplateEmbed(
+    signalData,
+    app,
+    "target_hit",
+  );
+  const embed = template?.embed ?? buildTargetHitEmbed(signalData, app);
+  const content =
+    template?.content ??
+    (app
+      ? getContentForInstrument(app, signalData.instrument_type || "Shares")
+      : "@everyone");
   const sent = await sendWebhook(discordWebhookUrl, content, [embed]);
 
   await storage
@@ -1055,10 +1342,17 @@ export async function sendStopLossRaisedDiscord(
   const discordWebhookUrl = getDiscordWebhookUrl(signalData, app);
   if (!discordWebhookUrl) return;
 
-  const embed = buildStopLossRaisedEmbed(signalData, app);
-  const content = app
-    ? getContentForInstrument(app, signalData.instrument_type || "Shares")
-    : "@everyone";
+  const template = await getRenderedTemplateEmbed(
+    signalData,
+    app,
+    "stop_loss_raised",
+  );
+  const embed = template?.embed ?? buildStopLossRaisedEmbed(signalData, app);
+  const content =
+    template?.content ??
+    (app
+      ? getContentForInstrument(app, signalData.instrument_type || "Shares")
+      : "@everyone");
   const sent = await sendWebhook(discordWebhookUrl, content, [embed]);
 
   await storage
@@ -1089,10 +1383,17 @@ export async function sendStopLossHitDiscord(
   const discordWebhookUrl = getDiscordWebhookUrl(signalData, app);
   if (!discordWebhookUrl) return;
 
-  const embed = buildStopLossHitEmbed(signalData, app);
-  const content = app
-    ? getContentForInstrument(app, signalData.instrument_type || "Shares")
-    : "@everyone";
+  const template = await getRenderedTemplateEmbed(
+    signalData,
+    app,
+    "stop_loss_hit",
+  );
+  const embed = template?.embed ?? buildStopLossHitEmbed(signalData, app);
+  const content =
+    template?.content ??
+    (app
+      ? getContentForInstrument(app, signalData.instrument_type || "Shares")
+      : "@everyone");
   const sent = await sendWebhook(discordWebhookUrl, content, [embed]);
 
   await storage
@@ -1188,7 +1489,7 @@ export async function sendEntryDicordAlert(
   if (!data.discord_webhook_url) {
     const updatedData = { ...data, discord_webhook_url: webhookUrl };
     await storage
-      .updateSignal(signal.id, { data: updatedData })
+      .updateSignal(signal.id, { data: updatedData as any })
       .catch(() => {});
   }
 
@@ -1200,8 +1501,17 @@ export async function sendEntryDicordAlert(
         ? "Swing Trade"
         : "";
 
-  const embed = buildEntryAlertEmbed(signal, expendName);
-  const content = getContentForInstrument(app, instrumentType);
+  const dataForTemplate = {
+    ...(signal.data as Record<string, any>),
+    app_name: expendName || app.name,
+  };
+  const template = await getRenderedTemplateEmbed(
+    dataForTemplate,
+    app,
+    "signal_alert",
+  );
+  const embed = template?.embed ?? buildEntryAlertEmbed(signal, expendName);
+  const content = template?.content ?? getContentForInstrument(app, instrumentType);
   let sent = false;
   let error: string | null = null;
   try {

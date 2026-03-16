@@ -740,7 +740,7 @@ export default function DiscordTemplatesPage() {
   const activeApps = connectedApps.filter(a => a.sendDiscordMessages);
 
   const defaultTemplatesQuery = useQuery<TemplateGroup[]>({
-    queryKey: ["/api/discord-templates/var-templates"],
+    queryKey: ["/api/discord-templates/app", "__default__"],
     enabled: selectedAppId === "__default__",
   });
 

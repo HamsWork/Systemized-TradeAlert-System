@@ -93,8 +93,13 @@ export function registerDiscordRoutes(app: Express) {
     asyncHandler(async (req, res) => {
       const appId = getParam(req, "appId");
 
-      const connectedApp = await storage.getConnectedApp(appId);
-      if (!connectedApp) return res.status(404).json({ message: "App not found" });
+      const isDefaultApp = appId === "__default__";
+      const connectedApp = isDefaultApp
+        ? null
+        : await storage.getConnectedApp(appId);
+      if (!isDefaultApp && !connectedApp) {
+        return res.status(404).json({ message: "App not found" });
+      }
 
       const overrides = await storage.getDiscordTemplatesByApp(appId);
       const overrideMap = new Map<string, typeof overrides[0]>();
@@ -137,14 +142,58 @@ export function registerDiscordRoutes(app: Express) {
     }),
   );
 
+  // Raw templates saved for an app (custom overrides only).
+  // Optional query params:
+  // - instrumentType: filter by instrument type
+  // - messageType: filter by message type (signal_alert, target_hit, stop_loss_raised, stop_loss_hit)
+  app.get(
+    "/api/discord-templates/app/:appId/raw",
+    asyncHandler(async (req, res) => {
+      const appId = getParam(req, "appId");
+      const isDefaultApp = appId === "__default__";
+      const connectedApp = isDefaultApp
+        ? null
+        : await storage.getConnectedApp(appId);
+      if (!isDefaultApp && !connectedApp) {
+        return res.status(404).json({ message: "App not found" });
+      }
+
+      const instrumentType =
+        typeof req.query.instrumentType === "string"
+          ? (req.query.instrumentType as string)
+          : undefined;
+      const messageType =
+        typeof req.query.messageType === "string"
+          ? (req.query.messageType as string)
+          : undefined;
+
+      const templates = await storage.getDiscordTemplatesByApp(appId);
+      const filtered = templates.filter((t) => {
+        if (instrumentType && t.instrumentType !== instrumentType) return false;
+        if (messageType && t.messageType !== messageType) return false;
+        return true;
+      });
+
+      res.json({
+        appId,
+        appName: connectedApp?.name ?? "__default__",
+        count: filtered.length,
+        templates: filtered,
+      });
+    }),
+  );
+
   app.put(
     "/api/discord-templates/app/:appId",
     asyncHandler(async (req, res) => {
       const appId = getParam(req, "appId");
 
-      if (appId !== "__default__") {
-        const connectedApp = await storage.getConnectedApp(appId);
-        if (!connectedApp) return res.status(404).json({ message: "App not found" });
+      const isDefaultApp = appId === "__default__";
+      const connectedApp = isDefaultApp
+        ? null
+        : await storage.getConnectedApp(appId);
+      if (!isDefaultApp && !connectedApp) {
+        return res.status(404).json({ message: "App not found" });
       }
 
       const { instrumentType, messageType, label, content, embedJson } = req.body;
