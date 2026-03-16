@@ -40,7 +40,6 @@ function optionsEntryTemplate(): TemplateEmbed {
       { ...SPACER_FIELD },
       { name: "🟢 Ticker", value: "{{ticker}}", inline: true },
       { name: "📊 Stock Price", value: "{{stock_price}}", inline: true },
-      { name: "📈 Direction", value: "{{direction}}", inline: true },
       { ...SPACER_FIELD },
       { name: "❌ Expiration", value: "{{expiry}}", inline: true },
       { name: "✍️ Strike", value: "{{strike}} {{right}}", inline: true },
@@ -52,7 +51,6 @@ function optionsEntryTemplate(): TemplateEmbed {
     ],
     footer: DISCLAIMER,
   };
-  console.log("result", JSON.stringify(result, null, 2));
   return result;
 }
 

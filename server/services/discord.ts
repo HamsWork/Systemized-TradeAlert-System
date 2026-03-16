@@ -80,20 +80,33 @@ function buildTakeProfitPlan(signalData: Record<string, any>): string {
     tpIndex++;
     const price = Number(t.price);
     const priceLabel =
-      signalData.underlying_price_based && entryTracking
-        ? `${fmtPrice(price)} (${fmtPct(entryTracking, price)})`
-        : entryTracking
-          ? `${fmtPrice(price)} (${fmtPct(entryTracking, price)})`
-          : fmtPrice(price);
+      signalData.underlying_price_based
+        ? fmtPrice(price)
+        : (() => {
+            const pct =
+              t.percentage != null
+                ? `${Number(t.percentage).toFixed(1)}%`
+                : entryTracking ? fmtPct(entryTracking, price) : "?";
+            return `${fmtPrice(price)} (${pct})`;
+          })();
     const takeOff = t.take_off_percent != null ? `${t.take_off_percent}%` : "100%";
     const positionLabel = tpIndex === 1 ? "of position" : "of remaining position";
     let line = `Take Profit (${tpIndex}): At ${priceLabel} take off ${takeOff} ${positionLabel}`;
     if (t.raise_stop_loss?.price != null) {
-      const rslPrice = Number(t.raise_stop_loss.price);
+      const rsl = t.raise_stop_loss;
+      const rslPrice = Number(rsl.price);
       const isBreakEven = entryTracking > 0 && Math.abs(rslPrice - entryTracking) < 0.01;
-      line += isBreakEven
-        ? " and raise stop loss to break even."
-        : ` and raise stop loss to ${fmtPrice(rslPrice)}.`;
+      if (isBreakEven) {
+        line += " and raise stop loss to break even.";
+      } else {
+        const rslPct =
+          rsl.percentage != null
+            ? ` (${Number(rsl.percentage).toFixed(1)}%)`
+            : entryTracking
+              ? ` (${fmtPct(entryTracking, rslPrice)})`
+              : "";
+        line += ` and raise stop loss to ${fmtPrice(rslPrice)}${rslPct}.`;
+      }
     } else {
       line += ".";
     }
@@ -107,23 +120,93 @@ function buildTradePlan(signalData: Record<string, any>): string {
   if (signalData.trade_plan) {
     parts.push(String(signalData.trade_plan));
   }
-  // If no explicit plan, generate a compact plan line like the entry embed.
+  // If no explicit plan, generate a compact plan based on targets + stop-loss.
   if (!signalData.trade_plan) {
     const tps: string[] = [];
-    if (signalData.targets && typeof signalData.targets === "object") {
-      const direction = signalData.direction || "Long";
-      const isBullish = direction === "Call" || direction === "Long";
-      const targets = Object.entries(signalData.targets)
-        .filter(([, v]) => (v as any)?.price != null)
-        .sort(([, a], [, b]) =>
-          isBullish
-            ? Number((a as any).price) - Number((b as any).price)
-            : Number((b as any).price) - Number((a as any).price),
-        )
-        .map(([, v]) => fmtPrice(Number((v as any).price)));
-      if (targets.length) tps.push(`🎯 Targets: ${targets.join(", ")}`);
+    const slLines: string[] = [];
+
+    const direction = signalData.direction || "Long";
+    const isBullish = direction === "Call" || direction === "Long";
+
+    const entryTracking =
+      typeof signalData.entry_tracking_price === "number"
+        ? signalData.entry_tracking_price
+        : typeof signalData.entry_underlying_price === "number"
+          ? signalData.entry_underlying_price
+          : typeof signalData.entry_instrument_price === "number"
+            ? signalData.entry_instrument_price
+            : typeof signalData.entry_price === "number"
+              ? signalData.entry_price
+              : null;
+
+    const targetsObj =
+      signalData.targets && typeof signalData.targets === "object"
+        ? (signalData.targets as Record<string, any>)
+        : {};
+
+    const targetEntries = Object.entries(targetsObj)
+      .filter(([, v]) => (v as any)?.price != null)
+      .sort(([, a], [, b]) =>
+        isBullish
+          ? Number((a as any).price) - Number((b as any).price)
+          : Number((b as any).price) - Number((a as any).price),
+      );
+
+    if (targetEntries.length > 0) {
+      const tpLabels = targetEntries.map(([, v]) => {
+        const t = v as any;
+        const price = Number(t.price);
+        if (signalData.underlying_price_based) {
+          return fmtPrice(price);
+        }
+        // Use percentage from target first; else compute from entry.
+        const pct =
+          t.percentage != null
+            ? `${Number(t.percentage).toFixed(1)}%`
+            : entryTracking != null
+              ? fmtPct(entryTracking, price)
+              : "?";
+        return `${fmtPrice(price)} (${pct})`;
+      });
+      tps.push(`🎯 Targets: ${tpLabels.join(", ")}`);
     }
+
+    // Build stop-loss list as { price, percentage? } for initial SL + each raise_stop_loss.
+    const slEntries: { price: number; percentage?: number }[] = [];
+    if (signalData.stop_loss != null) {
+      slEntries.push({
+        price: Number(signalData.stop_loss),
+        percentage: signalData.stop_loss_percentage,
+      });
+    }
+    for (const [, v] of targetEntries) {
+      const t = v as any;
+      const rsl = t.raise_stop_loss;
+      if (rsl?.price != null) {
+        slEntries.push({
+          price: Number(rsl.price),
+          percentage: rsl.percentage != null ? rsl.percentage : t.percentage,
+        });
+      }
+    }
+    if (slEntries.length > 0) {
+      const slParts = slEntries.map(({ price, percentage }) => {
+        if (signalData.underlying_price_based) {
+          return fmtPrice(price);
+        }
+        const pct =
+          percentage != null
+            ? `${Number(percentage).toFixed(1)}%`
+            : entryTracking != null
+              ? fmtPct(entryTracking, price)
+              : "?";
+        return `${fmtPrice(price)} (${pct})`;
+      });
+      slLines.push(`🛑 Stop loss: ${slParts.join(", ")}`);
+    }
+
     if (tps.length) parts.push(tps.join("\n"));
+    if (slLines.length) parts.push(slLines.join("\n"));
   }
   return parts.join("\n").trim() || "\u2014";
 }
