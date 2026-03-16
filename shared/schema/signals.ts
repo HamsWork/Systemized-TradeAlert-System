@@ -12,6 +12,7 @@ export const signalTargetEntrySchema = z.object({
   raise_stop_loss: z
     .object({ price: z.number().optional(), percentage: z.number().optional() })
     .optional(),
+  trailing_stop_percent: z.number().min(0.1).max(100).optional(),
 });
 
 /** Validates payload that becomes Signal.data (core plan + entry). */
@@ -60,6 +61,10 @@ export const signalTrackingDataSchema = z.object({
   current_stop_loss_is_break_even: z.boolean().optional(),
   risk_value: z.string().optional(),
   current_stop_loss_percent: z.number().nullable().optional(),
+  trailing_stop_active: z.boolean().optional(),
+  trailing_stop_percent: z.number().optional(),
+  trailing_stop_high: z.number().optional(),
+  trailing_stop_activated_at: z.string().optional(),
 });
 
 /** Validates full Signal.data (core + tracking). */
@@ -216,6 +221,7 @@ export interface SignalTargetEntry {
   percentage?: number;
   take_off_percent?: number;
   raise_stop_loss?: { price?: number; percentage?: number };
+  trailing_stop_percent?: number;
 }
 
 /**
@@ -269,6 +275,10 @@ export interface SignalTrackingData {
   current_stop_loss_is_break_even?: boolean;
   risk_value?: string;
   current_stop_loss_percent?: number | null;
+  trailing_stop_active?: boolean;
+  trailing_stop_percent?: number;
+  trailing_stop_high?: number;
+  trailing_stop_activated_at?: string;
 }
 
 /**

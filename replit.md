@@ -1,157 +1,26 @@
 # TradeSync - Signal Execution System Dashboard
 
-A modular trading dashboard where plugged-in apps send signals, which trigger IBKR trade execution and Discord notifications based on system settings. Built with full visibility into every system control, integration, and connection point.
+## Overview
+TradeSync is a modular trading dashboard designed to execute trading signals from various plugged-in applications. It automates trade execution via Interactive Brokers (IBKR) and delivers real-time notifications through Discord, all based on user-defined system settings. The platform provides comprehensive visibility into all system controls, integrations, and connection points, aiming to streamline and automate trading strategies.
 
-## Architecture
+## User Preferences
+I want to ensure all core features are robust and thoroughly tested. I prioritize maintainable code and clear documentation. I prefer iterative development with regular updates on progress and potential roadblocks. I value detailed explanations for complex technical decisions. For any significant architectural changes or critical feature implementations, please ask for my approval before proceeding. Do not make changes to files within the `server/storage/` directory without explicit instruction, as these directly interact with the database. Similarly, avoid modifying `client/src/lib/formatters.ts` unless adding new, globally applicable formatting utilities.
 
-- **Frontend**: React + TypeScript with Vite, TanStack Query, Wouter routing, Shadcn UI
-- **Backend**: Express.js with REST API
-- **Database**: PostgreSQL with Drizzle ORM
-- **Styling**: Tailwind CSS with dark mode support (dark by default)
-- **Environment**: Loads `.env` via dotenv when not running in Replit (checks REPL_ID)
+## System Architecture
+TradeSync employs a modern full-stack architecture:
+- **Frontend**: Developed with React and TypeScript, utilizing Vite for a fast development experience, TanStack Query for data fetching, Wouter for routing, and Shadcn UI for component styling. Tailwind CSS is used for styling, with dark mode enabled by default.
+- **Backend**: An Express.js server handles API requests, providing RESTful endpoints for all functionalities.
+- **Database**: PostgreSQL serves as the primary data store, with Drizzle ORM managing database interactions.
+- **Signal Processing**: A core `signal-processor.ts` service orchestrates the signal lifecycle, from ingestion to triggering IBKR trades and Discord alerts based on configured settings.
+- **Trade Execution**: The `trade-executor.ts` service interfaces with IBKR, placing orders and recording transactions.
+- **Notifications**: The `discord.ts` service formats and dispatches rich embeds to Discord webhooks.
+- **Data Model**: Key entities include Signals (flexible JSON `data` field for various instrument types, targets, stop-loss, trailing stops, and source app tracking), Activity Log, Discord Messages, Connected Apps (with API keys and per-app settings), System Settings, Integrations (Discord, IBKR), and IBKR Orders/Positions.
+- **UI/UX**: The dashboard provides a comprehensive overview with dedicated pages for Signals, Activity, Integrations, Connected Apps, API Guide, IBKR account details, and System Settings. A live system audit page (`/audit`) provides real-time insights into the codebase's architecture and features. Discord message templates are customizable per-app and instrument type.
+- **Code Conventions**: Adherence to DRY principles, central error handling, and generic CRUD factories (`createCrudMethods`) ensures consistency and maintainability across the codebase. `asyncHandler` wrappers are used for all routes to simplify error management.
 
-## Code Conventions
-
-- **DRY Rule**: Extract common patterns into shared functions/components. Never duplicate logic across files.
-- **Frontend shared utilities**: `client/src/lib/formatters.ts` (formatCurrency, formatNumber, formatRelativeTime)
-- **Frontend shared components**: `client/src/components/page-header.tsx` (PageHeader), `client/src/components/empty-state.tsx` (EmptyState)
-- **Backend shared utilities**: `server/lib/async-handler.ts` (asyncHandler wrapper for routes), `server/storage/crud-helpers.ts` (createCrudMethods generic CRUD factory)
-- **Error handling**: Central error handler middleware in `server/routes/index.ts`; routes use `asyncHandler` wrapper instead of manual try-catch
-- **Storage CRUD**: Standard CRUD operations use `createCrudMethods` factory; only custom methods are written manually
-
-## System Flow
-
-Plugged-in apps → Send signals via API → Signal Processor checks connected app settings → Executes IBKR trades (if `executeIbkrTrades` enabled) + Sends Discord webhook alerts (if `sendDiscordMessages` enabled) → Activity log entries created for each action
-
-## Data Model
-
-- **Signals**: Trading signals with flexible JSON `data` field containing: ticker, instrumentType (Options/Shares/LETF/LETF Option/Crypto), direction (Long/Short or Call/Put for Options/LETF Option), optional entryPrice, targets (object with tp1/tp2/etc each having price + raise_stop_loss), stop_loss (number), expiration, underlying_price_based (boolean, default false — when true, targets/stop_loss are tracked against the underlying stock price instead of option/LETF price for Options/LETF/LETF Option), underlying_symbol (string — the underlying index/ETF ticker for LETF/LETF Option, e.g. "QQQ" for TQQQ; auto-populated during ingestion from API or fallback lookup, used by Discord embeds and trade monitor). Options and LETF Option require expiration and strike. Crypto has no expiration/strike. Source app tracking via sourceAppId and sourceAppName.
-- **Activity Log**: System event feed tracking all actions. Has `signalId` FK to link activities to signals.
-- **Discord Messages**: Record of every Discord webhook sent/attempted, linked to signals via `signalId`. Tracks webhookUrl, channelType, instrumentType, status (sent/failed/error), messageType (signal_alert/trade_executed), embedData.
-- **Connected Apps**: Plugged-in trading applications with auto-generated API keys, Discord settings (Send Discord Messages toggle + Shares/Options/LETF/LETF Option/Crypto webhook URLs), and IBKR settings (Execute IBKR Trades toggle + Client ID, Host IP, Port)
-- **System Settings**: Key-value toggle/config store for system controls (signals, trading, system)
-- **Integrations**: Discord channels and IBKR trading accounts with per-integration notification and trading toggles
-- **IBKR Orders/Positions**: Trade execution records and open position tracking
-- **Alerts** (backend schema only, removed from frontend): Legacy alert schema retained in database
-
-## Signal Ingestion API
-
-Connected apps push signals to TradeSync via `POST /api/ingest/signals` using their API key:
-- Auth: `Authorization: Bearer <api_key>` header
-- Body: `{ ticker, instrumentType, direction, entryPrice?, tradePlan?, ... }`
-- Supports multipart form data with `chartMedia` file field (image/video) — attached to Discord embed when sending entry alerts. When using multipart, signal fields are form fields and `targets` should be JSON string.
-- App must be active and have syncSignals enabled
-- Each signal is tagged with sourceAppId and sourceAppName
-
-## Pages
-
-1. **Dashboard** (`/`) - System overview with signal pipeline flow card, stat cards, recent signals, activity feed, connections status, and positions summary
-2. **Signals** (`/signals`) - Full CRUD for trading signals with filtering, shows source app badges. Clicking a signal card opens a detail modal with trade chart (lightweight-charts), entry/TP/SL price lines, related IBKR orders, signal details sidebar, and activity feed
-3. **Activity** (`/activity`) - Complete activity log
-4. **Integrations** (`/integrations`) - Full CRUD for Discord channels and IBKR trading accounts with notification/trading toggles
-5. **Connected Apps** (`/connected-apps`) - Manage plugged-in trading apps with API key management (show/hide, copy, regenerate)
-6. **API Guide** (`/api-guide`) - Interactive API documentation with Massive.com-style layout, live code generation, and query testing
-7. **IBKR** (`/ibkr`) - Dedicated IBKR page with account overview (Net Liquidation, Buying Power, Daily P&L, Unrealized/Realized P&L, Cash Balance, Gross Position Value, Available Funds, Excess Liquidity, Margin Cushion), order status, open positions, and order history per connected app. Account data synced via `reqAccountSummary` and `reqPnL` IBKR API calls every 10s.
-8. **Settings** (`/settings`) - System controls organized by category (signals, trading, system) with toggle switches and value inputs
-9. **System Audit** (`/audit`) - Live self-documenting system overview: scans the actual codebase to generate real-time reports of architecture, feature maps, services, endpoints, DB tables, and file statistics. Three views: System Architecture, Feature File Map, JSON Export
-10. **Discord Templates** (`/discord-templates`) - Discord message templates organized by instrument type (Options/Shares/LETF/LETF Option/Crypto). Supports per-app custom templates: app selector dropdown shows "Default Templates" plus all connected apps with Discord enabled. Default templates are read-only previews; selecting an app enables Edit buttons for customizing embed JSON per template. Custom templates are saved to `discord_templates` table (unique per app+instrument+messageType). "Reset to Defaults" button removes all custom overrides for the active instrument type. Each template has expandable Discord-themed preview and "Send" button for manual webhook delivery.
-
-## API Routes
-
-All routes prefixed with `/api`:
-- `GET/POST /signals`, `GET/PATCH/DELETE /signals/:id`
-- `POST /ingest/signals` - External signal ingestion (requires Bearer API key auth)
-- `GET /activity`, `GET /activity/by-symbol/:symbol`, `GET /activity/by-signal/:signalId`
-- `GET /discord-messages`, `GET /discord-messages/by-signal/:signalId`
-- `GET/POST /connected-apps`, `GET/PATCH/DELETE /connected-apps/:id`
-- `POST /connected-apps/:id/regenerate-key` - Regenerate API key for an app
-- `GET/PUT /settings` (system settings - upsert by key)
-- `GET/POST /integrations`, `PATCH/DELETE /integrations/:id`
-- `GET /ibkr/orders`, `GET /ibkr/orders/by-symbol/:symbol`, `GET /ibkr/orders/by-signal/:signalId`, `GET /ibkr/orders/:integrationId`, `POST /ibkr/orders`, `PATCH /ibkr/orders/:id`
-- `GET /ibkr/positions`, `GET /ibkr/positions/:integrationId`, `POST /ibkr/positions`, `PATCH /ibkr/positions/:id`
-- `POST /ibkr/connect/:integrationId` - Connect to IBKR TWS/Gateway for an integration
-- `POST /ibkr/disconnect/:integrationId` - Disconnect from IBKR for an integration
-- `GET /ibkr/chart-data?symbol=X&secType=OPT&strike=N&expiration=DATE&right=C` - Historical chart data (Polygon.io primary, IBKR fallback; supports stocks and option contracts)
-- `GET /ibkr/status` - Get connection status of all IBKR integrations
-- `GET /discord-templates` - All Discord message templates grouped by instrument type with sample data
-- `GET /discord-templates/app/:appId` - Per-app templates (merged with defaults, marks custom overrides)
-- `PUT /discord-templates/app/:appId` - Upsert custom template for an app (body: instrumentType, messageType, label, content, embedJson)
-- `DELETE /discord-templates/app/:appId` - Reset custom templates for an app (optional ?instrumentType= filter)
-- `GET /dashboard/stats`
-- `GET/POST /alerts`, `GET/PATCH/DELETE /alerts/:id` (backend only, not exposed in frontend)
-- `GET /system-audit` - Live codebase scan: architecture, endpoints, DB tables, services, feature map, file stats
-
-## Key Files
-
-### Shared Utilities
-- `client/src/lib/formatters.ts` - Shared formatting functions (formatCurrency, formatNumber, formatRelativeTime)
-- `client/src/components/page-header.tsx` - Reusable PageHeader component (icon, title, description, actions)
-- `client/src/components/empty-state.tsx` - Reusable EmptyState component (icon, title, description)
-- `server/lib/async-handler.ts` - Express async route handler wrapper (eliminates manual try-catch)
-- `server/storage/crud-helpers.ts` - Generic CRUD factory (createCrudMethods) for storage layer
-
-### Shared Schema (split by domain)
-- `shared/schema.ts` - Barrel file re-exporting all domain schemas
-- `shared/schema/users.ts` - Users table, insert schema, types
-- `shared/schema/alerts.ts` - Alerts table, insert schema, types
-- `shared/schema/signals.ts` - Signals table, insert schema, types
-- `shared/schema/activity.ts` - Activity log table, insert schema, types
-- `shared/schema/apps.ts` - Connected apps table, insert schema, types
-- `shared/schema/settings.ts` - System settings table, insert schema, types
-- `shared/schema/integrations.ts` - Integrations table, insert schema, types
-- `shared/schema/ibkr.ts` - IBKR orders + positions tables, insert schemas, types
-- `shared/schema/discord.ts` - Discord messages + discord_templates tables, insert schemas, types
-- `shared/schema/watchlist.ts` - Watchlist table
-
-### Server Storage (split by domain)
-- `server/storage.ts` - Barrel file re-exporting storage interface, class, and instance
-- `server/storage/interface.ts` - IStorage interface definition
-- `server/storage/users.ts` - User CRUD methods
-- `server/storage/alerts.ts` - Alert CRUD methods (uses createCrudMethods)
-- `server/storage/signals.ts` - Signal CRUD methods (uses createCrudMethods)
-- `server/storage/activity.ts` - Activity log methods
-- `server/storage/apps.ts` - ConnectedApp CRUD methods (uses createCrudMethods + custom getByApiKey)
-- `server/storage/settings.ts` - SystemSettings methods
-- `server/storage/integrations.ts` - Integration CRUD methods (uses createCrudMethods)
-- `server/storage/ibkr.ts` - IBKR orders/positions methods
-- `server/storage/dashboard.ts` - Dashboard stats method
-- `server/storage/index.ts` - DatabaseStorage class composing all domain methods
-
-### Server Routes (split by domain)
-- `server/routes.ts` - Barrel file re-exporting registerRoutes
-- `server/routes/dashboard.ts` - GET /api/dashboard/stats
-- `server/routes/alerts.ts` - /api/alerts CRUD routes
-- `server/routes/signals.ts` - /api/signals CRUD + /api/ingest/signals
-- `server/routes/activity.ts` - /api/activity
-- `server/routes/apps.ts` - /api/connected-apps CRUD + regenerate-key
-- `server/routes/settings.ts` - /api/settings
-- `server/routes/integrations.ts` - /api/integrations CRUD
-- `server/routes/ibkr.ts` - /api/ibkr/orders + /api/ibkr/positions
-- `server/routes/index.ts` - registerRoutes composing all domain route registrars + error handler middleware
-- `server/routes/audit.ts` - Live codebase scanner: architecture, endpoints, DB tables, services, feature map
-
-### Services
-- `server/services/signal-processor.ts` - Signal processing pipeline: on signal ingestion, checks connected app settings and triggers IBKR trade execution + Discord webhook alerts
-- `server/services/trade-executor.ts` - IBKR trade execution: creates temporary IBApi connection, places market orders, records to DB
-- `server/services/discord.ts` - Discord webhook sender: formats signal alerts and trade execution notifications as rich embeds
-- `server/services/polygon.ts` - Polygon.io API client: fetches historical OHLCV bars for stocks and option contracts (OPRA format)
-- `server/services/ibkr-client.ts` - IbkrClient class wrapping `@stoqey/ib` IBApi for connection, order/position fetching
-- `server/services/ibkr-sync.ts` - IbkrSyncManager singleton: auto-connects enabled IBKR integrations, syncs orders/positions to DB every 10s
-- `server/services/trade-monitor.ts` - Background trade monitor: checks active signals every 10s against IBKR lastPrice, fires Discord alerts on target hits/stop loss, raises stop loss on TP hits, marks signals completed/stopped_out
-
-### Other Key Files
-- `server/db.ts` - Database connection with keepAlive and error handling
-- `server/seed.ts` - Seed data for all tables
-- `client/src/pages/dashboard.tsx` - Overview dashboard with signal pipeline flow, stats, recent signals, activity feed
-- `client/src/pages/settings.tsx` - System settings controls by category
-- `client/src/pages/connected-apps.tsx` - Connected apps management with API key display
-- `client/src/pages/signals.tsx` - Signals page with source app badges (cards link to detail page)
-- `client/src/pages/signal-detail.tsx` - Signal detail dialog with lightweight-charts candlestick chart (Polygon.io data for stocks and options, IBKR fallback, TradingView fallback), entry/TP/SL price lines, volume bars, IBKR orders, activity feed
-- `client/src/pages/api-guide.tsx` - Interactive API guide with live code examples
-- `client/src/components/app-sidebar.tsx` - Navigation sidebar
-
-## System Settings Categories
-
-- **signals**: Signal Engine, Confidence Threshold, Technical/Sentiment/Fundamental/Algorithmic toggles
-- **system**: Activity Logging, Dark Mode Default, API Access, Webhook Delivery
-- **trading**: Trade Execution, Paper Mode, Max Position Size, Risk Limit, Auto Stop-Loss, Auto Take-Profit
+## External Dependencies
+- **Interactive Brokers (IBKR)**: For trade execution and real-time account data synchronization (`@stoqey/ib` library).
+- **Discord**: For sending real-time notifications and alerts via webhooks.
+- **PostgreSQL**: The relational database management system for persistent storage.
+- **Polygon.io**: Primary source for historical OHLCV bar data for stocks and option contracts.
+- **dotenv**: For managing environment variables outside of Replit.

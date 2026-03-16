@@ -596,11 +596,12 @@ const sections: SectionDef[] = [
           { name: "targets", type: "json", required: false, description: "Take-profit targets. Target prices must be in the same space as entry_price (option / LETF / stock).", explanation: `The targets object defines your profit-taking strategy. Each key (tp1, tp2, etc.) maps to a target with a price (option contract price for Options, LETF price for LETF, stock price for Shares), a take_off_percent indicating how much of the position to close, and an optional raise_stop_loss that adjusts your stop loss when the target is hit.
 
 Structure:
-  tp1, tp2, ...      Target labels (you can use any key names)
-    price             Target price level
-    take_off_percent  Percentage of position to take off at this target (0-100)
+  tp1, tp2, ...           Target labels (you can use any key names)
+    price                  Target price level
+    take_off_percent       Percentage of position to take off at this target (0-100)
     raise_stop_loss
-      price           New stop loss price when this target is hit
+      price                New stop loss price when this target is hit
+    trailing_stop_percent  Optional trailing stop (0.1-100). When target is hit, activates a trailing stop that follows price at this % distance.
 
 Example:
 {
@@ -614,9 +615,7 @@ Example:
   "tp2": {
     "price": 110,
     "take_off_percent": 50,
-    "raise_stop_loss": {
-      "price": 100
-    }
+    "trailing_stop_percent": 5
   }
 }` },
         ],
@@ -1047,7 +1046,7 @@ function QuickStartContent({ baseUrl }: { baseUrl: string }) {
           <div className="rounded-lg bg-zinc-950/60 dark:bg-zinc-950/80 border border-zinc-800/60 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-800/40 bg-zinc-900/50">
               <span className="text-xs text-muted-foreground font-mono">cURL</span>
-              <CopyButton text={`curl -X POST ${baseUrl}/api/ingest/signals \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer YOUR_API_KEY" \\\n  -d '{\n    "ticker": "AAPL",\n    "instrumentType": "Options",\n    "direction": "Call",\n    "expiration": "2026-04-17",\n    "strike": "190",\n    "entryPrice": "5.20",\n    "stop_loss": 3.50,\n    "targets": {\n      "tp1": { "price": 7.00, "take_off_percent": 50, "raise_stop_loss": { "price": 5.20 } },\n      "tp2": { "price": 10.00, "take_off_percent": 50 }\n    }\n  }'`} />
+              <CopyButton text={`curl -X POST ${baseUrl}/api/ingest/signals \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer YOUR_API_KEY" \\\n  -d '{\n    "ticker": "AAPL",\n    "instrumentType": "Options",\n    "direction": "Call",\n    "expiration": "2026-04-17",\n    "strike": "190",\n    "entryPrice": "5.20",\n    "stop_loss": 3.50,\n    "targets": {\n      "tp1": { "price": 7.00, "take_off_percent": 50, "raise_stop_loss": { "price": 5.20 } },\n      "tp2": { "price": 10.00, "take_off_percent": 50, "trailing_stop_percent": 5 }\n    }\n  }'`} />
             </div>
             <pre className="p-4 overflow-x-auto text-[13px] font-mono text-zinc-300 leading-relaxed whitespace-pre-wrap">
               <code>{`curl -X POST ${baseUrl}/api/ingest/signals \\
@@ -1063,7 +1062,7 @@ function QuickStartContent({ baseUrl }: { baseUrl: string }) {
     "stop_loss": 3.50,
     "targets": {
       "tp1": { "price": 7.00, "take_off_percent": 50, "raise_stop_loss": { "price": 5.20 } },
-      "tp2": { "price": 10.00, "take_off_percent": 50 }
+      "tp2": { "price": 10.00, "take_off_percent": 50, "trailing_stop_percent": 5 }
     }
   }'`}</code>
             </pre>

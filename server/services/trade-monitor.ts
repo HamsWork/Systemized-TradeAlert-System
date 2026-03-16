@@ -29,6 +29,7 @@ interface TargetInfo {
   price: number;
   takeOffPercent: number;
   raiseStopLoss?: number;
+  trailingStopPercent?: number;
   tpNumber?: number;
 }
 
@@ -48,6 +49,9 @@ function parseTargets(
           t.take_off_percent != null ? Number(t.take_off_percent) : 100,
         raiseStopLoss: t.raise_stop_loss?.price
           ? Number(t.raise_stop_loss.price)
+          : undefined,
+        trailingStopPercent: t.trailing_stop_percent != null
+          ? Number(t.trailing_stop_percent)
           : undefined,
       };
     })
@@ -186,7 +190,11 @@ async function applyTargetHitAuto(
 
   const allTargetsHit = nextTargetIndex + 1 >=
     (parseTargets(signalData, isBullish).length || 0);
-  if (signalData.remain_quantity <= 0 || allTargetsHit) {
+  const trailingPctOnTarget = nextTarget.trailingStopPercent ?? (nextTarget as any).trailing_stop_percent;
+  const willActivateTrailing = trailingPctOnTarget != null && trailingPctOnTarget > 0 && signalData.remain_quantity > 0;
+  if (signalData.remain_quantity <= 0) {
+    signalData.status = "completed";
+  } else if (allTargetsHit && !willActivateTrailing) {
     signalData.status = "completed";
   }
 
@@ -245,6 +253,37 @@ async function applyTargetHitAuto(
       }
     }
   }
+
+  const trailingPct = nextTarget.trailingStopPercent ?? (nextTarget as any).trailing_stop_percent;
+  if (trailingPct != null && trailingPct > 0 && signalData.status !== "completed") {
+    signalData.trailing_stop_active = true;
+    signalData.trailing_stop_percent = trailingPct;
+    signalData.trailing_stop_high = currentTrackingPrice;
+    signalData.trailing_stop_activated_at = new Date().toISOString();
+
+    const trailingStopLevel = isBullish
+      ? currentTrackingPrice * (1 - trailingPct / 100)
+      : currentTrackingPrice * (1 + trailingPct / 100);
+    if (
+      signalData.current_stop_loss == null ||
+      (isBullish ? trailingStopLevel > signalData.current_stop_loss : trailingStopLevel < signalData.current_stop_loss)
+    ) {
+      signalData.current_stop_loss = Math.round(trailingStopLevel * 100) / 100;
+    }
+
+    console.log(
+      `[TradeMonitor] Trailing stop activated for ${signalData.ticker}: ${trailingPct}% trail from ${fmtPrice(currentTrackingPrice)}, SL at ${fmtPrice(signalData.current_stop_loss)}`,
+    );
+    storage.createActivity({
+      type: "trailing_stop_activated",
+      title: `Trailing stop activated for ${signalData.ticker}`,
+      description: `${trailingPct}% trailing stop activated after ${keyLabel} hit at ${fmtPrice(currentTrackingPrice)}`,
+      symbol: signalData.ticker,
+      signalId: signal.id,
+      metadata: { trailingStopPercent: trailingPct, activatedAt: currentTrackingPrice },
+    }).catch(() => {});
+  }
+
   const completed = signalData.status === "completed";
   await storage.updateSignal(signal.id, {
     data: signalData,
@@ -299,6 +338,39 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
     }
   }
 
+  if (signalData.trailing_stop_active && signalData.trailing_stop_percent > 0) {
+    const trailPct = signalData.trailing_stop_percent;
+    const prevHigh = signalData.trailing_stop_high ?? currentTrackingPrice;
+    const newHigh = isBullish
+      ? Math.max(prevHigh, currentTrackingPrice)
+      : Math.min(prevHigh, currentTrackingPrice);
+
+    if (newHigh !== prevHigh) {
+      signalData.trailing_stop_high = newHigh;
+      const newTrailingStop = isBullish
+        ? Math.round(newHigh * (1 - trailPct / 100) * 100) / 100
+        : Math.round(newHigh * (1 + trailPct / 100) * 100) / 100;
+
+      if (
+        signalData.current_stop_loss == null ||
+        (isBullish ? newTrailingStop > signalData.current_stop_loss : newTrailingStop < signalData.current_stop_loss)
+      ) {
+        signalData.current_stop_loss = newTrailingStop;
+        signalData.current_stop_loss_is_break_even =
+          Math.abs(newTrailingStop - (signalData.entry_tracking_price ?? signalData.entry_price ?? 0)) < 0.01;
+        signalData.risk_value = signalData.current_stop_loss_is_break_even
+          ? "0% (Risk-Free)"
+          : `${profitPctFromInstrument(
+            signalData.entry_tracking_price ?? signalData.entry_price,
+            newTrailingStop,
+            signalData.instrument_type,
+            signalData.direction,
+          ).toFixed(1)}%`;
+        await storage.updateSignal(signal.id, { data: signalData });
+      }
+    }
+  }
+
   if (signalData.current_stop_loss){
     const stopLossHit = isBullish ? currentTrackingPrice <= signalData.current_stop_loss : currentTrackingPrice >= signalData.current_stop_loss;
     if (stopLossHit) {
@@ -310,10 +382,11 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
       signalData.remain_quantity = 0;
       signalData.current_stop_loss_percent = profitPctFromInstrument(signalData.entry_instrument_price, currentInstrumentPrice, signalData.instrument_type, signalData.direction);
       await sendStopLossHitDiscord(signalData, app, signal.id);
+      const slType = signalData.trailing_stop_active ? "Trailing stop" : "Stop loss";
       storage.createActivity({
         type: "stop_loss_hit",
-        title: `Stop loss hit for ${signalData.ticker}`,
-        description: `Stop loss triggered at ${fmtPrice(currentTrackingPrice)} (SL: ${fmtPrice(signalData.current_stop_loss)})`,
+        title: `${slType} hit for ${signalData.ticker}`,
+        description: `${slType} triggered at ${fmtPrice(currentTrackingPrice)} (SL: ${fmtPrice(signalData.current_stop_loss)})${signalData.trailing_stop_active ? ` [${signalData.trailing_stop_percent}% trail]` : ""}`,
         symbol: signalData.ticker,
         signalId: signal.id,
       }).catch(() => {});
@@ -404,6 +477,7 @@ export async function recordManualTargetHit(
       price: nextTarget.price,
       takeOffPercent: nextTarget.takeOffPercent,
       raiseStopLoss: nextTarget.raiseStopLoss,
+      trailingStopPercent: nextTarget.trailingStopPercent,
     } as TargetInfo,
     nextTargetIndex,
     currentTrackingPrice,

@@ -398,7 +398,10 @@ export function buildSampleVariables(
     if (t.raise_stop_loss?.price) {
       const rsl = Number(t.raise_stop_loss.price);
       const isBreakEven = entryPrice > 0 && Math.abs(rsl - entryPrice) < 0.01;
-      line += isBreakEven ? " and raise stop loss to break even." : ` and raise stop loss to ${fmtPrice(rsl)}.`;
+      line += isBreakEven ? " and raise stop loss to break even" : ` and raise stop loss to ${fmtPrice(rsl)}`;
+    }
+    if (t.trailing_stop_percent != null) {
+      line += ` with ${t.trailing_stop_percent}% trailing stop.`;
     } else {
       line += ".";
     }
@@ -432,6 +435,10 @@ export function buildSampleVariables(
       vars.new_stop_loss = "—";
       vars.risk_mgmt = "No stop adjustment on this target.";
     }
+    if (tp.trailing_stop_percent != null) {
+      vars.trailing_stop_percent = `${tp.trailing_stop_percent}%`;
+      vars.risk_mgmt += `\n📏 ${tp.trailing_stop_percent}% trailing stop activated — stop will follow price.`;
+    }
   }
 
   if (messageType === "stop_loss_raised" && targetEntries.length > 0) {
@@ -458,6 +465,9 @@ export function buildSampleVariables(
     vars.profit_pct = `${pct}%`;
     vars.pnl_dollar = fmtPrice(null);
     vars.r_multiple = "—";
+    vars.trailing_stop_active = String(!!data.trailing_stop_active);
+    vars.trailing_stop_percent = data.trailing_stop_percent != null ? `${data.trailing_stop_percent}%` : "—";
+    vars.stop_type = data.trailing_stop_active ? "Trailing Stop" : "Stop Loss";
   }
 
 

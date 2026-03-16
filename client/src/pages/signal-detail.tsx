@@ -1038,7 +1038,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
   const isClosed = signal.status === "closed";
   const autoTrackEnabled = data.auto_track !== false;
 
-  const targets: { key: string; price: number; takeOffPercent?: number; raiseStopLoss?: number; isHit: boolean; hitAt?: string; hitPrice?: number }[] = [];
+  const targets: { key: string; price: number; takeOffPercent?: number; raiseStopLoss?: number; trailingStopPercent?: number; isHit: boolean; hitAt?: string; hitPrice?: number }[] = [];
   if (data.targets && typeof data.targets === "object") {
     for (const [key, val] of Object.entries(data.targets)) {
       const t = val as any;
@@ -1049,6 +1049,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
           price: Number(t.price),
           takeOffPercent: t.take_off_percent ? Number(t.take_off_percent) : undefined,
           raiseStopLoss: t.raise_stop_loss?.price ? Number(t.raise_stop_loss.price) : undefined,
+          trailingStopPercent: t.trailing_stop_percent != null ? Number(t.trailing_stop_percent) : undefined,
           isHit: !!hit,
           hitAt: hit?.hitAt,
           hitPrice: hit?.price,
@@ -1336,6 +1337,11 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                               {t.takeOffPercent && (
                                 <span className="text-[10px] text-muted-foreground">({t.takeOffPercent}%)</span>
                               )}
+                              {t.trailingStopPercent != null && (
+                                <Badge variant="outline" className="text-[8px] px-1 py-0 h-3.5 text-purple-500 border-purple-500/30 bg-purple-500/5">
+                                  {t.trailingStopPercent}% trail
+                                </Badge>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -1353,19 +1359,28 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                   </>
                 )}
 
-                {stopLoss !== undefined && (
+                {(stopLoss !== undefined || data.trailing_stop_active || data.current_stop_loss != null) && (
                   <>
                     <Separator />
                     <div data-testid="detail-stop-loss">
                       <div className="flex items-center gap-1.5 mb-2">
                         <ShieldAlert className="h-3.5 w-3.5 text-red-500/70" />
-                        <span className="text-[10px] font-medium text-red-500/80 uppercase tracking-wider">Stop Loss</span>
+                        <span className="text-[10px] font-medium text-red-500/80 uppercase tracking-wider">
+                          {data.trailing_stop_active ? "Trailing Stop" : "Stop Loss"}
+                        </span>
+                        {data.trailing_stop_active && (
+                          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 text-purple-500 border-purple-500/30 bg-purple-500/5">
+                            {data.trailing_stop_percent}% trail
+                          </Badge>
+                        )}
                       </div>
                       <div
                         className={`flex items-center justify-between rounded-md px-2 py-1.5 border ${
                           isStoppedOut
                             ? "border-red-500/30 bg-red-500/10"
-                            : "border-border bg-muted/30"
+                            : data.trailing_stop_active
+                              ? "border-purple-500/30 bg-purple-500/10"
+                              : "border-border bg-muted/30"
                         }`}
                       >
                         <div className="flex items-center gap-1.5">
@@ -1374,13 +1389,18 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                             : <ShieldAlert className="h-3 w-3 text-muted-foreground" />
                           }
                           <span className={`text-xs font-semibold ${isStoppedOut ? "text-red-500" : "text-foreground"}`}>
-                            {isStoppedOut ? "Triggered" : "Active"}
+                            {isStoppedOut ? "Triggered" : data.trailing_stop_active ? "Trailing" : "Active"}
                           </span>
                         </div>
                         <span className={`font-mono text-xs font-medium ${isStoppedOut ? "text-red-400" : "text-foreground"}`}>
-                          ${stopLoss}
+                          ${data.current_stop_loss ?? stopLoss}
                         </span>
                       </div>
+                      {data.trailing_stop_active && data.trailing_stop_high != null && !isStoppedOut && (
+                        <div className="flex items-center justify-between mt-1 px-2 text-[10px] text-muted-foreground">
+                          <span>High watermark: ${data.trailing_stop_high}</span>
+                        </div>
+                      )}
                     </div>
                   </>
                 )}
