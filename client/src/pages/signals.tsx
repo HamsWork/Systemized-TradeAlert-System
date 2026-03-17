@@ -655,6 +655,7 @@ export default function SignalsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedSignal, setSelectedSignal] = useState<Signal | null>(null);
   const [filter, setFilter] = useState<string>("active");
+  const [appFilter, setAppFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
   const { toast } = useToast();
 
@@ -683,7 +684,9 @@ export default function SignalsPage() {
   });
 
   const signals = signalsList;
-  const filtered = filter === "all" ? signals : signals.filter((s) => s.status === filter);
+  const sourceApps = [...new Set(signals.map(s => s.sourceAppName).filter(Boolean))].sort();
+  const afterApp = appFilter === "all" ? signals : signals.filter(s => s.sourceAppName === appFilter);
+  const filtered = filter === "all" ? afterApp : afterApp.filter((s) => s.status === filter);
   const totalPages = Math.max(1, Math.ceil(filtered.length / SIGNALS_PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const paginated = filtered.slice((currentPage - 1) * SIGNALS_PAGE_SIZE, currentPage * SIGNALS_PAGE_SIZE);
@@ -729,7 +732,7 @@ export default function SignalsPage() {
         <div className="flex items-center gap-2 flex-wrap">
           {["active", "all", "completed", "stopped_out", "closed", "expired"].map((f) => {
             const label = f === "stopped_out" ? "Stopped Out" : f.charAt(0).toUpperCase() + f.slice(1);
-            const count = f === "all" ? signals.length : signals.filter(s => s.status === f).length;
+            const count = f === "all" ? afterApp.length : afterApp.filter(s => s.status === f).length;
             return (
               <Button
                 key={f}
@@ -744,9 +747,25 @@ export default function SignalsPage() {
             );
           })}
         </div>
-        <span className="text-xs text-muted-foreground" title="List refreshes every 5 seconds">
-          Live · updates every 5s
-        </span>
+        <div className="flex items-center gap-3">
+          {sourceApps.length > 0 && (
+            <Select value={appFilter} onValueChange={(v) => { setAppFilter(v); setPage(1); }}>
+              <SelectTrigger className="w-full sm:w-[180px] h-8 text-xs" data-testid="select-source-app-filter">
+                <Puzzle className="h-3 w-3 mr-1.5 text-muted-foreground" />
+                <SelectValue placeholder="All Apps" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Apps</SelectItem>
+                {sourceApps.map(app => (
+                  <SelectItem key={app} value={app!}>{app}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <span className="text-xs text-muted-foreground whitespace-nowrap" title="List refreshes every 5 seconds">
+            Live · updates every 5s
+          </span>
+        </div>
       </div>
 
       {filtered.length === 0 ? (
