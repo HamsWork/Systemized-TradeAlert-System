@@ -34,7 +34,7 @@ const DISCLAIMER = "Disclaimer: Not financial advice. Trade at your own risk.";
 
 function optionsEntryTemplate(): TemplateEmbed {
   const result: TemplateEmbed = {
-    description: "**🚨 {{ticker}} Options Entry - {{app_name}}**",
+    description: "**🚨 {{ticker}} Options Entry - {{trade_type}} Trade**",
     color: GREEN,
     fields: [
       { ...SPACER_FIELD },
@@ -51,12 +51,13 @@ function optionsEntryTemplate(): TemplateEmbed {
     ],
     footer: DISCLAIMER,
   };
+  
   return result;
 }
 
 function sharesEntryTemplate(): TemplateEmbed {
   return {
-    description: "**🚨 {{ticker}} Shares Entry - {{app_name}}**",
+    description: "**🚨 {{ticker}} Shares Entry - {{trade_type}} Trade**",
     color: GREEN,
     fields: [
       { ...SPACER_FIELD },
@@ -74,7 +75,7 @@ function sharesEntryTemplate(): TemplateEmbed {
 
 function letfEntryTemplate(): TemplateEmbed {
   return {
-    description: "**🚨 {{underlying}} Shares Entry - {{app_name}}**",
+    description: "**🚨 {{underlying}} Shares Entry - {{trade_type}} Trade**",
     color: GREEN,
     fields: [
       { ...SPACER_FIELD },
@@ -94,7 +95,7 @@ function letfEntryTemplate(): TemplateEmbed {
 
 function letfOptionEntryTemplate(): TemplateEmbed {
   return {
-    description: "**🚨 {{underlying}} Options Entry - {{app_name}}**",
+    description: "**🚨 {{underlying}} Options Entry - {{trade_type}} Trade**",
     color: GREEN,
     fields: [
       { ...SPACER_FIELD },
@@ -116,7 +117,7 @@ function letfOptionEntryTemplate(): TemplateEmbed {
 
 function cryptoEntryTemplate(): TemplateEmbed {
   return {
-    description: "**🚨 {{ticker}} Crypto Entry - {{app_name}}**",
+    description: "**🚨 {{ticker}} Crypto Entry - {{trade_type}} Trade**",
     color: GREEN,
     fields: [
       { ...SPACER_FIELD },

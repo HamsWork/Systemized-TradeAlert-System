@@ -48,11 +48,30 @@ export function registerDiscordRoutes(app: Express) {
 
   app.get(
     "/api/discord-templates/var-templates",
-    asyncHandler(async (_req, res) => {
-      const overrides = await storage.getDiscordTemplatesByApp("__default__");
-      const overrideMap = new Map<string, typeof overrides[0]>();
-      for (const o of overrides) {
-        overrideMap.set(`${o.instrumentType}::${o.messageType}`, o);
+    asyncHandler(async (req, res) => {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ message: "Authorization header with Bearer token (API key) is required" });
+      }
+      const apiKey = authHeader.slice(7);
+      const connectedApp = await storage.getConnectedAppByApiKey(apiKey);
+      if (!connectedApp) {
+        return res.status(401).json({ message: "Invalid API key" });
+      }
+
+      const appId = connectedApp.id;
+      const isDefaultApp = false;
+
+      const appOverrides = await storage.getDiscordTemplatesByApp(appId);
+      const appOverrideMap = new Map<string, (typeof appOverrides)[number]>();
+      for (const o of appOverrides) {
+        appOverrideMap.set(`${o.instrumentType}::${o.messageType}`, o);
+      }
+
+      const globalOverrides = await storage.getDiscordTemplatesByApp("__default__");
+      const globalOverrideMap = new Map<string, (typeof globalOverrides)[number]>();
+      for (const o of globalOverrides) {
+        globalOverrideMap.set(`${o.instrumentType}::${o.messageType}`, o);
       }
 
       const groups = generateAllTemplateGroups();
@@ -61,15 +80,25 @@ export function registerDiscordRoutes(app: Express) {
         ticker: g.ticker,
         templates: g.templates.map(t => {
           const key = `${g.instrumentType}::${t.type}`;
-          const override = overrideMap.get(key);
-          const templateEmbed = override
-            ? (override.embedJson as TemplateEmbed)
+          const appOverride = appOverrideMap.get(key);
+          const globalOverride = globalOverrideMap.get(key);
+
+          const effective =
+            appOverride ??
+            globalOverride ??
+            null;
+
+          const templateEmbed = effective
+            ? (effective.embedJson as TemplateEmbed)
             : t.embed;
-          const content = override ? (override.content ?? t.content) : t.content;
-          const label = override ? (override.label || t.label) : t.label;
+          const content = effective
+            ? effective.content ?? t.content
+            : t.content;
+          const label = effective ? (effective.label || t.label) : t.label;
 
           const sampleVars = buildSampleVariables(g.instrumentType, t.type);
           const rendered = renderTemplate(templateEmbed, sampleVars);
+
           return {
             type: t.type,
             label,
@@ -80,7 +109,7 @@ export function registerDiscordRoutes(app: Express) {
               content,
               embed: rendered,
             },
-            isCustom: !!override,
+            isCustom: !!effective,
           };
         }),
       }));
@@ -198,11 +227,26 @@ export function registerDiscordRoutes(app: Express) {
         return true;
       });
 
+      const normalizedTemplates = filtered.map((t) => {
+        const embed = t.embedJson as TemplateEmbed;
+        const sampleVars = buildSampleVariables(t.instrumentType, t.messageType);
+        const rendered = renderTemplate(embed, sampleVars);
+        return {
+          ...t,
+          embedJson: embed,
+          sampleVars,
+          preview: {
+            content: t.content,
+            embed: rendered,
+          },
+        };
+      });
+
       res.json({
         appId,
         appName: connectedApp?.name ?? "__default__",
-        count: filtered.length,
-        templates: filtered,
+        count: normalizedTemplates.length,
+        templates: normalizedTemplates,
       });
     }),
   );

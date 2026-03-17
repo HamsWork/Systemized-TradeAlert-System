@@ -974,7 +974,8 @@ Example using percentages:
       {
         method: "GET",
         path: "/api/discord-templates/var-templates",
-        description: "Get all default Discord templates grouped by instrument type. Returns the template structure, sample variables, and a rendered preview for each message type (signal_alert, target_hit, stop_loss_raised, stop_loss_hit).",
+        description: "Get Discord templates for the app identified by the API key. Requires Bearer token (API key) in the Authorization header. Returns templates for that app (app overrides merged with global defaults), with sample variables and a rendered preview for each message type (signal_alert, target_hit, stop_loss_raised, stop_loss_hit).",
+        auth: "Bearer Token (Required)",
         params: [],
         responseExample: `[
   {

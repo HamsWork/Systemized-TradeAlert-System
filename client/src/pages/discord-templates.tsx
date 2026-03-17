@@ -842,8 +842,7 @@ export default function DiscordTemplatesPage() {
       <div className="p-4 sm:p-6">
         <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-4 sm:p-6 text-center space-y-2" data-testid="error-templates">
           <AlertCircle className="h-8 w-8 text-red-500 mx-auto" />
-          <p className="text-sm font-medium text-red-500">Failed to load templates</p>
-          <p className="text-xs text-muted-foreground">{(error as Error)?.message || "Unknown error"}</p>
+          <p className="text-sm font-medium text-red-500">No template found, contact to admin</p>
           <Button variant="outline" size="sm" onClick={() => refetch()} data-testid="button-retry-templates">
             Retry
           </Button>
