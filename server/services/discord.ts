@@ -399,8 +399,11 @@ async function getRenderedTemplateEmbed(
     // ignore template load failures; fall back to defaults
   }
 
+  console.log("embedTemplate", embedTemplate);
   const vars = buildTemplateVars(signalData, app, messageType);
+  console.log("vars", vars);
   const rendered = renderTemplate(embedTemplate, vars);
+  console.log("rendered", rendered);
   return { content, embed: rendered as unknown as DiscordEmbed };
 }
 
