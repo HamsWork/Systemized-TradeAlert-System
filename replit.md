@@ -30,3 +30,9 @@ TradeSync employs a modern full-stack architecture:
 - The trade executor (`server/services/trade-executor.ts`) populates this field for both entry order rejections and close order rejections.
 - The IBKR page (`client/src/pages/ibkr.tsx`) shows reject reasons inline below rejected orders in the Orders tab, and has a dedicated "Diagnostics" tab with rejection statistics, reason categorization, and a recent rejections table.
 - Historical rejected orders (pre-tracking) show "Reason not captured (pre-tracking)" in the diagnostics view.
+
+## IBKR Fill Price for Profit %
+- The trade monitor (`server/services/trade-monitor.ts`) looks up the IBKR entry order's `avg_fill_price` for each signal when calculating profit %.
+- If an IBKR fill price exists, it replaces the Polygon option snapshot as `entry_instrument_price`, making profit % reflect actual trading P&L.
+- The fill price is cached in `signalData.ibkr_fill_price` so the DB lookup only happens once per signal.
+- Fallback: if no IBKR fill exists (order rejected, not filled, or no IBKR trade), the original Polygon snapshot is used.

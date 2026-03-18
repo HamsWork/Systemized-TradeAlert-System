@@ -9,6 +9,22 @@ import {
 } from "./discord";
 import { fetchStockPrice, fetchOptionContractPrice } from "./polygon";
 
+async function getIbkrEntryFillPrice(signalId: string, direction?: string): Promise<number | null> {
+  try {
+    const orders = await storage.getIbkrOrdersBySignal(signalId);
+    const isShort = direction === "Short";
+    const expectedSide = isShort ? "sell" : "buy";
+    const entryOrder = orders
+      .filter(
+        (o) => o.side === expectedSide && o.status === "filled" && o.avgFillPrice != null && o.avgFillPrice > 0,
+      )
+      .sort((a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime())[0];
+    return entryOrder?.avgFillPrice ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function getUnderlyingTicker(data: Record<string, any>): string {
   return (
     data.underlying_ticker ||
@@ -318,6 +334,19 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
 
   signalData.current_tracking_price = currentTrackingPrice;
   signalData.current_instrument_price = currentInstrumentPrice;
+
+  if (signalData.ibkr_fill_price == null) {
+    const fillPrice = await getIbkrEntryFillPrice(signal.id, signalData.direction);
+    if (fillPrice != null) {
+      const prevEntry = signalData.entry_instrument_price;
+      signalData.ibkr_fill_price = fillPrice;
+      signalData.entry_instrument_price = fillPrice;
+      console.log(
+        `[TradeMonitor] Using IBKR fill price $${fillPrice} for ${signalData.ticker} (was Polygon snapshot $${prevEntry})`,
+      );
+      await storage.updateSignal(signal.id, { data: signalData });
+    }
+  }
 
   const tpLevels = parseTargets(signalData, isBullish);
   const nextTargetIndex = signalData.next_target_number ?? 0;
