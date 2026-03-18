@@ -242,6 +242,7 @@ function buildTemplateVars(
     instrument_label: instrumentLabel(instrumentType),
     direction,
     app_name: app?.name || "TradeSync",
+    trade_type: signalData.trade_type ? String(signalData.trade_type) : "Scalp",
     entry_price: fmtPrice(entryPrice),
     stock_price: fmtPrice(
       signalData.entry_underlying_price ??
@@ -398,8 +399,11 @@ async function getRenderedTemplateEmbed(
     // ignore template load failures; fall back to defaults
   }
 
+  console.log("embedTemplate", embedTemplate);
   const vars = buildTemplateVars(signalData, app, messageType);
+  console.log("vars", vars);
   const rendered = renderTemplate(embedTemplate, vars);
+  console.log("rendered", rendered);
   return { content, embed: rendered as unknown as DiscordEmbed };
 }
 

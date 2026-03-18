@@ -6,10 +6,7 @@ import type {
 } from "@shared/schema";
 import { insertSignalSchema, ingestSignalBodySchema } from "@shared/schema";
 import { storage } from "../storage";
-import {
-  getLETFLeverage,
-  getLETFUnderlying,
-} from "../constants/letf";
+import { getLETFLeverage, getLETFUnderlying } from "../constants/letf";
 import { executeIbkrTrade } from "./trade-executor";
 import { sendEntryDicordAlert, profitPctFromInstrument } from "./discord";
 import { getCurrentInstrumentPrice } from "./trade-monitor";
@@ -66,7 +63,13 @@ const TDI_DIRECTION_MAP: Record<string, string> = {
   PUT: "Put",
 };
 
-const INGEST_INSTRUMENT_ENUM = ["Options", "Shares", "LETF", "LETF Option", "Crypto"] as const;
+const INGEST_INSTRUMENT_ENUM = [
+  "Options",
+  "Shares",
+  "LETF",
+  "LETF Option",
+  "Crypto",
+] as const;
 
 function isTdiFormat(body: Record<string, any>): boolean {
   return !!(
@@ -169,7 +172,7 @@ function transformTdiSignal(body: Record<string, any>): Record<string, any> {
   return result;
 }
 
-/** TDI transform (if detected) + camelCase/enum normalization for ingest schema. */  //TODO should remove later
+/** TDI transform (if detected) + camelCase/enum normalization for ingest schema. */ //TODO should remove later
 function normalizeBodyForIngest(
   body: Record<string, any>,
   appName?: string,
@@ -199,7 +202,11 @@ function normalizeBodyForIngest(
     const upperKey = s.toUpperCase().replace(/\s+/g, "_");
     const mapped =
       TDI_INSTRUMENT_MAP[upperKey] ??
-      (INGEST_INSTRUMENT_ENUM.includes(s as (typeof INGEST_INSTRUMENT_ENUM)[number]) ? s : "Shares");
+      (INGEST_INSTRUMENT_ENUM.includes(
+        s as (typeof INGEST_INSTRUMENT_ENUM)[number],
+      )
+        ? s
+        : "Shares");
     out.instrumentType = mapped;
   }
   return out;
@@ -226,12 +233,15 @@ function normalizeTargets(
   },
 ): Record<string, SignalTargetEntry> {
   const underlyingPriceBased =
-    options.underlying_price_based !== undefined ? options.underlying_price_based : false;
+    options.underlying_price_based !== undefined
+      ? options.underlying_price_based
+      : false;
   const entryPriceNum =
     options.entryPrice != null && options.entryPrice !== ""
       ? Number(options.entryPrice)
       : NaN;
-  const isBullish = options.direction !== "Short" && options.direction !== "Put";
+  const isBullish =
+    options.direction !== "Short" && options.direction !== "Put";
 
   const normalizedTargets: Record<string, SignalTargetEntry> = {};
   for (const [key, val] of Object.entries(targets)) {
@@ -284,6 +294,7 @@ function normalizeTargets(
 
 async function buildSignalData(
   body: Record<string, any>,
+  app: ConnectedApp,
 ): Promise<{ data: StoredSignalData; errors: string[] }> {
   const {
     ticker,
@@ -302,13 +313,21 @@ async function buildSignalData(
 
   const errors: string[] = [];
 
+  const defaultTradeType =
+    app?.slug === "tdi-core-scanner" || app?.slug === "situ-trader"
+      ? "Swing"
+      : "Scalp";
+
   const signalData: StoredSignalData = {
     ticker,
     instrument_type: instrumentType,
     direction,
     entry_price: entryPrice != null ? Number(entryPrice) : 0.0,
     underlying_ticker: ticker,
-    trade_type: body.tradeType ? body.tradeType.charAt(0).toUpperCase() + body.tradeType.slice(1).toLowerCase() : "Scalp",
+    trade_type: body.tradeType
+      ? body.tradeType.charAt(0).toUpperCase() +
+        body.tradeType.slice(1).toLowerCase()
+      : defaultTradeType,
   };
 
   if (instrumentType === "Options" || instrumentType === "LETF Option") {
@@ -318,7 +337,8 @@ async function buildSignalData(
   }
 
   if (instrumentType === "LETF" || instrumentType === "LETF Option") {
-    signalData.underlying_ticker = body.underlying_ticker ?? (await getLETFUnderlying(ticker)) ?? ticker;
+    signalData.underlying_ticker =
+      body.underlying_ticker ?? (await getLETFUnderlying(ticker)) ?? ticker;
     signalData.leverage = body.leverage ?? getLETFLeverage(ticker);
 
     const dirText =
@@ -337,7 +357,9 @@ async function buildSignalData(
 
   if (stop_loss !== undefined && stop_loss !== null) {
     const stopLossNum = Number(stop_loss);
-    signalData.stop_loss = Number.isNaN(stopLossNum) ? Number(stop_loss) : stopLossNum;
+    signalData.stop_loss = Number.isNaN(stopLossNum)
+      ? Number(stop_loss)
+      : stopLossNum;
     signalData.current_stop_loss = signalData.stop_loss;
     const stopLossPercentageNum = Number(stop_loss_percentage);
     if (!Number.isNaN(stopLossPercentageNum)) {
@@ -364,13 +386,12 @@ async function buildSignalData(
     }
   }
 
-
-
   if (time_stop) {
     signalData.time_stop = time_stop;
   }
 
-  signalData.auto_track = auto_track !== undefined && auto_track !== null ? auto_track : true;
+  signalData.auto_track =
+    auto_track !== undefined && auto_track !== null ? auto_track : true;
 
   const webhookFromBody =
     typeof body.discord_webhook_url === "string"
@@ -384,12 +405,11 @@ async function buildSignalData(
 
   if (underlyingPriceBased) {
     const t0 = Date.now();
-    const instrumentPrice = await getCurrentInstrumentPrice(
-      signalData,
-      ticker,
-    );
+    const instrumentPrice = await getCurrentInstrumentPrice(signalData, ticker);
     const instrMs = Date.now() - t0;
-    console.log(`[Signal][Timing] fetchInstrumentPrice(${ticker}) took ${instrMs}ms → ${instrumentPrice}`);
+    console.log(
+      `[Signal][Timing] fetchInstrumentPrice(${ticker}) took ${instrMs}ms → ${instrumentPrice}`,
+    );
     if (instrumentPrice != null && instrumentPrice > 0) {
       signalData.entry_instrument_price = instrumentPrice;
     } else {
@@ -408,7 +428,9 @@ async function buildSignalData(
       const t0 = Date.now();
       const underlyingPrice = await fetchStockPrice(symbolForPrice);
       const stockMs = Date.now() - t0;
-      console.log(`[Signal][Timing] fetchStockPrice(${symbolForPrice}) took ${stockMs}ms → ${underlyingPrice}`);
+      console.log(
+        `[Signal][Timing] fetchStockPrice(${symbolForPrice}) took ${stockMs}ms → ${underlyingPrice}`,
+      );
       if (underlyingPrice == null || underlyingPrice <= 0) {
         errors.push("Underlying price Error");
       } else {
@@ -421,8 +443,11 @@ async function buildSignalData(
 
   if (instrumentType === "LETF Option") {
     const t0 = Date.now();
-    signalData.entry_letf_price = await fetchStockPrice(signalData.ticker) ?? null;
-    console.log(`[Signal][Timing] fetchLETFPrice(${signalData.ticker}) took ${Date.now() - t0}ms → ${signalData.entry_letf_price}`);
+    signalData.entry_letf_price =
+      (await fetchStockPrice(signalData.ticker)) ?? null;
+    console.log(
+      `[Signal][Timing] fetchLETFPrice(${signalData.ticker}) took ${Date.now() - t0}ms → ${signalData.entry_letf_price}`,
+    );
   }
 
   signalData.hit_targets = {};
@@ -461,8 +486,10 @@ export async function processSignal(
 
   const ingestParsed = ingestSignalBodySchema.safeParse(normalizedBody);
   if (!ingestParsed.success) {
-    const validationErrors = ingestParsed.error.issues.map(
-      (issue) => issue.path.length > 0 ? `${issue.path.join(".")}: ${issue.message}` : issue.message,
+    const validationErrors = ingestParsed.error.issues.map((issue) =>
+      issue.path.length > 0
+        ? `${issue.path.join(".")}: ${issue.message}`
+        : issue.message,
     );
     result.validationErrors = validationErrors;
     const ticker = normalizedBody.ticker || normalizedBody.symbol || "unknown";
@@ -488,7 +515,8 @@ export async function processSignal(
   console.log(`[Signal] Validated body for ${body.ticker}`, validatedBody);
 
   const buildT0 = Date.now();
-  const buildResult = await buildSignalData(validatedBody);
+  const buildResult = await buildSignalData(validatedBody, app);
+
   const signalData = buildResult.data;
 
   if (buildResult.errors.length > 0) {
@@ -513,7 +541,9 @@ export async function processSignal(
   }
 
   const buildMs = Date.now() - buildT0;
-  console.log(`[Signal][Timing] buildSignalData(${validatedBody.ticker}) took ${buildMs}ms`);
+  console.log(
+    `[Signal][Timing] buildSignalData(${validatedBody.ticker}) took ${buildMs}ms`,
+  );
 
   const {
     ticker,
@@ -577,8 +607,12 @@ export async function processSignal(
 
   const discordWebhookUrl =
     signalData.discord_webhook_url ??
-    (typeof body.discord_webhook_url === "string" ? body.discord_webhook_url.trim() || null : null) ??
-    (typeof body.discord_channel_webhook === "string" ? body.discord_channel_webhook.trim() || null : null);
+    (typeof body.discord_webhook_url === "string"
+      ? body.discord_webhook_url.trim() || null
+      : null) ??
+    (typeof body.discord_channel_webhook === "string"
+      ? body.discord_channel_webhook.trim() || null
+      : null);
   console.log(
     `[Signal] Sending discord alert to ${discordWebhookUrl ?? "(app default)"} for ${ticker}`,
   );
@@ -590,7 +624,9 @@ export async function processSignal(
     chartFile ?? null,
   );
   const discordMs = Date.now() - discordT0;
-  console.log(`[Signal][Timing] sendEntryDiscordAlert(${ticker}) took ${discordMs}ms`);
+  console.log(
+    `[Signal][Timing] sendEntryDiscordAlert(${ticker}) took ${discordMs}ms`,
+  );
   result.discord.sent = discordResult.sent;
   if (discordResult.error) {
     result.discord.errors.push(discordResult.error);
@@ -618,6 +654,8 @@ export async function processSignal(
   }
 
   const totalMs = Date.now() - totalT0;
-  console.log(`[Signal][Timing] TOTAL processSignal(${ticker}) took ${totalMs}ms (build=${buildMs}ms, discord=${discordMs}ms, ibkr=${ibkrMs}ms)`);
+  console.log(
+    `[Signal][Timing] TOTAL processSignal(${ticker}) took ${totalMs}ms (build=${buildMs}ms, discord=${discordMs}ms, ibkr=${ibkrMs}ms)`,
+  );
   return result;
 }
