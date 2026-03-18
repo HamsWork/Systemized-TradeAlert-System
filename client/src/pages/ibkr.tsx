@@ -41,6 +41,7 @@ import {
   Plug,
   Unplug,
   Loader2,
+  Bug,
 } from "lucide-react";
 import type { IbkrOrder, IbkrPosition, Integration, ConnectedApp } from "@shared/schema";
 import { formatCurrency, formatNumber, formatRelativeTime } from "@/lib/formatters";
@@ -554,25 +555,179 @@ function OrdersTable({ orders, page, onPageChange }: { orders: IbkrOrder[]; page
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paged.map((order) => (
-              <TableRow key={order.id} data-testid={`row-order-${order.id}`}>
-                <TableCell><SymbolDisplay symbol={order.symbol} secType={order.secType} expiration={order.expiration} strike={order.strike} right={order.right} /></TableCell>
-                <TableCell className="text-xs text-muted-foreground" data-testid={`text-app-${order.id}`}>{order.sourceAppName || "—"}</TableCell>
-                <TableCell><SideBadge side={order.side} /></TableCell>
-                <TableCell className="text-xs capitalize">{order.orderType.replace("_", " ")}</TableCell>
-                <TableCell className="text-right text-sm">{formatNumber(order.quantity)}</TableCell>
-                <TableCell className="text-right text-sm">{formatNumber(order.filledQuantity)}</TableCell>
-                <TableCell className="text-right text-sm font-mono" data-testid={`text-mkt-price-${order.id}`}>{order.lastPrice ? formatCurrency(order.lastPrice) : "—"}</TableCell>
-                <TableCell><OrderStatusBadge status={order.status} /></TableCell>
-                <TableCell className="text-xs text-muted-foreground">
-                  {formatRelativeTime(order.submittedAt)}
-                </TableCell>
-              </TableRow>
-            ))}
+            {paged.flatMap((order) => {
+              const rows = [
+                <TableRow key={order.id} data-testid={`row-order-${order.id}`} className={order.status === "rejected" && order.rejectReason ? "border-b-0" : ""}>
+                  <TableCell><SymbolDisplay symbol={order.symbol} secType={order.secType} expiration={order.expiration} strike={order.strike} right={order.right} /></TableCell>
+                  <TableCell className="text-xs text-muted-foreground" data-testid={`text-app-${order.id}`}>{order.sourceAppName || "—"}</TableCell>
+                  <TableCell><SideBadge side={order.side} /></TableCell>
+                  <TableCell className="text-xs capitalize">{order.orderType.replace("_", " ")}</TableCell>
+                  <TableCell className="text-right text-sm">{formatNumber(order.quantity)}</TableCell>
+                  <TableCell className="text-right text-sm">{formatNumber(order.filledQuantity)}</TableCell>
+                  <TableCell className="text-right text-sm font-mono" data-testid={`text-mkt-price-${order.id}`}>{order.lastPrice ? formatCurrency(order.lastPrice) : "—"}</TableCell>
+                  <TableCell><OrderStatusBadge status={order.status} /></TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {formatRelativeTime(order.submittedAt)}
+                  </TableCell>
+                </TableRow>,
+              ];
+              if (order.status === "rejected" && order.rejectReason) {
+                rows.push(
+                  <TableRow key={`${order.id}-reason`} className="hover:bg-transparent" data-testid={`row-reject-reason-${order.id}`}>
+                    <TableCell colSpan={9} className="pt-0 pb-3 pl-6">
+                      <div className="flex items-start gap-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 rounded px-3 py-1.5">
+                        <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                        <span data-testid={`text-reject-reason-${order.id}`}>{order.rejectReason}</span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              }
+              return rows;
+            })}
           </TableBody>
         </Table>
       </div>
       <Pagination currentPage={clampedPage} totalPages={totalPages} onPageChange={onPageChange} totalItems={orders.length} label="orders" />
+    </div>
+  );
+}
+
+function RejectionDiagnostics({ orders }: { orders: IbkrOrder[] }) {
+  const rejected = orders.filter(o => o.status === "rejected");
+  const withReason = rejected.filter(o => o.rejectReason);
+  const withoutReason = rejected.filter(o => !o.rejectReason);
+
+  const reasonCounts: Record<string, number> = {};
+  for (const o of withReason) {
+    const reason = o.rejectReason!;
+    const codeMatch = reason.match(/\[(\d{3,5})\]/);
+    let category: string;
+    if (codeMatch) {
+      const code = codeMatch[1];
+      const afterCode = reason.slice(reason.indexOf(codeMatch[0]) + codeMatch[0].length).trim();
+      const label = afterCode.split(":")[0].trim();
+      category = label ? `[${code}] ${label}` : `[${code}]`;
+    } else {
+      category = reason.length > 80 ? reason.slice(0, 80) + "..." : reason;
+    }
+    reasonCounts[category] = (reasonCounts[category] || 0) + 1;
+  }
+  const sortedReasons = Object.entries(reasonCounts).sort((a, b) => b[1] - a[1]);
+
+  const recentRejected = rejected
+    .sort((a, b) => new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime())
+    .slice(0, 10);
+
+  const filled = orders.filter(o => o.status === "filled").length;
+  const total = orders.length;
+  const rejectRate = total > 0 ? ((rejected.length / total) * 100).toFixed(1) : "0";
+
+  return (
+    <div className="space-y-4" data-testid="section-rejection-diagnostics">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-xs text-muted-foreground">Total Orders</div>
+            <div className="text-2xl font-bold" data-testid="text-total-orders">{total}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-xs text-muted-foreground">Filled</div>
+            <div className="text-2xl font-bold text-emerald-600" data-testid="text-filled-orders">{filled}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-xs text-muted-foreground">Rejected</div>
+            <div className="text-2xl font-bold text-red-600" data-testid="text-rejected-orders">{rejected.length}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-xs text-muted-foreground">Rejection Rate</div>
+            <div className="text-2xl font-bold text-red-600" data-testid="text-reject-rate">{rejectRate}%</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {sortedReasons.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Rejection Reasons</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="space-y-2">
+              {sortedReasons.map(([reason, count]) => (
+                <div key={reason} className="flex items-center justify-between gap-4 text-sm" data-testid={`row-reason-category-${reason}`}>
+                  <span className="text-red-600 dark:text-red-400 font-mono text-xs">{reason}</span>
+                  <Badge variant="outline" className="shrink-0">{count}</Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {withoutReason.length > 0 && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span data-testid="text-no-reason-count">{withoutReason.length} rejected order{withoutReason.length === 1 ? "" : "s"} from before reason tracking was added (reason not captured)</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Recent Rejections</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0">
+          {recentRejected.length === 0 ? (
+            <EmptyState
+              icon={CheckCircle2}
+              title="No rejections"
+              description="No rejected orders found"
+            />
+          ) : (
+            <div className="rounded-lg border overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="text-xs font-medium">Symbol</TableHead>
+                    <TableHead className="text-xs font-medium">Side</TableHead>
+                    <TableHead className="text-xs font-medium">Type</TableHead>
+                    <TableHead className="text-xs font-medium">Time</TableHead>
+                    <TableHead className="text-xs font-medium">Reason</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {recentRejected.map((order) => (
+                    <TableRow key={order.id} data-testid={`row-diag-${order.id}`}>
+                      <TableCell>
+                        <SymbolDisplay symbol={order.symbol} secType={order.secType} expiration={order.expiration} strike={order.strike} right={order.right} />
+                      </TableCell>
+                      <TableCell><SideBadge side={order.side} /></TableCell>
+                      <TableCell className="text-xs">{order.secType}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {order.submittedAt ? new Date(order.submittedAt).toLocaleString() : "—"}
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-xs text-red-600 dark:text-red-400" data-testid={`text-diag-reason-${order.id}`}>
+                          {order.rejectReason || "Reason not captured (pre-tracking)"}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -806,6 +961,10 @@ export default function IbkrPage() {
               <Layers className="mr-1.5 h-3.5 w-3.5" />
               Positions ({filteredPositions.length})
             </TabsTrigger>
+            <TabsTrigger value="diagnostics" data-testid="tab-diagnostics">
+              <Bug className="mr-1.5 h-3.5 w-3.5" />
+              Diagnostics
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -874,6 +1033,10 @@ export default function IbkrPage() {
               <PositionsTable positions={filteredPositions} page={positionsPage} onPageChange={setPositionsPage} />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="diagnostics" className="space-y-4">
+          <RejectionDiagnostics orders={accountOrders} />
         </TabsContent>
       </Tabs>
     </div>

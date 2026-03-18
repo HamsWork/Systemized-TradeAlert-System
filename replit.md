@@ -24,3 +24,9 @@ TradeSync employs a modern full-stack architecture:
 - **PostgreSQL**: The relational database management system for persistent storage.
 - **Polygon.io**: Primary source for historical OHLCV bar data for stocks and option contracts.
 - **dotenv**: For managing environment variables outside of Replit.
+
+## IBKR Reject Reason Tracking
+- The `ibkr_orders` table has a `reject_reason` text column that stores IBKR error codes and messages when orders are rejected or cancelled.
+- The trade executor (`server/services/trade-executor.ts`) populates this field for both entry order rejections and close order rejections.
+- The IBKR page (`client/src/pages/ibkr.tsx`) shows reject reasons inline below rejected orders in the Orders tab, and has a dedicated "Diagnostics" tab with rejection statistics, reason categorization, and a recent rejections table.
+- Historical rejected orders (pre-tracking) show "Reason not captured (pre-tracking)" in the diagnostics view.

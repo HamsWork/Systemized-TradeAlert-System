@@ -555,6 +555,7 @@ export async function executeIbkrTrade(
           status: "rejected",
           timeInForce: "DAY",
           commission: null,
+          rejectReason: reason,
           submittedAt: new Date(),
           filledAt: null,
           sourceAppId: app.id,
@@ -782,9 +783,12 @@ export async function executeIbkrClose(
           ? "filled"
           : statusResult.status === "PENDING_OPEN"
             ? "pending"
-            : "submitted",
+            : statusResult.rejected
+              ? "rejected"
+              : "submitted",
       timeInForce: "DAY",
       commission: null,
+      rejectReason: statusResult.rejected ? (statusResult.rejectReason || "Unknown rejection reason") : null,
       submittedAt: new Date(),
       filledAt: statusResult.status === "FILLED" ? new Date() : null,
       sourceAppId: app.id,

@@ -27,6 +27,7 @@ export const ibkrOrders = pgTable("ibkr_orders", {
   status: text("status").notNull().default("submitted"),
   timeInForce: text("time_in_force").notNull().default("DAY"),
   commission: real("commission"),
+  rejectReason: text("reject_reason"),
   submittedAt: timestamp("submitted_at").notNull().defaultNow(),
   filledAt: timestamp("filled_at"),
   cancelledAt: timestamp("cancelled_at"),
