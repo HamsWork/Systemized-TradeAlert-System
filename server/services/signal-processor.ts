@@ -284,6 +284,7 @@ function normalizeTargets(
 
 async function buildSignalData(
   body: Record<string, any>,
+  app: ConnectedApp,
 ): Promise<{ data: StoredSignalData; errors: string[] }> {
   const {
     ticker,
@@ -302,13 +303,21 @@ async function buildSignalData(
 
   const errors: string[] = [];
 
+  const defaultTradeType =
+    app?.slug === "tdi-core-scanner" || app?.slug === "situ-trader"
+      ? "Swing"
+      : "Scalp";
+
   const signalData: StoredSignalData = {
     ticker,
     instrument_type: instrumentType,
     direction,
     entry_price: entryPrice != null ? Number(entryPrice) : 0.0,
     underlying_ticker: ticker,
-    trade_type: body.tradeType ? body.tradeType.charAt(0).toUpperCase() + body.tradeType.slice(1).toLowerCase() : "Scalp",
+    trade_type: body.tradeType
+      ? body.tradeType.charAt(0).toUpperCase() +
+        body.tradeType.slice(1).toLowerCase()
+      : defaultTradeType,
   };
 
   if (instrumentType === "Options" || instrumentType === "LETF Option") {
@@ -478,7 +487,7 @@ export async function processSignal(
 
   console.log(`[Signal] Validated body for ${body.ticker}`, validatedBody);
 
-  const buildResult = await buildSignalData(validatedBody);
+  const buildResult = await buildSignalData(validatedBody, app);
   const signalData = buildResult.data;
 
   if (buildResult.errors.length > 0) {
