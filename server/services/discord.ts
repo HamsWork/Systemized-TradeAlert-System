@@ -242,6 +242,7 @@ function buildTemplateVars(
     instrument_label: instrumentLabel(instrumentType),
     direction,
     app_name: app?.name || "TradeSync",
+    trade_type: signalData.trade_type ? String(signalData.trade_type) : "Scalp",
     entry_price: fmtPrice(entryPrice),
     stock_price: fmtPrice(
       signalData.entry_underlying_price ??
