@@ -383,10 +383,13 @@ async function buildSignalData(
   signalData.underlying_price_based = underlyingPriceBased;
 
   if (underlyingPriceBased) {
+    const t0 = Date.now();
     const instrumentPrice = await getCurrentInstrumentPrice(
       signalData,
       ticker,
     );
+    const instrMs = Date.now() - t0;
+    console.log(`[Signal][Timing] fetchInstrumentPrice(${ticker}) took ${instrMs}ms → ${instrumentPrice}`);
     if (instrumentPrice != null && instrumentPrice > 0) {
       signalData.entry_instrument_price = instrumentPrice;
     } else {
@@ -402,7 +405,10 @@ async function buildSignalData(
     if (!symbolForPrice || typeof symbolForPrice !== "string") {
       errors.push("Ticker is required for Shares");
     } else {
+      const t0 = Date.now();
       const underlyingPrice = await fetchStockPrice(symbolForPrice);
+      const stockMs = Date.now() - t0;
+      console.log(`[Signal][Timing] fetchStockPrice(${symbolForPrice}) took ${stockMs}ms → ${underlyingPrice}`);
       if (underlyingPrice == null || underlyingPrice <= 0) {
         errors.push("Underlying price Error");
       } else {
@@ -414,7 +420,9 @@ async function buildSignalData(
   }
 
   if (instrumentType === "LETF Option") {
+    const t0 = Date.now();
     signalData.entry_letf_price = await fetchStockPrice(signalData.ticker) ?? null;
+    console.log(`[Signal][Timing] fetchLETFPrice(${signalData.ticker}) took ${Date.now() - t0}ms → ${signalData.entry_letf_price}`);
   }
 
   signalData.hit_targets = {};
@@ -445,6 +453,7 @@ export async function processSignal(
     validationErrors: [],
   };
 
+  const totalT0 = Date.now();
   console.log(`[Signal] Processing signal for ${body.ticker}`, body);
   const normalizedBody = normalizeBodyForIngest(body, app.name);
 
@@ -478,6 +487,7 @@ export async function processSignal(
 
   console.log(`[Signal] Validated body for ${body.ticker}`, validatedBody);
 
+  const buildT0 = Date.now();
   const buildResult = await buildSignalData(validatedBody);
   const signalData = buildResult.data;
 
@@ -501,6 +511,9 @@ export async function processSignal(
       .catch(() => {});
     return result;
   }
+
+  const buildMs = Date.now() - buildT0;
+  console.log(`[Signal][Timing] buildSignalData(${validatedBody.ticker}) took ${buildMs}ms`);
 
   const {
     ticker,
@@ -569,18 +582,24 @@ export async function processSignal(
   console.log(
     `[Signal] Sending discord alert to ${discordWebhookUrl ?? "(app default)"} for ${ticker}`,
   );
+  const discordT0 = Date.now();
   const discordResult = await sendEntryDicordAlert(
     signal,
     app,
     discordWebhookUrl,
     chartFile ?? null,
   );
+  const discordMs = Date.now() - discordT0;
+  console.log(`[Signal][Timing] sendEntryDiscordAlert(${ticker}) took ${discordMs}ms`);
   result.discord.sent = discordResult.sent;
   if (discordResult.error) {
     result.discord.errors.push(discordResult.error);
   }
 
+  const ibkrT0 = Date.now();
   const tradeExecution = await executeIbkrTrade(signal, app);
+  const ibkrMs = Date.now() - ibkrT0;
+  console.log(`[Signal][Timing] executeIbkrTrade(${ticker}) took ${ibkrMs}ms`);
   result.ibkr.executed = tradeExecution.executed;
   result.ibkr.tradeResult = tradeExecution.trade;
   if (tradeExecution.error) {
@@ -598,5 +617,7 @@ export async function processSignal(
     );
   }
 
+  const totalMs = Date.now() - totalT0;
+  console.log(`[Signal][Timing] TOTAL processSignal(${ticker}) took ${totalMs}ms (build=${buildMs}ms, discord=${discordMs}ms, ibkr=${ibkrMs}ms)`);
   return result;
 }
