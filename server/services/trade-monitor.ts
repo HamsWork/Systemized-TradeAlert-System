@@ -340,7 +340,7 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
     if (fillPrice != null) {
       const prevEntry = signalData.entry_instrument_price;
       signalData.ibkr_fill_price = fillPrice;
-      signalData.entry_instrument_price = fillPrice;
+      // signalData.entry_instrument_price = fillPrice; //TODO
       console.log(
         `[TradeMonitor] Using IBKR fill price $${fillPrice} for ${signalData.ticker} (was Polygon snapshot $${prevEntry})`,
       );

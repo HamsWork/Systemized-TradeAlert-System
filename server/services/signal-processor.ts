@@ -10,6 +10,7 @@ import { getLETFLeverage, getLETFUnderlying } from "../constants/letf";
 import { executeIbkrTrade } from "./trade-executor";
 import { sendEntryDicordAlert, profitPctFromInstrument } from "./discord";
 import { getCurrentInstrumentPrice } from "./trade-monitor";
+import { ibkrSyncManager } from "./ibkr-sync";
 import {
   fetchPolygonBars,
   fetchOptionContractPrice,
@@ -466,6 +467,32 @@ export interface ChartFile {
   mimetype: string;
 }
 
+function getAppBuyingPowerLimit(app: ConnectedApp): number {
+  const appAny = app as any;
+  const raw =
+    appAny.buyingPowerLimit ??
+    appAny.buying_power_limit ??
+    appAny.buyingPowerLimitPct ??
+    appAny.buying_power_limit_pct ??
+    appAny.positionLimit ??
+    appAny.position_limit ??
+    1;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return 1;
+  // Support both ratio (0..1) and percent-style (1..100).
+  return n > 1 ? n / 100 : n;
+}
+
+function getEntryPriceForSizing(signalData: StoredSignalData): number {
+  const p =
+    signalData.entry_instrument_price ??
+    signalData.entry_price ??
+    signalData.entry_tracking_price ??
+    null;
+  const n = Number(p);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 export async function processSignal(
   body: Record<string, any>,
   app: ConnectedApp,
@@ -633,7 +660,17 @@ export async function processSignal(
   }
 
   const ibkrT0 = Date.now();
-  const tradeExecution = await executeIbkrTrade(signal, app);
+  // Position sizing: cap notional by min($3000, buyingPower * appLimit).
+  const entryPriceForSizing = getEntryPriceForSizing(signalData);
+  const appLimitRatio = getAppBuyingPowerLimit(app);
+  const accountSummaries = ibkrSyncManager.getAccountSummary();
+  const buyingPower = accountSummaries.find((a) => (a.buyingPower ?? 0) > 0)?.buyingPower ?? 0;
+  const maxNotional = Math.min(3000, buyingPower * appLimitRatio);
+  const computedQty =
+    entryPriceForSizing > 0 && maxNotional > 0
+      ? Math.max(1, Math.floor(maxNotional / entryPriceForSizing))
+      : 1;
+  const tradeExecution = await executeIbkrTrade(signal, app, computedQty);
   const ibkrMs = Date.now() - ibkrT0;
   console.log(`[Signal][Timing] executeIbkrTrade(${ticker}) took ${ibkrMs}ms`);
   result.ibkr.executed = tradeExecution.executed;
