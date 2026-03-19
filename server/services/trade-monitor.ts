@@ -8,6 +8,7 @@ import {
   profitPctFromInstrument,
 } from "./discord";
 import { fetchStockPrice, fetchOptionContractPrice } from "./polygon";
+import { executeIbkrClose } from "./trade-executor";
 
 async function getIbkrEntryFillPrice(signalId: string, direction?: string): Promise<number | null> {
   try {
@@ -186,7 +187,9 @@ async function applyTargetHitAuto(
   isBullish: boolean,
 ): Promise<void> {
   const takeOffPct = nextTarget.takeOffPercent ?? 100;
-  const takeOffQty = signalData.remain_quantity * (takeOffPct / 100);
+  const prevRemainQty = signalData.remain_quantity;
+  const takeOffQty = prevRemainQty * (takeOffPct / 100);
+  const isFullExit = takeOffQty >= prevRemainQty - 0.001;
   const targetKey = nextTarget.key ?? `tp${nextTargetIndex + 1}`;
   signalData.hit_targets[targetKey] = {
     hitAt: new Date().toISOString(),
@@ -213,6 +216,30 @@ async function applyTargetHitAuto(
   } else if (allTargetsHit && !willActivateTrailing) {
     signalData.status = "completed";
   }
+
+  if (isFullExit || signalData.status === "completed") {
+    try {
+      const closeResult = await executeIbkrClose(signal, app);
+      if (closeResult.executed && closeResult.avgFillPrice && closeResult.avgFillPrice > 0) {
+        signalData.ibkr_close_fill_price = closeResult.avgFillPrice;
+        signalData.hit_targets[targetKey].ibkrCloseFillPrice = closeResult.avgFillPrice;
+        console.log(
+          `[TradeMonitor] IBKR close filled at $${closeResult.avgFillPrice} for ${signalData.ticker} ${targetKey}`,
+        );
+      } else if (closeResult.error && closeResult.error !== "No filled position to close for this signal") {
+        console.warn(
+          `[TradeMonitor] IBKR close failed for ${signalData.ticker}: ${closeResult.error}`,
+        );
+      }
+    } catch (err: any) {
+      console.error(`[TradeMonitor] IBKR close error for ${signalData.ticker}: ${err.message}`);
+    }
+  }
+
+  await storage.updateSignal(signal.id, {
+    data: signalData,
+    ...(signalData.status === "completed" ? { status: "completed" } : {}),
+  });
 
   if (takeOffPct > 0) {
     signalData.current_tp_number = (signalData.current_tp_number ?? 0) + 1;
@@ -340,7 +367,7 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
     if (fillPrice != null) {
       const prevEntry = signalData.entry_instrument_price;
       signalData.ibkr_fill_price = fillPrice;
-      // signalData.entry_instrument_price = fillPrice; //TODO
+      signalData.entry_instrument_price = fillPrice;
       console.log(
         `[TradeMonitor] Using IBKR fill price $${fillPrice} for ${signalData.ticker} (was Polygon snapshot $${prevEntry})`,
       );
@@ -410,6 +437,26 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
       signalData.stop_loss_hit_instrument_price = currentInstrumentPrice;
       signalData.remain_quantity = 0;
       signalData.current_stop_loss_percent = profitPctFromInstrument(signalData.entry_instrument_price, currentInstrumentPrice, signalData.instrument_type, signalData.direction);
+
+      try {
+        const closeResult = await executeIbkrClose(signal, app);
+        if (closeResult.executed && closeResult.avgFillPrice && closeResult.avgFillPrice > 0) {
+          signalData.ibkr_close_fill_price = closeResult.avgFillPrice;
+          signalData.stop_loss_hit_ibkr_fill_price = closeResult.avgFillPrice;
+          console.log(
+            `[TradeMonitor] IBKR close filled at $${closeResult.avgFillPrice} for ${signalData.ticker} (stop loss)`,
+          );
+        } else if (closeResult.error && closeResult.error !== "No filled position to close for this signal") {
+          console.warn(
+            `[TradeMonitor] IBKR close failed for ${signalData.ticker} (stop loss): ${closeResult.error}`,
+          );
+        }
+      } catch (err: any) {
+        console.error(`[TradeMonitor] IBKR close error for ${signalData.ticker} (stop loss): ${err.message}`);
+      }
+
+      await storage.updateSignal(signal.id, { data: signalData, status: "stopped_out" });
+
       await sendStopLossHitDiscord(signalData, app, signal.id);
       const slType = signalData.trailing_stop_active ? "Trailing stop" : "Stop loss";
       storage.createActivity({
@@ -419,7 +466,6 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
         symbol: signalData.ticker,
         signalId: signal.id,
       }).catch(() => {});
-      await storage.updateSignal(signal.id, { data: signalData, status: "stopped_out" });
     }
   }
   

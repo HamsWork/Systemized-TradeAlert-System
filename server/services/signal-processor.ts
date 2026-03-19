@@ -632,35 +632,7 @@ export async function processSignal(
     fetchPolygonBars({ symbol: ticker, secType: "STK" }).catch(() => {});
   }
 
-  const discordWebhookUrl =
-    signalData.discord_webhook_url ??
-    (typeof body.discord_webhook_url === "string"
-      ? body.discord_webhook_url.trim() || null
-      : null) ??
-    (typeof body.discord_channel_webhook === "string"
-      ? body.discord_channel_webhook.trim() || null
-      : null);
-  console.log(
-    `[Signal] Sending discord alert to ${discordWebhookUrl ?? "(app default)"} for ${ticker}`,
-  );
-  const discordT0 = Date.now();
-  const discordResult = await sendEntryDicordAlert(
-    signal,
-    app,
-    discordWebhookUrl,
-    chartFile ?? null,
-  );
-  const discordMs = Date.now() - discordT0;
-  console.log(
-    `[Signal][Timing] sendEntryDiscordAlert(${ticker}) took ${discordMs}ms`,
-  );
-  result.discord.sent = discordResult.sent;
-  if (discordResult.error) {
-    result.discord.errors.push(discordResult.error);
-  }
-
   const ibkrT0 = Date.now();
-  // Position sizing: cap notional by min($3000, buyingPower * appLimit).
   const entryPriceForSizing = getEntryPriceForSizing(signalData);
   const appLimitRatio = getAppBuyingPowerLimit(app);
   const accountSummaries = ibkrSyncManager.getAccountSummary();
@@ -684,15 +656,53 @@ export async function processSignal(
     console.log(
       `[Signal] IBKR entry order SUCCESS: ${t.side} ${t.quantity} ${t.symbol} | status=${t.status} | orderId=${t.orderId}`,
     );
+    if (t.avgFillPrice && t.avgFillPrice > 0) {
+      const prevEntry = signalData.entry_instrument_price;
+      signalData.ibkr_fill_price = t.avgFillPrice;
+      signalData.entry_instrument_price = t.avgFillPrice;
+      console.log(
+        `[Signal] Saved IBKR fill price $${t.avgFillPrice} to signal (was Polygon $${prevEntry})`,
+      );
+      await storage.updateSignal(signal.id, { data: signalData });
+    }
   } else if (tradeExecution.error) {
     console.error(
       `[Signal] IBKR trade FAILED for ${ticker}: ${tradeExecution.error}`,
     );
   }
 
+  const updatedSignal = { ...signal, data: signalData };
+
+  const discordWebhookUrl =
+    signalData.discord_webhook_url ??
+    (typeof body.discord_webhook_url === "string"
+      ? body.discord_webhook_url.trim() || null
+      : null) ??
+    (typeof body.discord_channel_webhook === "string"
+      ? body.discord_channel_webhook.trim() || null
+      : null);
+  console.log(
+    `[Signal] Sending discord alert to ${discordWebhookUrl ?? "(app default)"} for ${ticker}`,
+  );
+  const discordT0 = Date.now();
+  const discordResult = await sendEntryDicordAlert(
+    updatedSignal,
+    app,
+    discordWebhookUrl,
+    chartFile ?? null,
+  );
+  const discordMs = Date.now() - discordT0;
+  console.log(
+    `[Signal][Timing] sendEntryDiscordAlert(${ticker}) took ${discordMs}ms`,
+  );
+  result.discord.sent = discordResult.sent;
+  if (discordResult.error) {
+    result.discord.errors.push(discordResult.error);
+  }
+
   const totalMs = Date.now() - totalT0;
   console.log(
-    `[Signal][Timing] TOTAL processSignal(${ticker}) took ${totalMs}ms (build=${buildMs}ms, discord=${discordMs}ms, ibkr=${ibkrMs}ms)`,
+    `[Signal][Timing] TOTAL processSignal(${ticker}) took ${totalMs}ms (build=${buildMs}ms, ibkr=${ibkrMs}ms, discord=${discordMs}ms)`,
   );
   return result;
 }

@@ -675,6 +675,7 @@ export interface IbkrCloseResult {
   executed: boolean;
   orderId?: number;
   quantity?: number;
+  avgFillPrice?: number | null;
   error: string | null;
 }
 
@@ -803,6 +804,7 @@ export async function executeIbkrClose(
         executed: false,
         orderId: closeOrderId,
         quantity: totalQuantity,
+        avgFillPrice: null,
         error: statusResult.rejectReason || "Order rejected",
       };
     }
@@ -814,6 +816,7 @@ export async function executeIbkrClose(
       executed: true,
       orderId: closeOrderId,
       quantity: totalQuantity,
+      avgFillPrice: statusResult.avgFillPrice || null,
       error: null,
     };
   } catch (err: any) {

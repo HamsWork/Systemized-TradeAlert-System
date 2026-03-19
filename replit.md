@@ -31,8 +31,9 @@ TradeSync employs a modern full-stack architecture:
 - The IBKR page (`client/src/pages/ibkr.tsx`) shows reject reasons inline below rejected orders in the Orders tab, and has a dedicated "Diagnostics" tab with rejection statistics, reason categorization, and a recent rejections table.
 - Historical rejected orders (pre-tracking) show "Reason not captured (pre-tracking)" in the diagnostics view.
 
-## IBKR Fill Price for Profit %
-- The trade monitor (`server/services/trade-monitor.ts`) looks up the IBKR entry order's `avg_fill_price` for each signal when calculating profit %.
-- If an IBKR fill price exists, it replaces the Polygon option snapshot as `entry_instrument_price`, making profit % reflect actual trading P&L.
-- The fill price is cached in `signalData.ibkr_fill_price` so the DB lookup only happens once per signal.
-- Fallback: if no IBKR fill exists (order rejected, not filled, or no IBKR trade), the original Polygon snapshot is used.
+## IBKR Fill Price Flow (IBKR → Save → Discord)
+- **Entry**: IBKR order executes first. If filled, `ibkr_fill_price` and `entry_instrument_price` are saved to signal data, then Discord entry alert is sent with the real fill price.
+- **Target hit**: When auto-tracking hits a target with full exit (or all targets complete), `executeIbkrClose()` runs first, close fill price saved as `ibkr_close_fill_price` + `hit_targets[tpN].ibkrCloseFillPrice`, signal data persisted, then Discord alert sent.
+- **Stop loss / Trailing stop**: Same pattern — IBKR close first, fill prices saved as `ibkr_close_fill_price` + `stop_loss_hit_ibkr_fill_price`, signal data persisted, then Discord alert sent.
+- **Monitor fallback**: If no IBKR fill was saved at entry (order rejected/pending), the trade monitor looks up fill price from `ibkr_orders` table on first cycle and caches it in `signalData.ibkr_fill_price`.
+- **Fallback**: If no IBKR fill exists at all, the original Polygon snapshot is used for profit %.
