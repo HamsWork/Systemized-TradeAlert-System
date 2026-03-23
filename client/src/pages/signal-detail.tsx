@@ -1030,7 +1030,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
   const entryPrice = data.entry_price ? parseFloat(data.entry_price) : undefined;
   const expiration = data.expiration;
   const strike = data.strike;
-  const underlyingSymbol = data.underlying_symbol || null;
+  const underlyingSymbol = data.underlying_symbol || data.underlying_ticker || null;
 
   const hitTargetsData = data.hit_targets as Record<string, { hitAt: string; price: number }> | undefined;
   const isStoppedOut = signal.status === "stopped_out";
@@ -1121,7 +1121,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                     symbol={ticker}
                     strike={strike}
                     expiration={expiration}
-                    optionType={data.option_type}
+                    optionType={data.option_type || data.right || (data.direction === "Put" ? "P" : data.direction === "Call" ? "C" : undefined)}
                     entryPrice={entryPrice}
                     tpLevels={tpLevels}
                     slLevels={slLevels}
