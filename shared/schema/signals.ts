@@ -255,6 +255,7 @@ export interface SignalData {
   entry_option_price?: number | null;
   trade_type?: "Scalp" | "Swing" | "Leap";
   discord_webhook_url?: string | null;
+  alert_mode?: "normal" | "ten_percent";
 }
 
 /**

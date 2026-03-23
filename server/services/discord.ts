@@ -1559,6 +1559,15 @@ export async function sendTradeClosedManuallyDiscord(
     .catch(() => {});
 }
 
+async function sendEntryDiscordAlertTenPercent(
+  signal: Signal,
+  app: ConnectedApp | null,
+  overrideWebhookUrl?: string | null,
+  chartFile?: ChartFile | null,
+): Promise<DiscordSendResult> {
+  return { sent: false, error: "Ten percent alert mode is not supported" };
+}
+
 export async function sendEntryDicordAlert(
   signal: Signal,
   app: ConnectedApp | null,
@@ -1572,6 +1581,11 @@ export async function sendEntryDicordAlert(
     overrideWebhookUrl && overrideWebhookUrl.trim().length > 0;
   if (!useOverride && !app.sendDiscordMessages) {
     return { sent: false, error: `Discord messages disabled for ${app.name}` };
+  }
+
+  if (signal.data.alert_mode === "ten_percent") {
+    console.log("Sending ten percent alert");
+    return sendEntryDiscordAlertTenPercent(signal, app, overrideWebhookUrl, chartFile);
   }
 
   const data = signal.data as Record<string, any>;

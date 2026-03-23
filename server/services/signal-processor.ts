@@ -451,6 +451,8 @@ async function buildSignalData(
     );
   }
 
+  signalData.alert_mode: "normal" | "ten_percent"= body.alert_mode ?? "normal";
+
   signalData.hit_targets = {};
   signalData.current_target_number = 0;
   signalData.current_tp_number = 0;
