@@ -92,6 +92,7 @@ export const ingestSignalBodySchema = z
     underlying_ticker: z.string().nullable().optional(),
     leverage: z.union([z.number(), z.string()]).optional(),
     tradeType: z.enum(["Scalp", "Swing", "Leap"]).optional(),
+    alert_mode: z.enum(["normal", "ten_percent"]).optional(),
   })
   .superRefine((data, ctx) => {
     const validDirections =

@@ -5,6 +5,7 @@ import {
   sendTargetHitDiscordAlert,
   sendStopLossRaisedDiscord,
   sendStopLossHitDiscord,
+  sendProfitMilestoneDiscordAlert,
   profitPctFromInstrument,
 } from "./discord";
 import { fetchStockPrice, fetchOptionContractPrice } from "./polygon";
@@ -334,6 +335,103 @@ async function applyTargetHitAuto(
   });
 }
 
+const MILESTONE_STEP = 10;
+
+async function checkMilestoneMode(
+  signal: Signal,
+  signalData: Record<string, any>,
+  app: ConnectedApp,
+  currentInstrumentPrice: number,
+  currentTrackingPrice: number,
+  isBullish: boolean,
+): Promise<void> {
+  const entryPrice = signalData.entry_instrument_price ?? signalData.entry_price;
+  if (!entryPrice || entryPrice <= 0) return;
+
+  const currentProfitPct = profitPctFromInstrument(
+    entryPrice,
+    currentInstrumentPrice,
+    signalData.instrument_type || "Shares",
+    signalData.direction || "Long",
+  );
+
+  const lastMilestone: number = signalData.last_milestone_alerted ?? 0;
+
+  if (currentProfitPct >= lastMilestone + MILESTONE_STEP) {
+    const highestMilestone =
+      Math.floor(currentProfitPct / MILESTONE_STEP) * MILESTONE_STEP;
+
+    signalData.current_instrument_price = currentInstrumentPrice;
+    signalData.current_tracking_price = currentTrackingPrice;
+
+    for (let m = lastMilestone + MILESTONE_STEP; m <= highestMilestone; m += MILESTONE_STEP) {
+      signalData.last_milestone_alerted = m;
+      await storage.updateSignal(signal.id, { data: signalData });
+
+      await sendProfitMilestoneDiscordAlert(signalData, app, signal.id, m);
+
+      storage.createActivity({
+        type: "profit_milestone",
+        title: `+${m}% profit milestone for ${signalData.ticker}`,
+        description: `Profit reached +${currentProfitPct.toFixed(1)}% (milestone: +${m}%) at instrument price ${fmtPrice(currentInstrumentPrice)}`,
+        symbol: signalData.ticker,
+        signalId: signal.id,
+        metadata: { milestonePct: m, currentProfitPct },
+      }).catch(() => {});
+
+      console.log(
+        `[TradeMonitor] Milestone +${m}% hit for ${signalData.ticker} (actual: +${currentProfitPct.toFixed(1)}%)`,
+      );
+    }
+  }
+
+  if (signalData.current_stop_loss) {
+    const stopLossHit = isBullish
+      ? currentTrackingPrice <= signalData.current_stop_loss
+      : currentTrackingPrice >= signalData.current_stop_loss;
+
+    if (stopLossHit) {
+      signalData.status = "stopped_out";
+      signalData.stop_loss_hit = true;
+      signalData.stop_loss_hit_at = new Date().toISOString();
+      signalData.stop_loss_hit_tracking_price = currentTrackingPrice;
+      signalData.stop_loss_hit_instrument_price = currentInstrumentPrice;
+      signalData.remain_quantity = 0;
+      signalData.current_stop_loss_percent = profitPctFromInstrument(
+        entryPrice, currentInstrumentPrice, signalData.instrument_type, signalData.direction,
+      );
+
+      try {
+        const closeResult = await executeIbkrClose(signal, app);
+        if (closeResult.executed && closeResult.avgFillPrice && closeResult.avgFillPrice > 0) {
+          signalData.ibkr_close_fill_price = closeResult.avgFillPrice;
+          signalData.stop_loss_hit_ibkr_fill_price = closeResult.avgFillPrice;
+        }
+      } catch (err: any) {
+        console.error(`[TradeMonitor] IBKR close error for ${signalData.ticker} (milestone SL): ${err.message}`);
+      }
+
+      await storage.updateSignal(signal.id, { data: signalData, status: "stopped_out" });
+
+      const currentMilestone = signalData.last_milestone_alerted ?? 0;
+      const shouldAlertStopLoss = currentMilestone === 0;
+      if (shouldAlertStopLoss) {
+        await sendStopLossHitDiscord(signalData, app, signal.id);
+      }
+
+      const slLabel = shouldAlertStopLoss ? "Stop loss" : "Stop loss (silent — profit milestones were hit)";
+      storage.createActivity({
+        type: "stop_loss_hit",
+        title: `Stop loss hit for ${signalData.ticker}`,
+        description: `${slLabel} triggered at ${fmtPrice(currentTrackingPrice)} (SL: ${fmtPrice(signalData.current_stop_loss)})`,
+        symbol: signalData.ticker,
+        signalId: signal.id,
+        metadata: { lastMilestone: currentMilestone, alertSent: shouldAlertStopLoss },
+      }).catch(() => {});
+    }
+  }
+}
+
 async function checkSignalTargets(signal: Signal): Promise<void> {
   if (signal.status !== "active") return;
   const signalData = signal.data as Record<string, any>;
@@ -353,8 +451,6 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
   const currentTrackingPrice = signalData.underlying_price_based 
     ? await fetchStockPrice(underlyingTicker)
     : currentInstrumentPrice;
-  
-  
 
   if (!currentTrackingPrice || currentTrackingPrice <= 0) return;
   if (!currentInstrumentPrice || currentInstrumentPrice <= 0) return;
@@ -373,6 +469,11 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
       );
       await storage.updateSignal(signal.id, { data: signalData });
     }
+  }
+
+  if (signalData.alert_mode === "ten_percent") {
+    await checkMilestoneMode(signal, signalData, app, currentInstrumentPrice, currentTrackingPrice, isBullish);
+    return;
   }
 
   const tpLevels = parseTargets(signalData, isBullish);

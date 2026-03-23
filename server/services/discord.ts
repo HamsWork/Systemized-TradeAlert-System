@@ -1559,13 +1559,216 @@ export async function sendTradeClosedManuallyDiscord(
     .catch(() => {});
 }
 
+function buildMilestoneEntryEmbed(
+  signal: Signal,
+  appName?: string,
+): DiscordEmbed {
+  const signalData = signal.data as Record<string, any>;
+  const ticker = signalData.ticker;
+  const instrumentType = signalData.instrument_type || "Shares";
+  const strSharesSymbol =
+    instrumentType === "LETF" || instrumentType === "Shares"
+      ? "Shares"
+      : "Options";
+
+  const heading = `**\u{1F6A8} ${ticker} ${strSharesSymbol} Entry${appName && appName.trim().length > 0 ? ` - ${appName}` : ""}**`;
+
+  const fields = buildEmbedFields(signalData);
+
+  if (signalData.stop_loss != null) {
+    const slPrice = Number(signalData.stop_loss);
+    fields.push({
+      name: "🛑 Stop Loss",
+      value: fmtPrice(slPrice),
+      inline: true,
+    });
+  }
+
+  if (signalData.trade_plan) {
+    fields.push({ ...SPACER });
+    fields.push({
+      name: "📝 Notes",
+      value: String(signalData.trade_plan),
+      inline: false,
+    });
+  }
+
+  return {
+    description: heading,
+    color: GREEN,
+    fields,
+    footer: { text: DISCLAIMER },
+  };
+}
+
 async function sendEntryDiscordAlertTenPercent(
   signal: Signal,
   app: ConnectedApp | null,
   overrideWebhookUrl?: string | null,
   chartFile?: ChartFile | null,
 ): Promise<DiscordSendResult> {
-  return { sent: false, error: "Ten percent alert mode is not supported" };
+  if (!app) {
+    return { sent: false, error: "No connected app provided" };
+  }
+  const useOverride =
+    overrideWebhookUrl && overrideWebhookUrl.trim().length > 0;
+  if (!useOverride && !app.sendDiscordMessages) {
+    return { sent: false, error: `Discord messages disabled for ${app.name}` };
+  }
+
+  const data = signal.data as Record<string, any>;
+  const ticker = data.ticker || "UNKNOWN";
+  const instrumentType = data.instrument_type || "Options";
+
+  let webhookUrl: string | null = null;
+  if (useOverride) {
+    webhookUrl = overrideWebhookUrl!.trim();
+  } else if (data.discord_webhook_url) {
+    webhookUrl = data.discord_webhook_url;
+  } else {
+    webhookUrl = getWebhookForInstrument(app, instrumentType);
+  }
+
+  if (!webhookUrl) {
+    return {
+      sent: false,
+      error: `No webhook configured for ${instrumentType} on app ${app.name}`,
+    };
+  }
+
+  if (!data.discord_webhook_url) {
+    const updatedData = { ...data, discord_webhook_url: webhookUrl };
+    await storage
+      .updateSignal(signal.id, { data: updatedData as any })
+      .catch(() => {});
+  }
+
+  const expendName =
+    app.name === "Discord Scalper"
+      ? "Scalp Trade"
+      : app.name === "TDI Trade"
+        ? "Swing Trade"
+        : "";
+
+  const embed = buildMilestoneEntryEmbed(signal, expendName);
+  const content = getContentForInstrument(app, instrumentType);
+
+  let sent = false;
+  let error: string | null = null;
+  try {
+    sent = await sendWebhook(webhookUrl, content, [embed], false, chartFile);
+    if (!sent) error = "Webhook request failed";
+  } catch (err: any) {
+    error = err.message;
+  }
+
+  await storage.createDiscordMessage({
+    signalId: signal.id,
+    webhookUrl,
+    channelType: "signal",
+    instrumentType,
+    status: sent ? "sent" : "error",
+    messageType: "signal_alert",
+    embedData: { ticker, alertMode: "ten_percent" },
+    error,
+    sourceAppId: app.id,
+    sourceAppName: app.name,
+  });
+
+  if (sent) {
+    await storage.createActivity({
+      type: "discord_sent",
+      title: `Discord alert sent for ${ticker}`,
+      description: `Milestone-mode entry alert sent to Discord via ${app.name}`,
+      symbol: ticker,
+      signalId: signal.id,
+      metadata: { sourceApp: app.name, sourceAppId: app.id },
+    });
+  }
+
+  return { sent, error };
+}
+
+export function buildProfitMilestoneEmbed(
+  signalData: Record<string, any>,
+  milestonePct: number,
+  app: ConnectedApp | null,
+): DiscordEmbed {
+  const ticker = signalData.ticker || "UNKNOWN";
+  const instrumentType = signalData.instrument_type || "Shares";
+  const isSharesSymbol =
+    instrumentType === "LETF" || instrumentType === "Shares"
+      ? "Shares"
+      : "Options";
+
+  const ORANGE = 0xf59e0b;
+  const GOLD = 0xeab308;
+  const embedColor = milestonePct >= 50 ? GOLD : milestonePct >= 20 ? ORANGE : GREEN;
+
+  const heading = `**\u{1F4B0} ${ticker} ${isSharesSymbol} +${milestonePct}% Profit Milestone**`;
+
+  const fields: DiscordField[] = [];
+
+  const entryPrice = signalData.entry_instrument_price ?? signalData.entry_price;
+  const currentPrice = signalData.current_instrument_price;
+  const currentProfitPct = entryPrice && currentPrice
+    ? profitPctFromInstrument(entryPrice, currentPrice, instrumentType, signalData.direction || "Long")
+    : milestonePct;
+
+  pushInstrumentFields(fields, signalData);
+
+  fields.push(
+    { name: "📈 Entry Price", value: fmtPrice(entryPrice), inline: true },
+    { name: "💵 Current Price", value: fmtPrice(currentPrice), inline: true },
+    { name: "📊 Profit", value: `+${currentProfitPct.toFixed(1)}%`, inline: true },
+  );
+
+  fields.push({ ...SPACER });
+  fields.push({
+    name: "🏆 Milestone",
+    value: `+${milestonePct}% profit reached`,
+    inline: false,
+  });
+
+  return {
+    description: heading,
+    color: embedColor,
+    fields,
+    footer: { text: DISCLAIMER },
+  };
+}
+
+export async function sendProfitMilestoneDiscordAlert(
+  signalData: Record<string, any>,
+  app: ConnectedApp | null,
+  signalId: string,
+  milestonePct: number,
+): Promise<void> {
+  const discordWebhookUrl = getDiscordWebhookUrl(signalData, app);
+  if (!discordWebhookUrl) return;
+
+  const embed = buildProfitMilestoneEmbed(signalData, milestonePct, app);
+  const content = app
+    ? getContentForInstrument(app, signalData.instrument_type || "Shares")
+    : "@everyone";
+  const sent = await sendWebhook(discordWebhookUrl, content, [embed]);
+
+  await storage
+    .createDiscordMessage({
+      signalId,
+      webhookUrl: discordWebhookUrl,
+      channelType: "signal",
+      instrumentType: signalData.instrument_type || "Shares",
+      status: sent ? "sent" : "error",
+      messageType: "profit_milestone",
+      embedData: {
+        ticker: signalData.ticker || "",
+        milestonePct,
+        sourceAppId: app?.id ?? null,
+        sourceAppName: app?.name ?? null,
+      },
+    })
+    .catch(() => {});
 }
 
 export async function sendEntryDicordAlert(
