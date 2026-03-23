@@ -165,7 +165,7 @@ const sections: HelpSection[] = [
     description:
       "Register and manage external trading apps that send signals to TradeSync.",
     details: [
-      "App Cards — each app shows its name, description, and toggle switches for Sync Signals, Discord, and IBKR.",
+      "App Cards — each app shows its name, description, and toggle switches for Discord and IBKR.",
       "API Key — auto-generated Bearer token for authentication. Show/hide, copy, or regenerate.",
       "Settings Modal — click the gear icon to configure the app (General, Discord, IBKR settings).",
       "Add App — click '+ New App' to register a new external signal source.",

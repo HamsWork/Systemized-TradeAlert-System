@@ -99,8 +99,6 @@ async function seedBuiltInApp() {
     status: "active",
     isBuiltIn: true,
     apiKey: generateApiKey(),
-    syncAlerts: true,
-    syncSignals: true,
   });
 }
 
@@ -112,8 +110,6 @@ async function seedTdiApp() {
     status: "active",
     isBuiltIn: false,
     apiKey: generateApiKey(),
-    syncAlerts: false,
-    syncSignals: true,
     sendDiscordMessages: true,
     executeIbkrTrades: true,
   });
@@ -129,8 +125,6 @@ async function seedApps() {
       apiEndpoint: "https://api.situtrader.com/v1",
       apiKey: generateApiKey(),
       webhookUrl: "https://api.situtrader.com/webhooks/tradesync",
-      syncAlerts: true,
-      syncSignals: true,
     },
     {
       name: "Crowned Trader",
@@ -140,8 +134,6 @@ async function seedApps() {
       apiEndpoint: "https://api.crownedtrader.io/v2",
       apiKey: generateApiKey(),
       webhookUrl: "https://api.crownedtrader.io/hooks/tradesync",
-      syncAlerts: true,
-      syncSignals: true,
     },
   ]);
 }

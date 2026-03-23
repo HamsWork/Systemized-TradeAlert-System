@@ -96,26 +96,6 @@ async function authenticateApiKey(
     });
   }
 
-  if (!connectedApp.syncSignals) {
-    await storage
-      .createActivity({
-        type: "ingest_failed",
-        title: "Signal ingest rejected: sync disabled",
-        description: `Signal sync is disabled for app "${connectedApp.name}".`,
-        symbol: null,
-        signalId: null,
-        metadata: {
-          reason: "sync_signals_disabled",
-          path: "/api/ingest/signals",
-          appId: connectedApp.id,
-          appName: connectedApp.name,
-        },
-      })
-      .catch(() => {});
-    return res
-      .status(403)
-      .json({ message: "Signal sync is disabled for this app." });
-  }
 
   req.connectedApp = connectedApp;
   next();

@@ -15,8 +15,6 @@ export const connectedApps = pgTable("connected_apps", {
   apiEndpoint: text("api_endpoint"),
   apiKey: text("api_key"),
   webhookUrl: text("webhook_url"),
-  syncAlerts: boolean("sync_alerts").notNull().default(true),
-  syncSignals: boolean("sync_signals").notNull().default(true),
   discordWebhookShares: text("discord_webhook_shares"),
   discordWebhookOptions: text("discord_webhook_options"),
   discordWebhookLetf: text("discord_webhook_letf"),
