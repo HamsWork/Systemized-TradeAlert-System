@@ -256,6 +256,30 @@ function isSpacerField(f: { name: string; value: string; inline?: boolean }): bo
   return (n === "\u200b" || n === "") && (v === "" || v === "\u200b") && !f.inline;
 }
 
+const CUSTOM_EMOJI_MAP: Record<string, { label: string; bg: string; text: string }> = {
+  "swj_boom_emoji": { label: "BOOM", bg: "bg-gradient-to-r from-red-600 to-orange-500", text: "text-white" },
+  "swj_kaboom_emoji": { label: "KABOOM", bg: "bg-gradient-to-r from-purple-700 to-purple-500", text: "text-white" },
+};
+
+function renderDiscordText(text: string) {
+  const parts = text.split(/:(\w+):/g);
+  if (parts.length === 1) return text;
+  return parts.map((part, i) => {
+    if (i % 2 === 1) {
+      const emoji = CUSTOM_EMOJI_MAP[part];
+      if (emoji) {
+        return (
+          <span key={i} className={`inline-flex items-center px-1 py-0.5 rounded text-[9px] font-extrabold ${emoji.bg} ${emoji.text} align-middle mx-0.5`}>
+            {emoji.label}
+          </span>
+        );
+      }
+      return <span key={i}>:{part}:</span>;
+    }
+    return part;
+  });
+}
+
 function DiscordEmbed({ embed }: { embed: RenderedEmbed }) {
   const borderColor = colorToHex(embed.color);
   const allFields = embed.fields || [];
@@ -305,8 +329,8 @@ function DiscordEmbed({ embed }: { embed: RenderedEmbed }) {
                 <div key={si} className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {section.fields.map((field, fi) => (
                     <div key={fi} className="min-w-0">
-                      <p className="text-[11px] font-semibold text-[#b5bac1] uppercase tracking-wide">{field.name}</p>
-                      <p className="text-[12px] text-[#dbdee1] whitespace-pre-wrap break-words">{field.value || "\u200b"}</p>
+                      <p className="text-[11px] font-semibold text-[#b5bac1] uppercase tracking-wide">{renderDiscordText(field.name)}</p>
+                      <p className="text-[12px] text-[#dbdee1] whitespace-pre-wrap break-words">{field.value ? renderDiscordText(field.value) : "\u200b"}</p>
                     </div>
                   ))}
                 </div>
@@ -315,8 +339,8 @@ function DiscordEmbed({ embed }: { embed: RenderedEmbed }) {
             const field = section.fields[0];
             return (
               <div key={si}>
-                <p className="text-[11px] font-semibold text-[#b5bac1] uppercase tracking-wide">{field.name}</p>
-                <p className="text-[12px] text-[#dbdee1] whitespace-pre-wrap break-words leading-relaxed">{field.value || "\u200b"}</p>
+                <p className="text-[11px] font-semibold text-[#b5bac1] uppercase tracking-wide">{renderDiscordText(field.name)}</p>
+                <p className="text-[12px] text-[#dbdee1] whitespace-pre-wrap break-words leading-relaxed">{field.value ? renderDiscordText(field.value) : "\u200b"}</p>
               </div>
             );
           })}

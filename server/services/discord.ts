@@ -1767,9 +1767,9 @@ export function buildProfitMilestoneEmbed(
   let milestone_title = "🏆 Milestone";
   let milestone_text = `+${milestonePct}% profit reached`;
   if (milestonePct >= 30 && milestonePct < 40) {
-    milestone_title = ":swj_boom_emoji: Boom Baby";
+    milestone_title = "<:swj_boom_emoji:1485922107639726119> Boom Baby";
   } else if (milestonePct >= 40 && milestonePct < 50) {
-    milestone_title = ":swj_kaboom_emoji: Kaboom";
+    milestone_title = "<:swj_kaboom_emoji:1485921838675787806> Kaboom";
   } else if (milestonePct >= 50) {
     milestone_title = "💰 Gains";
   }
