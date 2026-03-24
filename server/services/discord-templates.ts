@@ -244,6 +244,118 @@ function stopLossHitTemplate(instrumentType: string): TemplateEmbed {
 }
 
 
+function tenPctEntryTemplate(instrumentType: string): TemplateEmbed {
+  const label = instrumentType === "LETF" || instrumentType === "Shares" ? "Shares" : "Options";
+  const tickerVar = instrumentType === "LETF" || instrumentType === "LETF Option" ? "{{underlying}}" : "{{ticker}}";
+  const fields: TemplateEmbed["fields"] = [];
+
+  if (instrumentType === "Options") {
+    fields.push(
+      { ...SPACER_FIELD },
+      { name: "🟢 Ticker", value: "{{ticker}}", inline: true },
+      { name: "📊 Stock Price", value: "{{stock_price}}", inline: true },
+      { ...SPACER_FIELD },
+      { name: "❌ Expiration", value: "{{expiry}}", inline: true },
+      { name: "✍️ Strike", value: "{{strike}} {{right}}", inline: true },
+      { name: "💵 Option Price", value: "{{option_price}}", inline: true },
+      { ...SPACER_FIELD },
+    );
+  } else if (instrumentType === "Shares") {
+    fields.push(
+      { ...SPACER_FIELD },
+      { name: "🟢 Ticker", value: "{{ticker}}", inline: true },
+      { name: "📊 Stock Price", value: "{{stock_price}}", inline: true },
+      { name: "📈 Direction", value: "{{direction}}", inline: true },
+      { ...SPACER_FIELD },
+    );
+  } else if (instrumentType === "LETF") {
+    fields.push(
+      { ...SPACER_FIELD },
+      { name: "🟢 Ticker", value: "{{underlying}}", inline: true },
+      { name: "📈 Direction", value: "{{direction}}", inline: true },
+      { ...SPACER_FIELD },
+      { name: "📹 LETF", value: "{{letf_ticker}} ({{leverage}}x {{letf_direction}})", inline: true },
+      { name: "💰 LETF Entry", value: "{{letf_entry}}", inline: true },
+      { ...SPACER_FIELD },
+    );
+  } else if (instrumentType === "LETF Option") {
+    fields.push(
+      { ...SPACER_FIELD },
+      { name: "🟢 Ticker", value: "{{underlying}}", inline: true },
+      { name: "📊 LETF Price", value: "{{stock_price}}", inline: true },
+      { name: "💹 Leveraged ETF", value: "{{letf_ticker}} ({{leverage}}x {{letf_direction}})", inline: true },
+      { ...SPACER_FIELD },
+      { name: "❌ Expiration", value: "{{expiry}}", inline: true },
+      { name: "✍️ Strike", value: "{{strike}} {{right}}", inline: true },
+      { name: "💵 Option Price", value: "{{option_price}}", inline: true },
+      { ...SPACER_FIELD },
+    );
+  } else if (instrumentType === "Crypto") {
+    fields.push(
+      { ...SPACER_FIELD },
+      { name: "🟢 Ticker", value: "{{ticker}}", inline: true },
+      { name: "📈 Direction", value: "{{direction}}", inline: true },
+      { name: "💵 Entry Price", value: "{{entry_price}}", inline: true },
+      { ...SPACER_FIELD },
+    );
+  }
+
+  fields.push({ name: "🛑 Stop Loss", value: "{{stop_loss}}", inline: true });
+  fields.push({ ...SPACER_FIELD });
+  fields.push({ name: "📝 Notes", value: "{{trade_plan}}", inline: false });
+
+  return {
+    description: `**🚨 ${tickerVar} ${label} Entry**`,
+    color: GREEN,
+    fields,
+    footer: DISCLAIMER,
+  };
+}
+
+function tenPctMilestoneTemplate(instrumentType: string): TemplateEmbed {
+  const label = instrumentType === "LETF" || instrumentType === "Shares" ? "Shares" : "Options";
+  const tickerVar = instrumentType === "LETF" || instrumentType === "LETF Option" ? "{{underlying}}" : "{{ticker}}";
+  const fields: TemplateEmbed["fields"] = [];
+
+  if (instrumentType === "LETF") {
+    fields.push(
+      { name: "💹 LETF", value: "{{letf_ticker}} ({{leverage}}x {{letf_direction}})", inline: true },
+      { name: "💵 LETF Entry", value: "{{letf_entry}}", inline: true },
+      { name: "📊 Underlying Price", value: "{{stock_price}}", inline: true },
+    );
+  } else if (instrumentType === "LETF Option") {
+    fields.push(
+      { name: "💹 Leveraged ETF", value: "{{letf_ticker}} ({{leverage}}x {{letf_direction}})", inline: true },
+      { name: "❌ Expiration", value: "{{expiry}}", inline: true },
+      { name: "✍️ Strike", value: "{{strike}} {{right}}", inline: true },
+    );
+  } else if (instrumentType === "Options") {
+    fields.push(
+      { name: "❌ Expiration", value: "{{expiry}}", inline: true },
+      { name: "✍️ Strike", value: "{{strike}} {{right}}", inline: true },
+    );
+  } else {
+    fields.push(
+      { name: "📊 Direction", value: "{{direction}}", inline: true },
+    );
+  }
+
+  fields.push(
+    { name: "📈 Entry Price", value: "{{entry_price}}", inline: true },
+    { name: "💵 Current Price", value: "{{current_price}}", inline: true },
+    { name: "📊 Profit", value: "{{current_profit_pct}}", inline: true },
+    { ...SPACER_FIELD },
+    { name: "{{milestone_title}}", value: "{{milestone_text}}", inline: false },
+  );
+
+  return {
+    description: `**💰 ${tickerVar} ${label} +{{milestone_pct}}% Profit Milestone**`,
+    color: GREEN,
+    fields,
+    footer: "{{milestone_footer}}",
+  };
+}
+
 function getEntryTemplate(instrumentType: string): TemplateEmbed {
   switch (instrumentType) {
     case "Options": return optionsEntryTemplate();
@@ -261,6 +373,8 @@ export function getDefaultTemplates(instrumentType: string): MessageTemplate[] {
     { type: "target_hit", label: "Target Hit", content: "", embed: targetHitTemplate(instrumentType) },
     { type: "stop_loss_raised", label: "SL Raised", content: "", embed: stopLossRaisedTemplate(instrumentType) },
     { type: "stop_loss_hit", label: "Stop Loss Hit", content: "", embed: stopLossHitTemplate(instrumentType) },
+    { type: "ten_pct_entry", label: "10% Entry", content: "@everyone", embed: tenPctEntryTemplate(instrumentType) },
+    { type: "ten_pct_milestone", label: "10% Milestone", content: "@everyone", embed: tenPctMilestoneTemplate(instrumentType) },
   ];
 }
 
@@ -458,6 +572,23 @@ export function buildSampleVariables(
       const [key2, target2] = targetEntries[1];
       vars.risk_mgmt += `\n🎯 Next target: ${key2.toUpperCase()} at ${fmtPrice(Number((target2 as any).price))}`;
     }
+  }
+
+  if (messageType === "ten_pct_entry") {
+    vars.trade_plan = data.stop_loss != null
+      ? `🛑 Stop loss: ${fmtPrice(data.stop_loss)}`
+      : "—";
+  }
+
+  if (messageType === "ten_pct_milestone") {
+    const samplePct = 30;
+    const sampleCurrentPrice = entryPrice * (1 + samplePct / 100);
+    vars.milestone_pct = String(samplePct);
+    vars.current_price = fmtPrice(sampleCurrentPrice);
+    vars.current_profit_pct = `+${samplePct.toFixed(1)}%`;
+    vars.milestone_title = "💥 Boom Baby";
+    vars.milestone_text = `+${samplePct}% profit reached`;
+    vars.milestone_footer = "Breakeven stop loss";
   }
 
   if (messageType === "stop_loss_hit") {

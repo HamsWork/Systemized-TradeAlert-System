@@ -237,6 +237,8 @@ const TYPE_ICONS: Record<string, typeof TrendingUp> = {
   target_hit: Target,
   stop_loss_raised: ShieldAlert,
   stop_loss_hit: AlertTriangle,
+  ten_pct_entry: TrendingUp,
+  ten_pct_milestone: Target,
 };
 
 const TYPE_COLORS: Record<string, string> = {
@@ -244,6 +246,8 @@ const TYPE_COLORS: Record<string, string> = {
   target_hit: "bg-green-500/10 text-green-500 border-green-500/20",
   stop_loss_raised: "bg-amber-500/10 text-amber-500 border-amber-500/20",
   stop_loss_hit: "bg-red-500/10 text-red-500 border-red-500/20",
+  ten_pct_entry: "bg-violet-500/10 text-violet-500 border-violet-500/20",
+  ten_pct_milestone: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
 };
 
 function isSpacerField(f: { name: string; value: string; inline?: boolean }): boolean {

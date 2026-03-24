@@ -2,7 +2,7 @@ export interface TemplateVariable {
   key: string;
   label: string;
   description: string;
-  category: "core" | "options" | "letf" | "targets" | "result";
+  category: "core" | "options" | "letf" | "targets" | "result" | "milestone";
 }
 
 export const TEMPLATE_VARIABLES: TemplateVariable[] = [
@@ -43,6 +43,13 @@ export const TEMPLATE_VARIABLES: TemplateVariable[] = [
   { key: "r_multiple", label: "R-Multiple", description: "Risk-reward ratio multiple", category: "result" },
   { key: "position_mgmt", label: "Position Management", description: "Position management instructions text", category: "result" },
   { key: "risk_mgmt", label: "Risk Management", description: "Risk management instructions text", category: "result" },
+
+  { key: "milestone_pct", label: "Milestone %", description: "Milestone percentage reached (10, 20, 30, ...)", category: "milestone" },
+  { key: "current_price", label: "Current Price", description: "Current instrument price", category: "milestone" },
+  { key: "current_profit_pct", label: "Current Profit %", description: "Current profit percentage from entry", category: "milestone" },
+  { key: "milestone_title", label: "Milestone Title", description: "Milestone title (🏆 Milestone, 💥 Boom Baby, 💥 Kaboom, 💰 Gains)", category: "milestone" },
+  { key: "milestone_text", label: "Milestone Text", description: "Milestone text (+N% profit reached)", category: "milestone" },
+  { key: "milestone_footer", label: "Milestone Footer", description: "Footer text (varies by milestone level)", category: "milestone" },
 ];
 
 export const VARIABLE_CATEGORIES: Record<string, string> = {
@@ -51,6 +58,7 @@ export const VARIABLE_CATEGORIES: Record<string, string> = {
   letf: "LETF / Leveraged ETF",
   targets: "Trade Plan & Targets",
   result: "Result & Exit",
+  milestone: "Milestone (10% Mode)",
 };
 
 export function getVariablesForMessageType(messageType: string): TemplateVariable[] {
@@ -75,6 +83,12 @@ export function getVariablesForMessageType(messageType: string): TemplateVariabl
       return [...core, ...options, ...letf, ...result.filter(v =>
         ["exit_price", "profit_pct", "pnl_dollar", "r_multiple"].includes(v.key)
       )];
+    case "ten_pct_entry":
+      return [...core, ...options, ...letf, ...TEMPLATE_VARIABLES.filter(v =>
+        ["stop_loss", "trade_plan"].includes(v.key)
+      )];
+    case "ten_pct_milestone":
+      return [...core, ...options, ...letf, ...TEMPLATE_VARIABLES.filter(v => v.category === "milestone")];
     default:
       return [...core, ...options, ...letf, ...targets, ...result];
   }
