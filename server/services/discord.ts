@@ -453,7 +453,7 @@ async function sendWebhook(
       const filename = chartFile.originalname || "chart.png";
       const embedsWithImage = embeds.map((e) => ({
         ...e,
-        image: e.image?.url ? e.image : { url: `attachment://${filename}` },
+        image: { url: `attachment://${filename}` },
       }));
 
       const formData = new FormData();
@@ -1799,7 +1799,6 @@ export function buildProfitMilestoneEmbed(
     color: embedColor,
     fields,
     footer: { text: disclaimer_text },
-    image: { url: image_url },
     thumbnail: { url: image_url },
   };
 }
