@@ -1703,7 +1703,8 @@ export function buildProfitMilestoneEmbed(
 
   const ORANGE = 0xf59e0b;
   const GOLD = 0xeab308;
-  const embedColor = milestonePct >= 50 ? GOLD : milestonePct >= 20 ? ORANGE : GREEN;
+  // const embedColor = milestonePct >= 50 ? GOLD : milestonePct >= 20 ? ORANGE : GREEN;
+  const embedColor = GREEN;
 
   const heading = `**\u{1F4B0} ${ticker} ${isSharesSymbol} +${milestonePct}% Profit Milestone**`;
 
@@ -1724,12 +1725,27 @@ export function buildProfitMilestoneEmbed(
   );
 
   fields.push({ ...SPACER });
+  let milestone_title = "🏆 Milestone";
+  let milestone_text = `+${milestonePct}% profit reached`;
+  if (milestonePct >= 30 && milestonePct < 40) {
+    milestone_text = `30% 💥 Boom Baby`;
+  } else if (milestonePct >= 40 && milestonePct < 50) {
+    milestone_text = `40% 💥 Kaboom`;
+  } else if (milestonePct >= 50) {
+    milestone_title = "💰 Gains";
+  }
   fields.push({
-    name: "🏆 Milestone",
-    value: `+${milestonePct}% profit reached`,
+    name: milestone_title,
+    value: milestone_text,
     inline: false,
   });
 
+  let disclaimer_text = DISCLAIMER;
+  if (milestonePct >= 10 && milestonePct < 30) {
+    disclaimer_text = "Manage your own trade accordingly";
+  } else if (milestonePct >= 30) {
+    disclaimer_text = "Breakeven stop loss";
+  }
   return {
     description: heading,
     color: embedColor,
