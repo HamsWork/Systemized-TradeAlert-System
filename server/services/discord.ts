@@ -1728,9 +1728,9 @@ export function buildProfitMilestoneEmbed(
   let milestone_title = "🏆 Milestone";
   let milestone_text = `+${milestonePct}% profit reached`;
   if (milestonePct >= 30 && milestonePct < 40) {
-    milestone_text = `30% 💥 Boom Baby`;
+    milestone_title = "💥 Boom Baby";
   } else if (milestonePct >= 40 && milestonePct < 50) {
-    milestone_text = `40% 💥 Kaboom`;
+    milestone_title = "💥 Kaboom";
   } else if (milestonePct >= 50) {
     milestone_title = "💰 Gains";
   }
