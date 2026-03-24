@@ -256,9 +256,9 @@ function isSpacerField(f: { name: string; value: string; inline?: boolean }): bo
   return (n === "\u200b" || n === "") && (v === "" || v === "\u200b") && !f.inline;
 }
 
-const CUSTOM_EMOJI_MAP: Record<string, { label: string; bg: string; text: string }> = {
-  "swj_boom_emoji": { label: "BOOM", bg: "bg-gradient-to-r from-red-600 to-orange-500", text: "text-white" },
-  "swj_kaboom_emoji": { label: "KABOOM", bg: "bg-gradient-to-r from-purple-700 to-purple-500", text: "text-white" },
+const CUSTOM_EMOJI_MAP: Record<string, { src: string; alt: string }> = {
+  "swj_boom_emoji": { src: "https://cdn.discordapp.com/emojis/1485922107639726119.webp?size=60&animated=true", alt: "Boom" },
+  "swj_kaboom_emoji": { src: "https://cdn.discordapp.com/emojis/1485921838675787806.webp?size=60&animated=true", alt: "Kaboom" },
 };
 
 function renderDiscordText(text: string) {
@@ -269,9 +269,7 @@ function renderDiscordText(text: string) {
       const emoji = CUSTOM_EMOJI_MAP[part];
       if (emoji) {
         return (
-          <span key={i} className={`inline-flex items-center px-1 py-0.5 rounded text-[9px] font-extrabold ${emoji.bg} ${emoji.text} align-middle mx-0.5`}>
-            {emoji.label}
-          </span>
+          <img key={i} src={emoji.src} alt={emoji.alt} className="inline-block h-5 w-5 align-middle mx-0.5" />
         );
       }
       return <span key={i}>:{part}:</span>;
