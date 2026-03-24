@@ -1750,7 +1750,7 @@ export function buildProfitMilestoneEmbed(
     description: heading,
     color: embedColor,
     fields,
-    footer: { text: DISCLAIMER },
+    footer: { text: disclaimer_text },
   };
 }
 
