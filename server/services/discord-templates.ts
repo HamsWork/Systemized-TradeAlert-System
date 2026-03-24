@@ -586,7 +586,7 @@ export function buildSampleVariables(
     vars.milestone_pct = String(samplePct);
     vars.current_price = fmtPrice(sampleCurrentPrice);
     vars.current_profit_pct = `+${samplePct.toFixed(1)}%`;
-    vars.milestone_title = "<:swj_boom_emoji:1485922107639726119> Boom Baby";
+    vars.milestone_title = "<a:swj_boom_emoji:1485922107639726119> Boom Baby";
     vars.milestone_text = `+${samplePct}% profit reached`;
     vars.milestone_footer = "Breakeven stop loss";
   }
