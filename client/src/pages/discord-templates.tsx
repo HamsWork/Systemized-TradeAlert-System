@@ -262,10 +262,12 @@ const CUSTOM_EMOJI_MAP: Record<string, { src: string; alt: string }> = {
 };
 
 function renderDiscordText(text: string) {
-  const parts = text.split(/:(\w+):/g);
+  const parts = text.split(/<:(\w+):\d+>|:(\w+):/g);
   if (parts.length === 1) return text;
   return parts.map((part, i) => {
-    if (i % 2 === 1) {
+    if (part === undefined) return null;
+    if (i % 3 === 1 || i % 3 === 2) {
+      if (!part) return null;
       const emoji = CUSTOM_EMOJI_MAP[part];
       if (emoji) {
         return (
