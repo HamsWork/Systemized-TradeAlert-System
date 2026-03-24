@@ -50,6 +50,7 @@ export const TEMPLATE_VARIABLES: TemplateVariable[] = [
   { key: "milestone_title", label: "Milestone Title", description: "Milestone title (🏆 Milestone, 💥 Boom Baby, 💥 Kaboom, 💰 Gains)", category: "milestone" },
   { key: "milestone_text", label: "Milestone Text", description: "Milestone text (+N% profit reached)", category: "milestone" },
   { key: "milestone_footer", label: "Milestone Footer", description: "Footer text (varies by milestone level)", category: "milestone" },
+  { key: "milestone_image", label: "Milestone Image", description: "Image URL for milestone level (boom/kaboom emoji)", category: "milestone" },
 ];
 
 export const VARIABLE_CATEGORIES: Record<string, string> = {

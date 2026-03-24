@@ -6,6 +6,8 @@ export interface TemplateEmbed {
   fields?: { name: string; value: string; inline?: boolean }[];
   footer?: string;
   timestamp?: boolean;
+  image?: { url: string };
+  thumbnail?: { url: string };
 }
 
 // Store the literal escape sequence so it shows as "\u200b" in JSON,
@@ -353,6 +355,8 @@ function tenPctMilestoneTemplate(instrumentType: string): TemplateEmbed {
     color: GREEN,
     fields,
     footer: "{{milestone_footer}}",
+    image: { url: "{{milestone_image}}" },
+    thumbnail: { url: "{{milestone_image}}" },
   };
 }
 
@@ -589,6 +593,7 @@ export function buildSampleVariables(
     vars.milestone_title = "<a:swj_boom_emoji:1485922107639726119> Boom Baby";
     vars.milestone_text = `+${samplePct}% profit reached`;
     vars.milestone_footer = "Breakeven stop loss";
+    vars.milestone_image = "https://cdn.discordapp.com/emojis/1485922107639726119.webp?size=60&animated=true";
   }
 
   if (messageType === "stop_loss_hit") {
@@ -616,6 +621,8 @@ export function renderTemplate(
   fields?: { name: string; value: string; inline?: boolean }[];
   footer?: { text: string };
   timestamp?: string;
+  image?: { url: string };
+  thumbnail?: { url: string };
 } {
   const applyVarsAndEscapes = (s: string): string => {
     // Replace {{var}} placeholders
@@ -633,6 +640,9 @@ export function renderTemplate(
     colorNum = parseInt(colorHex, 16) || 0x6b7280;
   }
 
+  const resolvedImage = template.image?.url ? applyVarsAndEscapes(template.image.url) : undefined;
+  const resolvedThumbnail = template.thumbnail?.url ? applyVarsAndEscapes(template.thumbnail.url) : undefined;
+
   return {
     description: template.description
       ? applyVarsAndEscapes(template.description)
@@ -647,6 +657,8 @@ export function renderTemplate(
       ? { text: applyVarsAndEscapes(template.footer) }
       : undefined,
     timestamp: template.timestamp ? new Date().toISOString() : undefined,
+    image: resolvedImage && !resolvedImage.includes("{{") ? { url: resolvedImage } : undefined,
+    thumbnail: resolvedThumbnail && !resolvedThumbnail.includes("{{") ? { url: resolvedThumbnail } : undefined,
   };
 }
 

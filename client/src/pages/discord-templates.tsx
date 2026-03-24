@@ -183,6 +183,8 @@ interface TemplateEmbed {
   fields?: { name: string; value: string; inline?: boolean }[];
   footer?: string;
   timestamp?: boolean;
+  image?: { url: string };
+  thumbnail?: { url: string };
 }
 
 interface RenderedEmbed {
@@ -191,6 +193,8 @@ interface RenderedEmbed {
   fields?: { name: string; value: string; inline?: boolean }[];
   footer?: { text: string };
   timestamp?: string;
+  image?: { url: string };
+  thumbnail?: { url: string };
 }
 
 interface TemplateMsg {
@@ -312,6 +316,8 @@ function DiscordEmbed({ embed }: { embed: RenderedEmbed }) {
       <div className="flex">
         <div className="w-1 shrink-0" style={{ backgroundColor: borderColor }} />
         <div className="p-3 flex-1 min-w-0 space-y-2">
+          <div className="flex gap-3">
+            <div className="flex-1 min-w-0 space-y-2">
           {embed.description && (
             <p className="text-[13px] text-[#dbdee1] font-medium leading-snug">
               {embed.description.split(/\*\*(.*?)\*\*/).map((part, i) =>
@@ -344,6 +350,16 @@ function DiscordEmbed({ embed }: { embed: RenderedEmbed }) {
               </div>
             );
           })}
+
+            </div>
+            {embed.thumbnail?.url && (
+              <img src={embed.thumbnail.url} alt="" className="w-16 h-16 rounded object-cover shrink-0" />
+            )}
+          </div>
+
+          {embed.image?.url && (
+            <img src={embed.image.url} alt="" className="w-full max-h-48 rounded object-contain" />
+          )}
 
           {embed.footer && (
             <p className="text-[10px] text-[#949ba4] pt-1 border-t border-[#3f4147]">{embed.footer.text}</p>
@@ -458,6 +474,9 @@ function renderTemplateLocally(template: TemplateEmbed, sampleVars: Record<strin
     colorNum = parseInt(colorHex, 16) || 0x6b7280;
   }
 
+  const resolvedImage = template.image?.url ? sub(template.image.url) : undefined;
+  const resolvedThumbnail = template.thumbnail?.url ? sub(template.thumbnail.url) : undefined;
+
   return {
     description: template.description ? sub(template.description) : undefined,
     color: colorNum,
@@ -468,6 +487,8 @@ function renderTemplateLocally(template: TemplateEmbed, sampleVars: Record<strin
     })),
     footer: template.footer ? { text: sub(template.footer) } : undefined,
     timestamp: template.timestamp ? new Date().toISOString() : undefined,
+    image: resolvedImage && !resolvedImage.includes("{{") ? { url: resolvedImage } : undefined,
+    thumbnail: resolvedThumbnail && !resolvedThumbnail.includes("{{") ? { url: resolvedThumbnail } : undefined,
   };
 }
 

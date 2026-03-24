@@ -31,6 +31,7 @@ export interface DiscordEmbed {
   timestamp?: string;
   image?: { url: string };
   video?: { url: string };
+  thumbnail?: { url: string };
 }
 
 const GREEN = 0x22c55e;
@@ -452,7 +453,7 @@ async function sendWebhook(
       const filename = chartFile.originalname || "chart.png";
       const embedsWithImage = embeds.map((e) => ({
         ...e,
-        image: { url: `attachment://${filename}` },
+        image: e.image?.url ? e.image : { url: `attachment://${filename}` },
       }));
 
       const formData = new FormData();
@@ -1785,11 +1786,21 @@ export function buildProfitMilestoneEmbed(
   } else if (milestonePct >= 30) {
     disclaimer_text = "Breakeven stop loss";
   }
+  let image_url = "";
+  if (milestonePct >= 30 && milestonePct < 40) {
+    image_url =
+      "https://cdn.discordapp.com/emojis/1485922107639726119.webp?size=60&animated=true";
+  } else if (milestonePct >= 40 && milestonePct < 50) {
+    image_url =
+      "https://cdn.discordapp.com/emojis/1485921838675787806.webp?size=60&animated=true";
+  }
   return {
     description: heading,
     color: embedColor,
     fields,
     footer: { text: disclaimer_text },
+    image: { url: image_url },
+    thumbnail: { url: image_url },
   };
 }
 
