@@ -355,7 +355,6 @@ function tenPctMilestoneTemplate(instrumentType: string): TemplateEmbed {
     color: GREEN,
     fields,
     footer: "{{milestone_footer}}",
-    image: { url: "{{milestone_image}}" },
     thumbnail: { url: "{{milestone_image}}" },
   };
 }
