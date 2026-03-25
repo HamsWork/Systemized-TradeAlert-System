@@ -11,6 +11,7 @@ import { executeIbkrTrade } from "./trade-executor";
 import { sendEntryDicordAlert, profitPctFromInstrument } from "./discord";
 import { getCurrentInstrumentPrice } from "./trade-monitor";
 import { ibkrSyncManager } from "./ibkr-sync";
+import { queueIbkrRetry } from "./ibkr-retry-queue";
 import {
   fetchPolygonBars,
   fetchOptionContractPrice,
@@ -671,6 +672,14 @@ export async function processSignal(
     console.error(
       `[Signal] IBKR trade FAILED for ${ticker}: ${tradeExecution.error}`,
     );
+    const isConnectionError =
+      tradeExecution.error.includes("Failed to connect") ||
+      tradeExecution.error.includes("ECONNREFUSED") ||
+      tradeExecution.error.includes("timeout") ||
+      tradeExecution.error.includes("socket");
+    if (isConnectionError && signal.id && app.id) {
+      queueIbkrRetry(signal.id, app.id, computedQty, tradeExecution.error);
+    }
   }
 
   const updatedSignal = { ...signal, data: signalData };

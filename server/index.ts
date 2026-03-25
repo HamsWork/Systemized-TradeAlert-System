@@ -131,6 +131,9 @@ app.use((req, res, next) => {
   const { startTradeMonitor } = await import("./services/trade-monitor");
   startTradeMonitor();
 
+  const { startIbkrRetryQueue } = await import("./services/ibkr-retry-queue");
+  startIbkrRetryQueue();
+
   const { prefetchSignalCharts, startPolygonRefresh } = await import("./services/polygon");
   const { storage: storageInstance } = await import("./storage");
   try {

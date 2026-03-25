@@ -37,6 +37,10 @@ const TYPE_LABELS: Record<string, string> = {
   stop_loss_hit: "Stop Loss Hit",
   stop_loss_raised: "SL Raised",
   trade_error: "Trade Error",
+  ibkr_retry_queued: "IBKR Retry Queued",
+  ibkr_retry_success: "IBKR Retry Success",
+  ibkr_retry_failed: "IBKR Retry Failed",
+  ibkr_retry_expired: "IBKR Retry Expired",
   alert_triggered: "Alert Triggered",
   alert_created: "Alert Created",
   signal_created: "Signal Created",
@@ -68,14 +72,18 @@ function getActivityBadge(type: string) {
     case "ingest_failed":
     case "signal_rejected":
     case "trade_error":
+    case "ibkr_retry_failed":
+    case "ibkr_retry_expired":
       return <Badge variant="destructive" className="text-xs">{label}</Badge>;
     case "alert_created":
     case "signal_created":
     case "signal_ingested":
     case "discord_sent":
+    case "ibkr_retry_success":
       return <Badge variant="default" className="text-xs">{label}</Badge>;
     case "target_hit":
     case "stop_loss_raised":
+    case "ibkr_retry_queued":
       return <Badge variant="secondary" className="text-xs">{label}</Badge>;
     default:
       return <Badge variant="secondary" className="text-xs">{label}</Badge>;
