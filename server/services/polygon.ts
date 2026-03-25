@@ -300,6 +300,8 @@ export async function fetchOptionContractPrice(
     if (!result) return null;
     const bid = result.last_quote?.bid;
     const ask = result.last_quote?.ask;
+    console.log("option snapshot", result);
+    console.log("option last trade", result.last_trade);
     const price = result.last_trade?.price ??
       (bid && ask ? (bid + ask) / 2 : result.day?.close ?? null);
     return { exists: price !== null, price };
