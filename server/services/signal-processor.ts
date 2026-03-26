@@ -313,6 +313,8 @@ async function buildSignalData(
     underlying_price_based,
   } = body;
 
+  
+
   const errors: string[] = [];
 
   const defaultTradeType =
@@ -401,8 +403,10 @@ async function buildSignalData(
       : null;
   if (webhookFromBody) signalData.discord_webhook_url = webhookFromBody;
 
+  const alertMode = body.alert_mode ?? "normal";
   const underlyingPriceBased =
-    underlying_price_based !== undefined ? underlying_price_based : false;
+    alertMode === "ten_percent" ? false
+    : underlying_price_based !== undefined ? underlying_price_based : false;
   signalData.underlying_price_based = underlyingPriceBased;
 
   if (underlyingPriceBased) {
@@ -452,7 +456,7 @@ async function buildSignalData(
     );
   }
 
-  signalData.alert_mode = body.alert_mode ?? "normal";
+  signalData.alert_mode = alertMode;
 
   signalData.hit_targets = {};
   signalData.current_target_number = 0;
