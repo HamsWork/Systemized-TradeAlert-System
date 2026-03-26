@@ -1793,7 +1793,7 @@ export function buildProfitMilestoneEmbed(
   if (milestonePct >= 10 && milestonePct < 30) {
     disclaimer_text = "Manage your own trade accordingly";
   } else if (milestonePct >= 30) {
-    disclaimer_text = "Breakeven stop loss";
+    disclaimer_text = "Raise stop accordingly";
   }
   let image_url = "";
   if (milestonePct >= 30 && milestonePct < 40) {
