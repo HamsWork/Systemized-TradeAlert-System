@@ -440,10 +440,11 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
   const app = (await storage.getConnectedApp(signal.sourceAppId)) || null;
   if (!app) return;
 
-  // const isBullish = signalData.underlying_price_based 
-  //   ? signalData.direction === "Long" || signalData.direction === "Call"
-  //   : signalData.direction !== "Short";
-  const isBullish = signalData.instrument_type === "Shares" ? signalData.direction === "Long" : true;
+  const isBullish = signalData.underlying_price_based
+    ? signalData.direction === "Long" || signalData.direction === "Call"
+    : signalData.instrument_type === "Shares"
+      ? signalData.direction === "Long"
+      : true;
 
   const ticker = signalData.ticker;
   if (!ticker) return;
