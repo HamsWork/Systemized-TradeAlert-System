@@ -46,15 +46,6 @@ function fmtPrice(p: number | null | undefined): string {
   return `$${Number(p).toFixed(2)}`;
 }
 
-function fmtExpiry(raw: string | null | undefined): string {
-  if (!raw) return "\u2014";
-  const s = String(raw).replace(/-/g, "");
-  if (s.length === 8) {
-    return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
-  }
-  return raw;
-}
-
 function instrumentLabel(instrumentType: string): string {
   if (instrumentType === "LETF" || instrumentType === "Shares") return "Shares";
   if (instrumentType === "Crypto") return "Crypto";
@@ -267,7 +258,7 @@ function buildTemplateVars(
         signalData.current_instrument_price ??
         null,
     ),
-    expiry: fmtExpiry(signalData.expiration),
+    expiry: signalData.expiration ? String(signalData.expiration) : "\u2014",
     strike:
       signalData.strike != null && !isNaN(Number(signalData.strike))
         ? String(signalData.strike)
@@ -702,7 +693,7 @@ function buildOptionsFields(signalData: Record<string, any>): DiscordField[] {
   fields.push({ ...SPACER });
   fields.push({
     name: "\u274C Expiration",
-    value: fmtExpiry(signalData.expiration),
+    value: signalData.expiration || "\u2014",
     inline: true,
   });
   fields.push({
@@ -776,7 +767,7 @@ function buildLetfOptionsFields(
     { ...SPACER },
     {
       name: "\u274C Expiration",
-      value: fmtExpiry(signalData.expiration),
+      value: signalData.expiration || "\u2014",
       inline: true,
     },
     {
@@ -1441,7 +1432,7 @@ function pushInstrumentFields(
       },
       {
         name: "\u274C Expiration",
-        value: fmtExpiry(signalData.expiration),
+        value: `${signalData.expiration ?? "\u2014"}`,
         inline: true,
       },
       {
@@ -1454,7 +1445,7 @@ function pushInstrumentFields(
     fields.push(
       {
         name: "\u274C Expiration",
-        value: fmtExpiry(signalData.expiration),
+        value: `${signalData.expiration ?? "\u2014"}`,
         inline: true,
       },
       {
@@ -1792,7 +1783,9 @@ export function buildProfitMilestoneEmbed(
   let disclaimer_text = DISCLAIMER;
   if (milestonePct >= 10 && milestonePct < 30) {
     disclaimer_text = "Manage your own trade accordingly";
-  } else if (milestonePct >= 30) {
+  } else if (milestonePct >= 30 && milestonePct < 40) {
+    disclaimer_text = "Breakeven stop loss";
+  } else if (milestonePct >= 40) {
     disclaimer_text = "Raise stop accordingly";
   }
   let image_url = "";
