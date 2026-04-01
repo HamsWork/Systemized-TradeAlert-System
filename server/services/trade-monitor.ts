@@ -476,100 +476,103 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
   if (signalData.alert_mode === "ten_percent") {
     await checkMilestoneMode(signal, signalData, app, currentInstrumentPrice, currentTrackingPrice, isBullish);
     return;
-  }
+  } else if (signalData.alert_mode === "normal") {
 
-  const tpLevels = parseTargets(signalData, isBullish);
-  const nextTargetIndex = signalData.next_target_number ?? 0;
-  if (tpLevels.length > 0 && nextTargetIndex < tpLevels.length) {
-    const nextTarget = tpLevels[nextTargetIndex];
-    const nextTargetHit = isBullish ? currentTrackingPrice >= nextTarget.price : currentTrackingPrice <= nextTarget.price;
-    if (nextTargetHit) {
-      await applyTargetHitAuto(
-        signal,
-        signalData,
-        app,
-        nextTarget,
-        nextTargetIndex,
-        currentTrackingPrice,
-        currentInstrumentPrice,
-        isBullish,
-      );
-    }
-  }
-
-  if (signalData.trailing_stop_active && signalData.trailing_stop_percent > 0) {
-    const trailPct = signalData.trailing_stop_percent;
-    const prevHigh = signalData.trailing_stop_high ?? currentTrackingPrice;
-    const newHigh = isBullish
-      ? Math.max(prevHigh, currentTrackingPrice)
-      : Math.min(prevHigh, currentTrackingPrice);
-
-    if (newHigh !== prevHigh) {
-      signalData.trailing_stop_high = newHigh;
-      const newTrailingStop = isBullish
-        ? Math.round(newHigh * (1 - trailPct / 100) * 100) / 100
-        : Math.round(newHigh * (1 + trailPct / 100) * 100) / 100;
-
-      if (
-        signalData.current_stop_loss == null ||
-        (isBullish ? newTrailingStop > signalData.current_stop_loss : newTrailingStop < signalData.current_stop_loss)
-      ) {
-        signalData.current_stop_loss = newTrailingStop;
-        signalData.current_stop_loss_is_break_even =
-          Math.abs(newTrailingStop - (signalData.entry_tracking_price ?? signalData.entry_price ?? 0)) < 0.01;
-        signalData.risk_value = signalData.current_stop_loss_is_break_even
-          ? "0% (Risk-Free)"
-          : `${profitPctFromInstrument(
-            signalData.entry_tracking_price ?? signalData.entry_price,
-            newTrailingStop,
-            signalData.instrument_type,
-            signalData.direction,
-          ).toFixed(1)}%`;
-        await storage.updateSignal(signal.id, { data: signalData });
+    const tpLevels = parseTargets(signalData, isBullish);
+    const nextTargetIndex = signalData.next_target_number ?? 0;
+    if (tpLevels.length > 0 && nextTargetIndex < tpLevels.length) {
+      const nextTarget = tpLevels[nextTargetIndex];
+      const nextTargetHit = isBullish ? currentTrackingPrice >= nextTarget.price : currentTrackingPrice <= nextTarget.price;
+      if (nextTargetHit) {
+        await applyTargetHitAuto(
+          signal,
+          signalData,
+          app,
+          nextTarget,
+          nextTargetIndex,
+          currentTrackingPrice,
+          currentInstrumentPrice,
+          isBullish,
+        );
       }
     }
-  }
 
-  if (signalData.current_stop_loss){
-    const stopLossHit = isBullish ? currentTrackingPrice <= signalData.current_stop_loss : currentTrackingPrice >= signalData.current_stop_loss;
-    if (stopLossHit) {
-      signalData.status = "stopped_out";
-      signalData.stop_loss_hit = true;
-      signalData.stop_loss_hit_at = new Date().toISOString();
-      signalData.stop_loss_hit_tracking_price = currentTrackingPrice;
-      signalData.stop_loss_hit_instrument_price = currentInstrumentPrice;
-      signalData.remain_quantity = 0;
-      signalData.current_stop_loss_percent = profitPctFromInstrument(signalData.entry_instrument_price, currentInstrumentPrice, signalData.instrument_type, signalData.direction);
+    if (signalData.trailing_stop_active && signalData.trailing_stop_percent > 0) {
+      const trailPct = signalData.trailing_stop_percent;
+      const prevHigh = signalData.trailing_stop_high ?? currentTrackingPrice;
+      const newHigh = isBullish
+        ? Math.max(prevHigh, currentTrackingPrice)
+        : Math.min(prevHigh, currentTrackingPrice);
 
-      try {
-        const closeResult = await executeIbkrClose(signal, app);
-        if (closeResult.executed && closeResult.avgFillPrice && closeResult.avgFillPrice > 0) {
-          signalData.ibkr_close_fill_price = closeResult.avgFillPrice;
-          signalData.stop_loss_hit_ibkr_fill_price = closeResult.avgFillPrice;
-          console.log(
-            `[TradeMonitor] IBKR close filled at $${closeResult.avgFillPrice} for ${signalData.ticker} (stop loss)`,
-          );
-        } else if (closeResult.error && closeResult.error !== "No filled position to close for this signal") {
-          console.warn(
-            `[TradeMonitor] IBKR close failed for ${signalData.ticker} (stop loss): ${closeResult.error}`,
-          );
+      if (newHigh !== prevHigh) {
+        signalData.trailing_stop_high = newHigh;
+        const newTrailingStop = isBullish
+          ? Math.round(newHigh * (1 - trailPct / 100) * 100) / 100
+          : Math.round(newHigh * (1 + trailPct / 100) * 100) / 100;
+
+        if (
+          signalData.current_stop_loss == null ||
+          (isBullish ? newTrailingStop > signalData.current_stop_loss : newTrailingStop < signalData.current_stop_loss)
+        ) {
+          signalData.current_stop_loss = newTrailingStop;
+          signalData.current_stop_loss_is_break_even =
+            Math.abs(newTrailingStop - (signalData.entry_tracking_price ?? signalData.entry_price ?? 0)) < 0.01;
+          signalData.risk_value = signalData.current_stop_loss_is_break_even
+            ? "0% (Risk-Free)"
+            : `${profitPctFromInstrument(
+              signalData.entry_tracking_price ?? signalData.entry_price,
+              newTrailingStop,
+              signalData.instrument_type,
+              signalData.direction,
+            ).toFixed(1)}%`;
+          await storage.updateSignal(signal.id, { data: signalData });
         }
-      } catch (err: any) {
-        console.error(`[TradeMonitor] IBKR close error for ${signalData.ticker} (stop loss): ${err.message}`);
       }
-
-      await storage.updateSignal(signal.id, { data: signalData, status: "stopped_out" });
-
-      await sendStopLossHitDiscord(signalData, app, signal.id);
-      const slType = signalData.trailing_stop_active ? "Trailing stop" : "Stop loss";
-      storage.createActivity({
-        type: "stop_loss_hit",
-        title: `${slType} hit for ${signalData.ticker}`,
-        description: `${slType} triggered at ${fmtPrice(currentTrackingPrice)} (SL: ${fmtPrice(signalData.current_stop_loss)})${signalData.trailing_stop_active ? ` [${signalData.trailing_stop_percent}% trail]` : ""}`,
-        symbol: signalData.ticker,
-        signalId: signal.id,
-      }).catch(() => {});
     }
+
+    if (signalData.current_stop_loss){
+      const stopLossHit = isBullish ? currentTrackingPrice <= signalData.current_stop_loss : currentTrackingPrice >= signalData.current_stop_loss;
+      if (stopLossHit) {
+        signalData.status = "stopped_out";
+        signalData.stop_loss_hit = true;
+        signalData.stop_loss_hit_at = new Date().toISOString();
+        signalData.stop_loss_hit_tracking_price = currentTrackingPrice;
+        signalData.stop_loss_hit_instrument_price = currentInstrumentPrice;
+        signalData.remain_quantity = 0;
+        signalData.current_stop_loss_percent = profitPctFromInstrument(signalData.entry_instrument_price, currentInstrumentPrice, signalData.instrument_type, signalData.direction);
+
+        try {
+          const closeResult = await executeIbkrClose(signal, app);
+          if (closeResult.executed && closeResult.avgFillPrice && closeResult.avgFillPrice > 0) {
+            signalData.ibkr_close_fill_price = closeResult.avgFillPrice;
+            signalData.stop_loss_hit_ibkr_fill_price = closeResult.avgFillPrice;
+            console.log(
+              `[TradeMonitor] IBKR close filled at $${closeResult.avgFillPrice} for ${signalData.ticker} (stop loss)`,
+            );
+          } else if (closeResult.error && closeResult.error !== "No filled position to close for this signal") {
+            console.warn(
+              `[TradeMonitor] IBKR close failed for ${signalData.ticker} (stop loss): ${closeResult.error}`,
+            );
+          }
+        } catch (err: any) {
+          console.error(`[TradeMonitor] IBKR close error for ${signalData.ticker} (stop loss): ${err.message}`);
+        }
+
+        await storage.updateSignal(signal.id, { data: signalData, status: "stopped_out" });
+
+        await sendStopLossHitDiscord(signalData, app, signal.id);
+        const slType = signalData.trailing_stop_active ? "Trailing stop" : "Stop loss";
+        storage.createActivity({
+          type: "stop_loss_hit",
+          title: `${slType} hit for ${signalData.ticker}`,
+          description: `${slType} triggered at ${fmtPrice(currentTrackingPrice)} (SL: ${fmtPrice(signalData.current_stop_loss)})${signalData.trailing_stop_active ? ` [${signalData.trailing_stop_percent}% trail]` : ""}`,
+          symbol: signalData.ticker,
+          signalId: signal.id,
+        }).catch(() => {});
+      }
+    }
+  } else {
+    console.log("No alert mode found for signal", signal.id);
   }
   
 }
