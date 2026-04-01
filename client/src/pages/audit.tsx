@@ -361,7 +361,7 @@ export default function AuditPage() {
   const handleCopyAll = () => {
     if (!data) return;
 
-    let text = `TradeSync System Audit\nGenerated: ${new Date(data.generatedAt).toLocaleString()}\n\n`;
+    let text = `TradeSync System Audit\nGenerated: ${new Date(data.generatedAt).toLocaleString("en-US", { timeZone: "America/Chicago" })}\n\n`;
 
     text += "=== TECH STACK ===\n";
     for (const [k, v] of Object.entries(data.architecture.techStack)) {
@@ -436,7 +436,7 @@ export default function AuditPage() {
 
       {data && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>Last scanned: {new Date(data.generatedAt).toLocaleString()}</span>
+          <span>Last scanned: {new Date(data.generatedAt).toLocaleString("en-US", { timeZone: "America/Chicago" })}</span>
           <span className="text-muted-foreground/50">|</span>
           <span>{data.architecture.stats.sourceFiles} files</span>
           <span className="text-muted-foreground/50">|</span>

@@ -39,7 +39,8 @@ import {
 import { type Signal, type IbkrOrder, type ActivityLogEntry } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { formatDistanceToNow, format } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
+import { formatDateTime } from "@/lib/formatters";
 import { createChart, ColorType, CandlestickSeries } from "lightweight-charts";
 
 interface ChartBar {
@@ -421,7 +422,7 @@ function OrderRow({ order }: { order: IbkrOrder }) {
           <div className="text-[10px] text-blue-500 font-medium mb-0.5" data-testid={`text-order-app-${order.id}`}>{order.sourceAppName}</div>
         )}
         <div className="text-[10px] text-muted-foreground">
-          {order.submittedAt ? format(new Date(order.submittedAt), "MMM d, h:mm a") : ""}
+          {order.submittedAt ? formatDateTime(order.submittedAt, "short") : ""}
         </div>
       </div>
     </div>
@@ -1271,7 +1272,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                   <div className="flex items-center justify-between" data-testid="detail-created">
                     <span className="text-xs text-muted-foreground">Created</span>
                     <span className="text-[10px]">
-                      {signal.createdAt ? format(new Date(signal.createdAt), "MMM d, yyyy h:mm a") : ""}
+                      {signal.createdAt ? formatDateTime(signal.createdAt, "full") : ""}
                     </span>
                   </div>
                 </div>
@@ -1355,7 +1356,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                         <div className="mt-2 space-y-1">
                           {targets.filter(t => t.isHit && t.hitAt).map((t, i) => (
                             <p key={i} className="text-[10px] text-muted-foreground">
-                              {t.key.toUpperCase()} hit at ${t.hitPrice?.toFixed(2)} — {t.hitAt ? format(new Date(t.hitAt), "MMM d, h:mm a") : ""}
+                              {t.key.toUpperCase()} hit at ${t.hitPrice?.toFixed(2)} — {t.hitAt ? formatDateTime(t.hitAt, "short") : ""}
                             </p>
                           ))}
                         </div>

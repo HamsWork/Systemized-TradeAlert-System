@@ -282,14 +282,14 @@ interface OrderStatusResult {
 function isMarketOpen(): boolean {
   const now = new Date();
   const et = new Date(
-    now.toLocaleString("en-US", { timeZone: "America/New_York" }),
+    now.toLocaleString("en-US", { timeZone: "America/Chicago" }),
   );
   const day = et.getDay();
   const hour = et.getHours();
   const min = et.getMinutes();
   const timeInMinutes = hour * 60 + min;
   if (day === 0 || day === 6) return false;
-  return timeInMinutes >= 9 * 60 + 30 && timeInMinutes < 16 * 60;
+  return timeInMinutes >= 8 * 60 + 30 && timeInMinutes < 15 * 60;
 }
 
 function waitForOrderStatus(

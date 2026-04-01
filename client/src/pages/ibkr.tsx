@@ -713,7 +713,7 @@ function RejectionDiagnostics({ orders }: { orders: IbkrOrder[] }) {
                       <TableCell><SideBadge side={order.side} /></TableCell>
                       <TableCell className="text-xs">{order.secType}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {order.submittedAt ? new Date(order.submittedAt).toLocaleString() : "—"}
+                        {order.submittedAt ? new Date(order.submittedAt).toLocaleString("en-US", { timeZone: "America/Chicago" }) : "—"}
                       </TableCell>
                       <TableCell>
                         <span className="text-xs text-red-600 dark:text-red-400" data-testid={`text-diag-reason-${order.id}`}>
