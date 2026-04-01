@@ -591,7 +591,7 @@ export async function processSignal(
 
   const signalPayload = {
     data: signalData,
-    status: "active",
+    status: "pending",
     sourceAppId: sourceId,
     sourceAppName: sourceName,
   };
@@ -714,6 +714,9 @@ export async function processSignal(
   if (discordResult.error) {
     result.discord.errors.push(discordResult.error);
   }
+
+  await storage.updateSignal(signal.id, { status: "active" });
+  console.log(`[Signal] Signal ${signal.id} activated for ${ticker}`);
 
   const totalMs = Date.now() - totalT0;
   console.log(
