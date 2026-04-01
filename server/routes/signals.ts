@@ -200,11 +200,15 @@ export function registerSignalRoutes(app: Express) {
         sent: false,
         error: null,
       };
+      const isTenPercent = data.alert_mode === "ten_percent";
+
       switch (messageType) {
         case "signal_alert":
           result = await sendEntryDicordAlert(signal, app);
           break;
         case "target_hit": {
+          if (isTenPercent)
+            return res.status(400).json({ message: "Signal is in ten_percent milestone mode — target_hit is not allowed" });
           const targetKey = req.body.targetKey || "tp1";
           const targets = data.targets || {};
           const t = targets[targetKey];
@@ -255,6 +259,8 @@ export function registerSignalRoutes(app: Express) {
           break;
         }
         case "stop_loss_raised": {
+          if (isTenPercent)
+            return res.status(400).json({ message: "Signal is in ten_percent milestone mode — stop_loss_raised is not allowed" });
           const targetKey = req.body.targetKey || "tp1";
           const targets = data.targets || {};
           const t = targets[targetKey];
