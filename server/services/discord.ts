@@ -1784,9 +1784,9 @@ export function buildProfitMilestoneEmbed(
   if (milestonePct >= 10 && milestonePct < 30) {
     disclaimer_text = "Manage your own trade accordingly";
   } else if (milestonePct >= 30 && milestonePct < 40) {
-    disclaimer_text = "Breakeven stop loss";
+    disclaimer_text = "break even stop loss";
   } else if (milestonePct >= 40) {
-    disclaimer_text = "Raise stop accordingly";
+    disclaimer_text = "raise stop loss accordingly";
   }
   let image_url = "";
   if (milestonePct >= 30 && milestonePct < 40) {
