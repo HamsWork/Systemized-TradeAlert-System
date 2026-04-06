@@ -443,11 +443,25 @@ function fmtPnl(p: number): string {
   return `${sign}$${Number(p).toFixed(2)}`;
 }
 
+const WEBHOOK_MAX_RETRIES = 3;
+const WEBHOOK_CLOUDFLARE_BACKOFF_MS = 60_000;
+
+let webhookQueue: Promise<void> = Promise.resolve();
+
+function enqueueWebhook<T>(fn: () => Promise<T>): Promise<T> {
+  const result = webhookQueue.then(fn, fn);
+  webhookQueue = result.then(
+    () => new Promise((r) => setTimeout(r, 500)),
+    () => new Promise((r) => setTimeout(r, 500)),
+  );
+  return result;
+}
+
 async function sendWebhook(
   url: string,
   content: string,
   embeds: DiscordEmbed[],
-  isRetry = false,
+  _unused = false,
   chartFile?: ChartFile | null,
 ): Promise<boolean> {
   if (!url) {
@@ -455,55 +469,86 @@ async function sendWebhook(
     return false;
   }
 
-  try {
-    let res: Response;
+  return enqueueWebhook(() => sendWebhookInner(url, content, embeds, chartFile));
+}
 
-    if (chartFile) {
-      const filename = chartFile.originalname || "chart.png";
-      const embedsWithImage = embeds.map((e) => ({
-        ...e,
-        image: { url: `attachment://${filename}` },
-      }));
+async function sendWebhookInner(
+  url: string,
+  content: string,
+  embeds: DiscordEmbed[],
+  chartFile?: ChartFile | null,
+): Promise<boolean> {
+  for (let attempt = 0; attempt < WEBHOOK_MAX_RETRIES; attempt++) {
+    try {
+      let res: Response;
 
-      const formData = new FormData();
-      formData.append(
-        "payload_json",
-        JSON.stringify({ content, embeds: embedsWithImage }),
+      if (chartFile) {
+        const filename = chartFile.originalname || "chart.png";
+        const embedsWithImage = embeds.map((e) => ({
+          ...e,
+          image: { url: `attachment://${filename}` },
+        }));
+
+        const formData = new FormData();
+        formData.append(
+          "payload_json",
+          JSON.stringify({ content, embeds: embedsWithImage }),
+        );
+        const blob = new Blob([chartFile.buffer], { type: chartFile.mimetype });
+        formData.append("files[0]", blob, filename);
+
+        res = await fetch(url, { method: "POST", body: formData });
+      } else {
+        res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content, embeds }),
+        });
+      }
+
+      if (res.status === 429) {
+        const bodyText = await res.text().catch(() => "");
+        const isCloudflareBlock = bodyText.includes("Cloudflare") || bodyText.includes("<!doctype") || bodyText.includes("Access denied");
+
+        if (isCloudflareBlock) {
+          const waitMs = WEBHOOK_CLOUDFLARE_BACKOFF_MS * (attempt + 1);
+          console.warn(`[Discord] Cloudflare IP ban detected (attempt ${attempt + 1}/${WEBHOOK_MAX_RETRIES}), waiting ${waitMs / 1000}s`);
+          await new Promise((r) => setTimeout(r, waitMs));
+          continue;
+        }
+
+        let retryAfter = 1;
+        try {
+          const parsed = JSON.parse(bodyText);
+          retryAfter = parsed.retry_after ?? 1;
+        } catch {}
+        console.log(`[Discord] Rate limited (attempt ${attempt + 1}/${WEBHOOK_MAX_RETRIES}), retrying after ${retryAfter}s`);
+        await new Promise((r) => setTimeout(r, retryAfter * 1000));
+        continue;
+      }
+
+      if (!res.ok) {
+        const body = await res.text();
+        console.warn(`[Discord] Webhook failed: ${res.status} ${body}`);
+        return false;
+      }
+
+      console.log(
+        `[Discord] Webhook sent successfully${chartFile ? " (with chart media)" : ""}`,
       );
-      const blob = new Blob([chartFile.buffer], { type: chartFile.mimetype });
-      formData.append("files[0]", blob, filename);
-
-      res = await fetch(url, { method: "POST", body: formData });
-    } else {
-      res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content, embeds }),
-      });
-    }
-
-    if (res.status === 429 && !isRetry) {
-      const body = await res.json().catch(() => ({}));
-      const retryAfter = (body as { retry_after?: number }).retry_after ?? 1;
-      console.log(`[Discord] Rate limited, retrying after ${retryAfter}s`);
-      await new Promise((r) => setTimeout(r, retryAfter * 1000));
-      return sendWebhook(url, content, embeds, true, chartFile);
-    }
-
-    if (!res.ok) {
-      const body = await res.text();
-      console.warn(`[Discord] Webhook failed: ${res.status} ${body}`);
+      return true;
+    } catch (err: any) {
+      console.warn(`[Discord] Webhook error (attempt ${attempt + 1}/${WEBHOOK_MAX_RETRIES}): ${err.message}`);
+      if (attempt < WEBHOOK_MAX_RETRIES - 1) {
+        await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+        continue;
+      }
       return false;
     }
-
-    console.log(
-      `[Discord] Webhook sent successfully${chartFile ? " (with chart media)" : ""}`,
-    );
-    return true;
-  } catch (err: any) {
-    console.warn(`[Discord] Webhook error: ${err.message}`);
-    return false;
   }
+
+  console.warn(`[Discord] Webhook exhausted all ${WEBHOOK_MAX_RETRIES} retries`);
+  return false;
 }
 
 export async function sendDirectWebhook(
