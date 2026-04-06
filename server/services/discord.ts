@@ -46,6 +46,15 @@ function fmtPrice(p: number | null | undefined): string {
   return `$${Number(p).toFixed(2)}`;
 }
 
+function fmtExpiration(raw: string | null | undefined): string {
+  if (raw == null) return "\u2014";
+  const s = String(raw).replace(/-/g, "");
+  if (s.length === 8) {
+    return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+  }
+  return raw;
+}
+
 function instrumentLabel(instrumentType: string): string {
   if (instrumentType === "LETF" || instrumentType === "Shares") return "Shares";
   if (instrumentType === "Crypto") return "Crypto";
@@ -258,7 +267,7 @@ function buildTemplateVars(
         signalData.current_instrument_price ??
         null,
     ),
-    expiry: signalData.expiration ? String(signalData.expiration) : "\u2014",
+    expiry: fmtExpiration(signalData.expiration),
     strike:
       signalData.strike != null && !isNaN(Number(signalData.strike))
         ? String(signalData.strike)
@@ -693,7 +702,7 @@ function buildOptionsFields(signalData: Record<string, any>): DiscordField[] {
   fields.push({ ...SPACER });
   fields.push({
     name: "\u274C Expiration",
-    value: signalData.expiration || "\u2014",
+    value: fmtExpiration(signalData.expiration),
     inline: true,
   });
   fields.push({
@@ -767,7 +776,7 @@ function buildLetfOptionsFields(
     { ...SPACER },
     {
       name: "\u274C Expiration",
-      value: signalData.expiration || "\u2014",
+      value: fmtExpiration(signalData.expiration),
       inline: true,
     },
     {
@@ -1432,7 +1441,7 @@ function pushInstrumentFields(
       },
       {
         name: "\u274C Expiration",
-        value: `${signalData.expiration ?? "\u2014"}`,
+        value: fmtExpiration(signalData.expiration),
         inline: true,
       },
       {
@@ -1445,7 +1454,7 @@ function pushInstrumentFields(
     fields.push(
       {
         name: "\u274C Expiration",
-        value: `${signalData.expiration ?? "\u2014"}`,
+        value: fmtExpiration(signalData.expiration),
         inline: true,
       },
       {
