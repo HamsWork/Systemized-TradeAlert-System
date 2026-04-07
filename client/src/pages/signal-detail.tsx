@@ -33,6 +33,8 @@ import {
   AlertTriangle,
   MessageSquare,
   ChevronRight,
+  ChevronDown,
+  Code,
   Send,
   Loader2,
 } from "lucide-react";
@@ -426,6 +428,45 @@ function OrderRow({ order }: { order: IbkrOrder }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function SignalPayloadCard({ payload, isLoading }: { payload: Record<string, any> | null; isLoading: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <Card data-testid="card-signal-payload">
+      <CardContent className="p-3">
+        <button
+          type="button"
+          className="flex items-center gap-2 w-full text-left"
+          onClick={() => setExpanded(!expanded)}
+          data-testid="button-toggle-payload"
+        >
+          <Code className="h-4 w-4 text-amber-500" />
+          <span className="text-sm font-medium flex-1">Signal Payload</span>
+          {expanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+        </button>
+        {expanded && (
+          <div className="mt-2">
+            {isLoading ? (
+              <Skeleton className="h-24 w-full" />
+            ) : payload ? (
+              <pre
+                className="text-[11px] leading-relaxed bg-muted/50 rounded-lg p-3 overflow-x-auto max-h-[400px] overflow-y-auto font-mono whitespace-pre-wrap break-all"
+                data-testid="text-signal-payload"
+              >
+                {JSON.stringify(payload, null, 2)}
+              </pre>
+            ) : (
+              <p className="text-xs text-muted-foreground py-2 text-center" data-testid="text-no-payload">
+                No payload data available
+              </p>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1066,6 +1107,8 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
 
   const orders = ordersQuery.data ?? [];
   const activity = activityQuery.data ?? [];
+  const ingestEntry = activity.find(a => a.type === "signal_ingested");
+  const rawPayload = (ingestEntry?.metadata as any)?.rawSignal ?? null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1456,6 +1499,8 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                 )}
               </CardContent>
             </Card>
+
+            <SignalPayloadCard payload={rawPayload} isLoading={activityQuery.isLoading} />
           </div>
         </div>
       </DialogContent>
