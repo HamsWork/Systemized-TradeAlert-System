@@ -458,6 +458,66 @@ async function buildSignalData(
 
   signalData.alert_mode = alertMode;
 
+  if (
+    signalData.auto_track &&
+    signalData.current_stop_loss != null &&
+    typeof signalData.current_stop_loss === "number" &&
+    !Number.isNaN(signalData.current_stop_loss)
+  ) {
+    const sl = signalData.current_stop_loss;
+    const isBullish =
+      direction === "Long" || direction === "Call";
+
+    const trackingPrice = signalData.entry_tracking_price
+      ?? signalData.entry_instrument_price
+      ?? (entryPrice != null ? Number(entryPrice) : null);
+
+    if (trackingPrice != null && trackingPrice > 0) {
+      if (isBullish && sl >= trackingPrice) {
+        console.warn(
+          `[Signal] Stop loss validation failed for ${ticker}: bullish signal but SL ${sl} >= tracking price ${trackingPrice}. Removing stop loss.`,
+        );
+        signalData.stop_loss_validation_error = `Bullish signal but stop loss (${sl}) is at or above entry/tracking price (${trackingPrice})`;
+        delete signalData.stop_loss;
+        delete signalData.current_stop_loss;
+        delete signalData.stop_loss_percentage;
+        delete signalData.current_stop_loss_percent;
+      } else if (!isBullish && sl <= trackingPrice) {
+        console.warn(
+          `[Signal] Stop loss validation failed for ${ticker}: bearish signal but SL ${sl} <= tracking price ${trackingPrice}. Removing stop loss.`,
+        );
+        signalData.stop_loss_validation_error = `Bearish signal but stop loss (${sl}) is at or below entry/tracking price (${trackingPrice})`;
+        delete signalData.stop_loss;
+        delete signalData.current_stop_loss;
+        delete signalData.stop_loss_percentage;
+        delete signalData.current_stop_loss_percent;
+      }
+    }
+
+    if (signalData.current_stop_loss != null) {
+      const currentPrice = signalData.underlying_price_based
+        ? signalData.entry_underlying_price
+        : signalData.entry_instrument_price ?? signalData.entry_tracking_price;
+
+      if (currentPrice != null && typeof currentPrice === "number" && currentPrice > 0) {
+        const alreadyHit = isBullish
+          ? currentPrice <= sl
+          : currentPrice >= sl;
+
+        if (alreadyHit) {
+          console.warn(
+            `[Signal] Stop loss already breached for ${ticker}: current price ${currentPrice} vs SL ${sl} (${isBullish ? "bullish" : "bearish"}). Removing stop loss.`,
+          );
+          signalData.stop_loss_validation_error = `Current price (${currentPrice}) already at or past stop loss (${sl}) at entry`;
+          delete signalData.stop_loss;
+          delete signalData.current_stop_loss;
+          delete signalData.stop_loss_percentage;
+          delete signalData.current_stop_loss_percent;
+        }
+      }
+    }
+  }
+
   signalData.hit_targets = {};
   signalData.current_target_number = 0;
   signalData.current_tp_number = 0;
