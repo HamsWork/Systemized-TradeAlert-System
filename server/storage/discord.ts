@@ -3,7 +3,7 @@ import {
   type DiscordTemplate, type InsertDiscordTemplate, discordTemplates,
 } from "@shared/schema";
 import { db } from "../db";
-import { desc, eq, and } from "drizzle-orm";
+import { desc, eq, and, gte, count } from "drizzle-orm";
 
 export const discordMethods = {
   async getDiscordMessages(): Promise<DiscordMessage[]> {
@@ -17,6 +17,27 @@ export const discordMethods = {
   async createDiscordMessage(message: InsertDiscordMessage): Promise<DiscordMessage> {
     const [created] = await db.insert(discordMessages).values(message).returning();
     return created;
+  },
+
+  async countDiscordMessagesSince(
+    sourceAppId: string,
+    instrumentType: string,
+    messageType: string,
+    since: Date,
+  ): Promise<number> {
+    const [result] = await db
+      .select({ count: count() })
+      .from(discordMessages)
+      .where(
+        and(
+          eq(discordMessages.sourceAppId, sourceAppId),
+          eq(discordMessages.instrumentType, instrumentType),
+          eq(discordMessages.messageType, messageType),
+          eq(discordMessages.status, "sent"),
+          gte(discordMessages.createdAt, since),
+        ),
+      );
+    return result?.count ?? 0;
   },
 
   async getDiscordTemplatesByApp(appId: string): Promise<DiscordTemplate[]> {

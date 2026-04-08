@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, boolean, timestamp, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -30,11 +30,22 @@ export const connectedApps = pgTable("connected_apps", {
   ibkrHost: text("ibkr_host"),
   ibkrPort: text("ibkr_port"),
   sendDiscordMessages: boolean("send_discord_messages").notNull().default(false),
+  discordLimitShares: integer("discord_limit_shares"),
+  discordLimitOptions: integer("discord_limit_options"),
+  discordLimitLetf: integer("discord_limit_letf"),
+  discordLimitLetfOption: integer("discord_limit_letf_option"),
+  discordLimitCrypto: integer("discord_limit_crypto"),
   lastSyncAt: timestamp("last_sync_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-export const insertConnectedAppSchema = createInsertSchema(connectedApps).omit({
+export const insertConnectedAppSchema = createInsertSchema(connectedApps, {
+  discordLimitShares: z.number().int().min(0).nullable().optional(),
+  discordLimitOptions: z.number().int().min(0).nullable().optional(),
+  discordLimitLetf: z.number().int().min(0).nullable().optional(),
+  discordLimitLetfOption: z.number().int().min(0).nullable().optional(),
+  discordLimitCrypto: z.number().int().min(0).nullable().optional(),
+}).omit({
   id: true,
   createdAt: true,
   lastSyncAt: true,

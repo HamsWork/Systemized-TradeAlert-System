@@ -72,6 +72,7 @@ export interface IStorage {
   getDiscordMessages(): Promise<DiscordMessage[]>;
   getDiscordMessagesBySignal(signalId: string): Promise<DiscordMessage[]>;
   createDiscordMessage(message: InsertDiscordMessage): Promise<DiscordMessage>;
+  countDiscordMessagesSince(sourceAppId: string, instrumentType: string, messageType: string, since: Date): Promise<number>;
 
   getDiscordTemplatesByApp(appId: string): Promise<DiscordTemplate[]>;
   upsertDiscordTemplate(template: InsertDiscordTemplate): Promise<DiscordTemplate>;

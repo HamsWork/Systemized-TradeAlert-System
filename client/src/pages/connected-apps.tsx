@@ -104,11 +104,12 @@ function IbkrAccountSelector({ form, ibkrAccounts, testIdPrefix }: { form: any; 
   );
 }
 
-function DiscordChannelFields({ form, label, webhookName, contentName, testIdPrefix }: {
+function DiscordChannelFields({ form, label, webhookName, contentName, limitName, testIdPrefix }: {
   form: any;
   label: string;
   webhookName: string;
   contentName: string;
+  limitName: string;
   testIdPrefix: string;
 }) {
   const slug = label.toLowerCase().replace(/\s+/g, "-");
@@ -142,6 +143,31 @@ function DiscordChannelFields({ form, label, webhookName, contentName, testIdPre
           </FormItem>
         )}
       />
+      <FormField
+        control={form.control}
+        name={limitName}
+        render={({ field }: any) => (
+          <FormItem>
+            <FormLabel className="text-xs">Daily Message Limit</FormLabel>
+            <FormControl>
+              <Input
+                type="number"
+                min={0}
+                placeholder="Unlimited"
+                {...field}
+                value={field.value ?? ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  field.onChange(val === "" ? null : parseInt(val, 10));
+                }}
+                data-testid={`input-${prefix}discord-limit-${slug}`}
+              />
+            </FormControl>
+            <p className="text-[10px] text-muted-foreground">Max entry alerts per day. Leave empty for unlimited.</p>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
     </div>
   );
 }
@@ -167,6 +193,11 @@ function CreateAppDialog({ open, onOpenChange, ibkrAccounts }: { open: boolean; 
       discordContentLetfOption: "@everyone",
       discordContentCrypto: "@everyone",
       sendDiscordMessages: false,
+      discordLimitShares: undefined as any,
+      discordLimitOptions: undefined as any,
+      discordLimitLetf: undefined as any,
+      discordLimitLetfOption: undefined as any,
+      discordLimitCrypto: undefined as any,
       executeIbkrTrades: false,
       ibkrClientId: "",
       ibkrHost: "",
@@ -275,11 +306,11 @@ function CreateAppDialog({ open, onOpenChange, ibkrAccounts }: { open: boolean; 
                   )}
                 />
               </div>
-              <DiscordChannelFields form={form} label="Shares" webhookName="discordWebhookShares" contentName="discordContentShares" testIdPrefix="" />
-              <DiscordChannelFields form={form} label="Options" webhookName="discordWebhookOptions" contentName="discordContentOptions" testIdPrefix="" />
-              <DiscordChannelFields form={form} label="Leveraged ETF" webhookName="discordWebhookLetf" contentName="discordContentLetf" testIdPrefix="" />
-              <DiscordChannelFields form={form} label="LETF Option" webhookName="discordWebhookLetfOption" contentName="discordContentLetfOption" testIdPrefix="" />
-              <DiscordChannelFields form={form} label="Crypto" webhookName="discordWebhookCrypto" contentName="discordContentCrypto" testIdPrefix="" />
+              <DiscordChannelFields form={form} label="Shares" webhookName="discordWebhookShares" contentName="discordContentShares" limitName="discordLimitShares" testIdPrefix="" />
+              <DiscordChannelFields form={form} label="Options" webhookName="discordWebhookOptions" contentName="discordContentOptions" limitName="discordLimitOptions" testIdPrefix="" />
+              <DiscordChannelFields form={form} label="Leveraged ETF" webhookName="discordWebhookLetf" contentName="discordContentLetf" limitName="discordLimitLetf" testIdPrefix="" />
+              <DiscordChannelFields form={form} label="LETF Option" webhookName="discordWebhookLetfOption" contentName="discordContentLetfOption" limitName="discordLimitLetfOption" testIdPrefix="" />
+              <DiscordChannelFields form={form} label="Crypto" webhookName="discordWebhookCrypto" contentName="discordContentCrypto" limitName="discordLimitCrypto" testIdPrefix="" />
             </div>
             <div className="space-y-3 rounded-lg border p-3">
               <div className="flex items-center justify-between">
@@ -328,6 +359,11 @@ function EditAppDialog({ app, open, onOpenChange, ibkrAccounts }: { app: Connect
       discordContentLetfOption: app.discordContentLetfOption ?? "@everyone",
       discordContentCrypto: app.discordContentCrypto ?? "@everyone",
       sendDiscordMessages: app.sendDiscordMessages,
+      discordLimitShares: app.discordLimitShares ?? (undefined as any),
+      discordLimitOptions: app.discordLimitOptions ?? (undefined as any),
+      discordLimitLetf: app.discordLimitLetf ?? (undefined as any),
+      discordLimitLetfOption: app.discordLimitLetfOption ?? (undefined as any),
+      discordLimitCrypto: app.discordLimitCrypto ?? (undefined as any),
       executeIbkrTrades: app.executeIbkrTrades,
       ibkrClientId: app.ibkrClientId ?? "",
       ibkrHost: app.ibkrHost ?? "",
@@ -417,11 +453,11 @@ function EditAppDialog({ app, open, onOpenChange, ibkrAccounts }: { app: Connect
                   )}
                 />
               </div>
-              <DiscordChannelFields form={form} label="Shares" webhookName="discordWebhookShares" contentName="discordContentShares" testIdPrefix="edit" />
-              <DiscordChannelFields form={form} label="Options" webhookName="discordWebhookOptions" contentName="discordContentOptions" testIdPrefix="edit" />
-              <DiscordChannelFields form={form} label="Leveraged ETF" webhookName="discordWebhookLetf" contentName="discordContentLetf" testIdPrefix="edit" />
-              <DiscordChannelFields form={form} label="LETF Option" webhookName="discordWebhookLetfOption" contentName="discordContentLetfOption" testIdPrefix="edit" />
-              <DiscordChannelFields form={form} label="Crypto" webhookName="discordWebhookCrypto" contentName="discordContentCrypto" testIdPrefix="edit" />
+              <DiscordChannelFields form={form} label="Shares" webhookName="discordWebhookShares" contentName="discordContentShares" limitName="discordLimitShares" testIdPrefix="edit" />
+              <DiscordChannelFields form={form} label="Options" webhookName="discordWebhookOptions" contentName="discordContentOptions" limitName="discordLimitOptions" testIdPrefix="edit" />
+              <DiscordChannelFields form={form} label="Leveraged ETF" webhookName="discordWebhookLetf" contentName="discordContentLetf" limitName="discordLimitLetf" testIdPrefix="edit" />
+              <DiscordChannelFields form={form} label="LETF Option" webhookName="discordWebhookLetfOption" contentName="discordContentLetfOption" limitName="discordLimitLetfOption" testIdPrefix="edit" />
+              <DiscordChannelFields form={form} label="Crypto" webhookName="discordWebhookCrypto" contentName="discordContentCrypto" limitName="discordLimitCrypto" testIdPrefix="edit" />
             </div>
             <div className="space-y-3 rounded-lg border p-3">
               <div className="flex items-center justify-between">

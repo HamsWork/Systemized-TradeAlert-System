@@ -638,6 +638,56 @@ function getContentForInstrument(
   return trimmed || "";
 }
 
+function getDiscordLimitForInstrument(
+  app: ConnectedApp,
+  instrumentType: string,
+): number | null {
+  switch (instrumentType) {
+    case "Shares":
+      return app.discordLimitShares ?? null;
+    case "Options":
+      return app.discordLimitOptions ?? null;
+    case "LETF":
+      return app.discordLimitLetf ?? null;
+    case "LETF Option":
+      return app.discordLimitLetfOption ?? null;
+    case "Crypto":
+      return app.discordLimitCrypto ?? null;
+    default:
+      return null;
+  }
+}
+
+async function checkDailyDiscordLimit(
+  app: ConnectedApp,
+  instrumentType: string,
+): Promise<{ allowed: boolean; reason?: string; count?: number; limit?: number }> {
+  const limit = getDiscordLimitForInstrument(app, instrumentType);
+  if (limit == null || limit <= 0) {
+    return { allowed: true };
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const count = await storage.countDiscordMessagesSince(
+    app.id,
+    instrumentType,
+    "signal_alert",
+    today,
+  );
+
+  if (count >= limit) {
+    return {
+      allowed: false,
+      reason: `Daily Discord limit reached for ${instrumentType} on ${app.name}: ${count}/${limit}`,
+      count,
+      limit,
+    };
+  }
+  return { allowed: true, count, limit };
+}
+
 function getWebhookForInstrument(
   app: ConnectedApp,
   instrumentType: string,
@@ -1703,6 +1753,12 @@ async function sendEntryDiscordAlertTenPercent(
   const ticker = data.ticker || "UNKNOWN";
   const instrumentType = data.instrument_type || "Options";
 
+  const limitCheck = await checkDailyDiscordLimit(app, instrumentType);
+  if (!limitCheck.allowed) {
+    console.log(`[Discord] ${limitCheck.reason}`);
+    return { sent: false, error: limitCheck.reason ?? "Daily limit reached" };
+  }
+
   let webhookUrl: string | null = null;
   if (useOverride) {
     webhookUrl = overrideWebhookUrl!.trim();
@@ -1921,6 +1977,12 @@ export async function sendEntryDicordAlert(
   const ticker = data.ticker || "UNKNOWN";
   const direction = data.direction || "Long";
   const instrumentType = data.instrument_type || "Options";
+
+  const limitCheck = await checkDailyDiscordLimit(app, instrumentType);
+  if (!limitCheck.allowed) {
+    console.log(`[Discord] ${limitCheck.reason}`);
+    return { sent: false, error: limitCheck.reason ?? "Daily limit reached" };
+  }
 
   let webhookUrl: string | null = null;
   if (useOverride) {
