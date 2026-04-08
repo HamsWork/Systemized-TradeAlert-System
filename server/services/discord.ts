@@ -667,14 +667,21 @@ async function checkDailyDiscordLimit(
     return { allowed: true };
   }
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const now = new Date();
+  const estNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const estOffset = now.getTime() - estNow.getTime();
+  const est8am = new Date(estNow);
+  est8am.setHours(8, 0, 0, 0);
+  if (estNow < est8am) {
+    est8am.setDate(est8am.getDate() - 1);
+  }
+  const since = new Date(est8am.getTime() + estOffset);
 
   const count = await storage.countDiscordMessagesSince(
     app.id,
     instrumentType,
     "signal_alert",
-    today,
+    since,
   );
 
   if (count >= limit) {
