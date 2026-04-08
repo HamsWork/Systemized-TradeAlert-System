@@ -87,6 +87,7 @@ function isTdiFormat(body: Record<string, any>): boolean {
 export function isBullishTrade(signalData: StoredSignalData): boolean {
   const instrumentType = signalData.instrument_type || "Shares";
   if (instrumentType === "Options" || instrumentType === "LETF Option") {
+    if (signalData.underlying_price_based) return true;
     return signalData.direction === "Call";
   }
   return signalData.direction === "Long";
