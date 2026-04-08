@@ -133,6 +133,11 @@ export function registerTestRoutes(app: Express) {
       };
 
       if (type === "signal_alert") {
+        if (body.alert_mode) {
+          const updData = { ...(signal.data as Record<string, any>), alert_mode: body.alert_mode };
+          await storage.updateSignal(signal.id, { data: updData as any });
+          signal = (await storage.getSignal(signal.id))!;
+        }
         const result = await sendEntryDicordAlert(signal, app);
         return res.json({
           ok: result.sent,
