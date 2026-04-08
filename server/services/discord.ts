@@ -751,7 +751,9 @@ export function profitPctFromInstrument(
   const isOption =
     instrumentType === "Options" || instrumentType === "LETF Option";
   if (isOption) return ((current - entry) / entry) * 100; // option P&L: we're long the option, profit when option price rises
-  const isBullish = direction === "Call" || direction === "Long";
+
+  const isBullish = direction === "Long";
+  
   return isBullish
     ? ((current - entry) / entry) * 100
     : ((entry - current) / entry) * 100;

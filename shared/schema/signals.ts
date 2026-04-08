@@ -257,6 +257,7 @@ export interface SignalData {
   trade_type?: "Scalp" | "Swing" | "Leap";
   discord_webhook_url?: string | null;
   alert_mode?: "normal" | "ten_percent";
+  stop_loss_validation_error?: string | null;
 }
 
 /**
@@ -285,6 +286,7 @@ export interface SignalTrackingData {
   trailing_stop_percent?: number;
   trailing_stop_high?: number;
   trailing_stop_activated_at?: string;
+  ibkr_fill_price?: number | null;
 }
 
 /**

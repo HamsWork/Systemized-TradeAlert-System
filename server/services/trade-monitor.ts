@@ -10,6 +10,7 @@ import {
 } from "./discord";
 import { fetchStockPrice, fetchOptionContractPrice } from "./polygon";
 import { executeIbkrClose } from "./trade-executor";
+import { isBullishTrade } from "./signal-processor";
 
 async function getIbkrEntryFillPrice(signalId: string, direction?: string): Promise<number | null> {
   try {
@@ -83,13 +84,7 @@ function parseTargets(
   }));
 }
 
-function isBullishTrade(data: Record<string, any>): boolean {
-  const instrumentType = data.instrument_type || "Shares";
-  if (instrumentType === "Options" || instrumentType === "LETF Option") {
-    return data.direction === "Call";
-  }
-  return data.direction === "Long";
-}
+
 
 /** Fetch current instrument price for Discord profit display. Options use underlying symbol for Polygon. Exported for use in routes when sending Discord. */
 export async function getCurrentInstrumentPrice(
@@ -644,7 +639,7 @@ export async function recordManualTargetHit(
     };
   }
   const ticker = data.ticker || "UNKNOWN";
-  const bullish = isBullishTrade(data);
+  const bullish = isBullishTrade(signal.data as StoredSignalData);
   const targets = parseTargets(data, bullish);
   console.log("targets", targets);
   console.log("data", data);

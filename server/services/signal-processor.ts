@@ -84,6 +84,14 @@ function isTdiFormat(body: Record<string, any>): boolean {
   );
 }
 
+export function isBullishTrade(signalData: StoredSignalData): boolean {
+  const instrumentType = signalData.instrument_type || "Shares";
+  if (instrumentType === "Options" || instrumentType === "LETF Option") {
+    return signalData.direction === "Call";
+  }
+  return signalData.direction === "Long";
+}
+
 function transformTdiSignal(body: Record<string, any>): Record<string, any> {
   const rawInstrument = (body.instrument_type || "SHARES").toUpperCase();
   const instrumentType = TDI_INSTRUMENT_MAP[rawInstrument] || "Shares";
@@ -317,10 +325,13 @@ async function buildSignalData(
 
   const errors: string[] = [];
 
+  //TODO we should remove hardcoded value later
   const defaultTradeType =
     app?.slug === "tdi-core-scanner" || app?.slug === "situ-trader"
       ? "Swing"
       : "Scalp";
+
+  const trade_type = body.tradeType ?? body.trade_type ?? defaultTradeType;
 
   const signalData: StoredSignalData = {
     ticker,
@@ -328,10 +339,7 @@ async function buildSignalData(
     direction,
     entry_price: entryPrice != null ? Number(entryPrice) : 0.0,
     underlying_ticker: ticker,
-    trade_type: body.tradeType
-      ? body.tradeType.charAt(0).toUpperCase() +
-        body.tradeType.slice(1).toLowerCase()
-      : defaultTradeType,
+    trade_type: trade_type,
   };
 
   if (instrumentType === "Options" || instrumentType === "LETF Option") {
@@ -352,6 +360,7 @@ async function buildSignalData(
   }
 
   if (targets && typeof targets === "object" && !Array.isArray(targets)) {
+    // TODO we should check in detail, especially with underlying price based
     signalData.targets = normalizeTargets(targets, {
       underlying_price_based,
       entryPrice,
@@ -378,6 +387,7 @@ async function buildSignalData(
         typeof signalData.current_stop_loss === "number" &&
         !Number.isNaN(signalData.current_stop_loss)
       ) {
+        // TODO we should check for underying price based
         const slPct = profitPctFromInstrument(
           entryNum,
           signalData.current_stop_loss,
@@ -404,6 +414,8 @@ async function buildSignalData(
   if (webhookFromBody) signalData.discord_webhook_url = webhookFromBody;
 
   const alertMode = body.alert_mode ?? "normal";
+
+  // TODO we should update it, remove alert mode check later. 
   const underlyingPriceBased =
     alertMode === "ten_percent" ? false
     : underlying_price_based !== undefined ? underlying_price_based : false;
@@ -445,6 +457,7 @@ async function buildSignalData(
     }
     signalData.entry_tracking_price = entryPrice ?? null;
     signalData.entry_instrument_price = entryPrice ?? null;
+    
   }
 
   if (instrumentType === "LETF Option") {
@@ -465,55 +478,44 @@ async function buildSignalData(
     !Number.isNaN(signalData.current_stop_loss)
   ) {
     const sl = signalData.current_stop_loss;
-    const isBullish =
-      direction === "Long" || direction === "Call";
+    const entry_tracking_price = signalData.entry_tracking_price
+    const current_tracking_price = signalData.underlying_price_based 
+      ? (signalData.underlying_ticker ? await fetchStockPrice(signalData.underlying_ticker) : null)
+      : await getCurrentInstrumentPrice(signalData, signalData.ticker)
 
-    const trackingPrice = signalData.entry_tracking_price
-      ?? signalData.entry_instrument_price
-      ?? (entryPrice != null ? Number(entryPrice) : null);
+    const isBullish = isBullishTrade(signalData);
 
-    if (trackingPrice != null && trackingPrice > 0) {
-      if (isBullish && sl >= trackingPrice) {
+    
+
+    if (entry_tracking_price != null && entry_tracking_price > 0) {
+      if (isBullish && sl >= entry_tracking_price) {
         console.warn(
-          `[Signal] Stop loss validation failed for ${ticker}: bullish signal but SL ${sl} >= tracking price ${trackingPrice}. Removing stop loss.`,
+          `[Signal] Stop loss validation failed for ${ticker}: bullish signal but SL ${sl} >= tracking price ${entry_tracking_price}. `,
         );
-        signalData.stop_loss_validation_error = `Bullish signal but stop loss (${sl}) is at or above entry/tracking price (${trackingPrice})`;
-        delete signalData.stop_loss;
-        delete signalData.current_stop_loss;
-        delete signalData.stop_loss_percentage;
-        delete signalData.current_stop_loss_percent;
-      } else if (!isBullish && sl <= trackingPrice) {
+        signalData.stop_loss_validation_error = `Bullish signal but stop loss (${sl}) is at or above entry/tracking price (${entry_tracking_price})`;
+        errors.push(`Bullish signal but stop loss (${sl}) is at or above entry/tracking price (${entry_tracking_price})`)
+      } else if (!isBullish && sl <= entry_tracking_price) {
         console.warn(
-          `[Signal] Stop loss validation failed for ${ticker}: bearish signal but SL ${sl} <= tracking price ${trackingPrice}. Removing stop loss.`,
+          `[Signal] Stop loss validation failed for ${ticker}: bearish signal but SL ${sl} <= tracking price ${entry_tracking_price}. `,
         );
-        signalData.stop_loss_validation_error = `Bearish signal but stop loss (${sl}) is at or below entry/tracking price (${trackingPrice})`;
-        delete signalData.stop_loss;
-        delete signalData.current_stop_loss;
-        delete signalData.stop_loss_percentage;
-        delete signalData.current_stop_loss_percent;
+        signalData.stop_loss_validation_error = `Bearish signal but stop loss (${sl}) is at or below entry/tracking price (${entry_tracking_price})`;
+        errors.push(`Bearish signal but stop loss (${sl}) is at or below entry/tracking price (${entry_tracking_price})`)
       }
     }
 
-    if (signalData.current_stop_loss != null) {
-      const currentPrice = signalData.underlying_price_based
-        ? signalData.entry_underlying_price
-        : signalData.entry_instrument_price ?? signalData.entry_tracking_price;
-
-      if (currentPrice != null && typeof currentPrice === "number" && currentPrice > 0) {
-        const alreadyHit = isBullish
-          ? currentPrice <= sl
-          : currentPrice >= sl;
-
-        if (alreadyHit) {
-          console.warn(
-            `[Signal] Stop loss already breached for ${ticker}: current price ${currentPrice} vs SL ${sl} (${isBullish ? "bullish" : "bearish"}). Removing stop loss.`,
-          );
-          signalData.stop_loss_validation_error = `Current price (${currentPrice}) already at or past stop loss (${sl}) at entry`;
-          delete signalData.stop_loss;
-          delete signalData.current_stop_loss;
-          delete signalData.stop_loss_percentage;
-          delete signalData.current_stop_loss_percent;
-        }
+    if (current_tracking_price != null && current_tracking_price > 0){
+      if (isBullish && sl >= current_tracking_price){
+        console.warn(
+          `[Signal] Stop loss validation failed for ${ticker}: bullish signal but SL ${sl} >= current tracking price ${current_tracking_price}. `,
+        );
+        signalData.stop_loss_validation_error = `Bullish signal but stop loss (${sl}) is at or above current tracking price (${current_tracking_price})`
+        errors.push(`Bullish signal but stop loss (${sl}) is at or above current tracking price (${current_tracking_price})`)
+      } else if (!isBullish && sl <= current_tracking_price){
+        console.warn(
+          `[Signal] Stop loss validation failed for ${ticker}: bearish signal but SL ${sl} >= current tracking price ${current_tracking_price}. `,
+        );
+        signalData.stop_loss_validation_error = `Bearish signal but stop loss (${sl}) is at or above current tracking price (${current_tracking_price})`
+        errors.push(`Bearish signal but stop loss (${sl}) is at or above current tracking price (${current_tracking_price})`)
       }
     }
   }
@@ -574,7 +576,7 @@ export async function processSignal(
 
   const totalT0 = Date.now();
   console.log(`[Signal] Processing signal for ${body.ticker}`, body);
-  const normalizedBody = normalizeBodyForIngest(body, app.name);
+  const normalizedBody = normalizeBodyForIngest(body, app.name); //TODO we should check it, it for TDI
 
   console.log(`[Signal] Normalized body for ${body.ticker}`, normalizedBody);
 
@@ -604,6 +606,7 @@ export async function processSignal(
       .catch(() => {});
     return result;
   }
+
   const validatedBody = ingestParsed.data;
 
   console.log(`[Signal] Validated body for ${body.ticker}`, validatedBody);
@@ -699,6 +702,7 @@ export async function processSignal(
     fetchPolygonBars({ symbol: ticker, secType: "STK" }).catch(() => {});
   }
 
+  // TODO, we should check the ibkr
   const ibkrT0 = Date.now();
   const entryPriceForSizing = getEntryPriceForSizing(signalData);
   const appLimitRatio = getAppBuyingPowerLimit(app);
