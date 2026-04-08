@@ -1735,11 +1735,14 @@ function buildMilestoneEntryEmbed(
     });
   }
 
+  const image_url = "https://media.discordapp.net/attachments/1484653264225177745/1491388026398572544/entry_boom_style_tight_preview.gif"
+
   return {
     description: heading,
     color: GREEN,
     fields,
     footer: { text: DISCLAIMER },
+    thumbnail: {url: image_url},
   };
 }
 
