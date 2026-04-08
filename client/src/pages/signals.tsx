@@ -49,7 +49,7 @@ import {
 } from "lucide-react";
 import { type Signal, type InsertSignal } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { SignalDetailDialog } from "@/pages/signal-detail";
@@ -622,8 +622,8 @@ function SignalCard({ signal, onDelete, onOpen }: { signal: Signal; onDelete: (i
                     {signal.sourceAppName}
                   </Badge>
                 )}
-                <span className="text-[10px] text-muted-foreground" data-testid="text-time">
-                  {signal.createdAt ? formatDistanceToNow(new Date(signal.createdAt), { addSuffix: true }) : ""}
+                <span className="text-[10px] text-muted-foreground" data-testid="text-time" title={signal.createdAt ? formatDistanceToNow(new Date(signal.createdAt), { addSuffix: true }) : ""}>
+                  {signal.createdAt ? format(new Date(signal.createdAt), "MM/dd/yyyy hh:mm:ss a") : ""}
                 </span>
               </div>
 
@@ -656,6 +656,7 @@ export default function SignalsPage() {
   const [selectedSignal, setSelectedSignal] = useState<Signal | null>(null);
   const [filter, setFilter] = useState<string>("active");
   const [appFilter, setAppFilter] = useState<string>("all");
+  const [instrumentFilter, setInstrumentFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
   const { toast } = useToast();
 
@@ -685,8 +686,10 @@ export default function SignalsPage() {
 
   const signals = signalsList;
   const sourceApps = [...new Set(signals.map(s => s.sourceAppName).filter(Boolean))].sort();
+  const instrumentTypes = [...new Set(signals.map(s => (s.data as any)?.instrument_type).filter(Boolean))].sort();
   const afterApp = appFilter === "all" ? signals : signals.filter(s => s.sourceAppName === appFilter);
-  const filtered = filter === "all" ? afterApp : afterApp.filter((s) => s.status === filter);
+  const afterInstrument = instrumentFilter === "all" ? afterApp : afterApp.filter(s => (s.data as any)?.instrument_type === instrumentFilter);
+  const filtered = filter === "all" ? afterInstrument : afterInstrument.filter((s) => s.status === filter);
   const totalPages = Math.max(1, Math.ceil(filtered.length / SIGNALS_PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const paginated = filtered.slice((currentPage - 1) * SIGNALS_PAGE_SIZE, currentPage * SIGNALS_PAGE_SIZE);
@@ -732,7 +735,7 @@ export default function SignalsPage() {
         <div className="flex items-center gap-2 flex-wrap">
           {["active", "all", "completed", "stopped_out", "closed", "expired"].map((f) => {
             const label = f === "stopped_out" ? "Stopped Out" : f.charAt(0).toUpperCase() + f.slice(1);
-            const count = f === "all" ? afterApp.length : afterApp.filter(s => s.status === f).length;
+            const count = f === "all" ? afterInstrument.length : afterInstrument.filter(s => s.status === f).length;
             return (
               <Button
                 key={f}
@@ -747,7 +750,21 @@ export default function SignalsPage() {
             );
           })}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          {instrumentTypes.length > 1 && (
+            <Select value={instrumentFilter} onValueChange={(v) => { setInstrumentFilter(v); setPage(1); }}>
+              <SelectTrigger className="w-full sm:w-[160px] h-8 text-xs" data-testid="select-instrument-filter">
+                <Target className="h-3 w-3 mr-1.5 text-muted-foreground" />
+                <SelectValue placeholder="All Types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                {instrumentTypes.map(t => (
+                  <SelectItem key={t} value={t!}>{t}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           {sourceApps.length > 0 && (
             <Select value={appFilter} onValueChange={(v) => { setAppFilter(v); setPage(1); }}>
               <SelectTrigger className="w-full sm:w-[180px] h-8 text-xs" data-testid="select-source-app-filter">
