@@ -49,7 +49,7 @@ import {
 } from "lucide-react";
 import { type Signal, type InsertSignal } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
-import { formatDistanceToNow, format } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { SignalDetailDialog } from "@/pages/signal-detail";
@@ -623,7 +623,7 @@ function SignalCard({ signal, onDelete, onOpen }: { signal: Signal; onDelete: (i
                   </Badge>
                 )}
                 <span className="text-[10px] text-muted-foreground" data-testid="text-time" title={signal.createdAt ? formatDistanceToNow(new Date(signal.createdAt), { addSuffix: true }) : ""}>
-                  {signal.createdAt ? format(new Date(signal.createdAt), "MM/dd/yyyy hh:mm:ss a") : ""}
+                  {signal.createdAt ? new Date(signal.createdAt).toLocaleString("en-US", { timeZone: "America/New_York", month: "2-digit", day: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true }) + " EST" : ""}
                 </span>
               </div>
 
