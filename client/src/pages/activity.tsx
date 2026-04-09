@@ -20,6 +20,8 @@ import {
   Zap,
   Search,
   X,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import type { ActivityLogEntry } from "@shared/schema";
 import { formatRelativeTime } from "@/lib/formatters";
@@ -27,6 +29,8 @@ import { format } from "date-fns";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
+
+const PAGE_SIZE = 50;
 
 const TYPE_LABELS: Record<string, string> = {
   signal_ingested: "Signal Ingested",
@@ -91,11 +95,20 @@ function getActivityBadge(type: string) {
 }
 
 export default function ActivityPage() {
-  const activityQuery = useQuery<ActivityLogEntry[]>({ queryKey: ["/api/activity"] });
   const [selectedEntry, setSelectedEntry] = useState<ActivityLogEntry | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
+
+  const activityQuery = useQuery<{ data: ActivityLogEntry[]; total: number }>({
+    queryKey: ["/api/activity", page],
+    queryFn: async () => {
+      const res = await fetch(`/api/activity?page=${page}&pageSize=${PAGE_SIZE}`);
+      if (!res.ok) throw new Error("Failed to fetch activity");
+      return res.json();
+    },
+  });
 
   const handleCardClick = (entry: ActivityLogEntry) => {
     setSelectedEntry(entry);
@@ -109,7 +122,9 @@ export default function ActivityPage() {
     }
   };
 
-  const activities = activityQuery.data ?? [];
+  const activities = activityQuery.data?.data ?? [];
+  const totalItems = activityQuery.data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
 
   const availableTypes = useMemo(() => {
     const typeCounts = new Map<string, number>();
@@ -158,7 +173,7 @@ export default function ActivityPage() {
       <PageHeader
         icon={Activity}
         title="Activity"
-        description="Complete log of system events and actions"
+        description={`Complete log of system events and actions · ${totalItems.toLocaleString()} total`}
         testId="heading-activity"
       />
 
@@ -232,7 +247,7 @@ export default function ActivityPage() {
         <div className="space-y-2">
           {searchQuery || activeFilter !== "all" ? (
             <p className="text-xs text-muted-foreground">
-              Showing {filteredActivities.length} of {activities.length} events
+              Showing {filteredActivities.length} of {activities.length} events on this page
             </p>
           ) : null}
           {filteredActivities.map((entry) => (
@@ -272,6 +287,39 @@ export default function ActivityPage() {
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between gap-4 pt-2">
+          <p className="text-sm text-muted-foreground" data-testid="text-activity-page-info">
+            Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, totalItems)} of {totalItems.toLocaleString()}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              data-testid="button-activity-prev-page"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Previous
+            </Button>
+            <span className="text-sm font-medium min-w-[6rem] text-center" data-testid="text-activity-page-indicator">
+              Page {page} of {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              data-testid="button-activity-next-page"
+            >
+              Next
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       )}
 

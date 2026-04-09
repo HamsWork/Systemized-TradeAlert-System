@@ -4,9 +4,11 @@ import { asyncHandler } from "../lib/async-handler";
 import { getParam } from "../lib/params";
 
 export function registerActivityRoutes(app: Express) {
-  app.get("/api/activity", asyncHandler(async (_req, res) => {
-    const log = await storage.getActivityLog();
-    res.json(log);
+  app.get("/api/activity", asyncHandler(async (req, res) => {
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize as string) || 50));
+    const result = await storage.getActivityLog(page, pageSize);
+    res.json(result);
   }));
 
   app.get("/api/activity/by-symbol/:symbol", asyncHandler(async (req, res) => {

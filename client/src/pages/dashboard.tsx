@@ -489,7 +489,7 @@ export default function Dashboard() {
   }>({ queryKey: ["/api/dashboard/stats"] });
 
   const signalsQuery = useQuery<Signal[]>({ queryKey: ["/api/signals"] });
-  const activityQuery = useQuery<ActivityLogEntry[]>({ queryKey: ["/api/activity"] });
+  const activityQuery = useQuery<{ data: ActivityLogEntry[]; total: number }>({ queryKey: ["/api/activity"] });
   const appsQuery = useQuery<ConnectedApp[]>({ queryKey: ["/api/connected-apps"] });
   const integrationsQuery = useQuery<Integration[]>({ queryKey: ["/api/integrations"] });
   const positionsQuery = useQuery<IbkrPosition[]>({ queryKey: ["/api/ibkr/positions"] });
@@ -518,7 +518,7 @@ export default function Dashboard() {
 
   const stats = statsQuery.data;
   const signals = signalsQuery.data ?? [];
-  const activity = activityQuery.data ?? [];
+  const activity = activityQuery.data?.data ?? [];
   const apps = appsQuery.data ?? [];
   const integrations = integrationsQuery.data ?? [];
   const positions = positionsQuery.data ?? [];

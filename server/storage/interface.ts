@@ -29,7 +29,7 @@ export interface IStorage {
   updateSignal(id: string, data: Partial<InsertSignal>): Promise<Signal | undefined>;
   deleteSignal(id: string): Promise<boolean>;
 
-  getActivityLog(): Promise<ActivityLogEntry[]>;
+  getActivityLog(page?: number, pageSize?: number): Promise<{ data: ActivityLogEntry[]; total: number }>;
   getActivityBySymbol(symbol: string): Promise<ActivityLogEntry[]>;
   getActivityBySignal(signalId: string): Promise<ActivityLogEntry[]>;
   createActivity(entry: InsertActivityLog): Promise<ActivityLogEntry>;
