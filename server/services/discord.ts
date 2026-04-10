@@ -1739,7 +1739,7 @@ function buildMilestoneEntryEmbed(
 
   return {
     description: heading,
-    color: GREEN,
+    color: BLUE,
     fields,
     footer: { text: DISCLAIMER },
     thumbnail: {url: image_url},
