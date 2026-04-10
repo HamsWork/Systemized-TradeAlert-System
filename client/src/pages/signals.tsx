@@ -507,6 +507,19 @@ function SignalCard({ signal, onDelete, onOpen }: { signal: Signal; onDelete: (i
                     {data.trade_type}
                   </Badge>
                 )}
+                {data.alert_mode === "ten_percent" && (
+                  <Badge
+                    variant="outline"
+                    className={`text-[10px] ${
+                      data.last_milestone_alerted > 0
+                        ? "text-amber-400 border-amber-500/30 bg-amber-500/10"
+                        : "text-muted-foreground border-border"
+                    }`}
+                    data-testid="badge-milestone"
+                  >
+                    {data.last_milestone_alerted > 0 ? `+${data.last_milestone_alerted}%` : "10% Mode"}
+                  </Badge>
+                )}
               </div>
 
               <div className="mt-3 flex items-center gap-4 flex-wrap text-sm">
