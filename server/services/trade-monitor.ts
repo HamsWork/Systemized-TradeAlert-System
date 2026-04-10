@@ -368,12 +368,14 @@ async function checkMilestoneMode(
         signalData.milestone_trailing_stop_active = true;
         signalData.milestone_trailing_stop_percent = MILESTONE_TRAILING_STOP_PCT;
         signalData.milestone_trailing_stop_high = currentInstrumentPrice;
+        const trailAmount = Math.round(entryPrice * (MILESTONE_TRAILING_STOP_PCT / 100) * 100) / 100;
         const trailingStopPrice = isBullish
-          ? Math.round(currentInstrumentPrice * (1 - MILESTONE_TRAILING_STOP_PCT / 100) * 100) / 100
-          : Math.round(currentInstrumentPrice * (1 + MILESTONE_TRAILING_STOP_PCT / 100) * 100) / 100;
+          ? Math.round((currentInstrumentPrice - trailAmount) * 100) / 100
+          : Math.round((currentInstrumentPrice + trailAmount) * 100) / 100;
+        signalData.milestone_trailing_stop_amount = trailAmount;
         signalData.current_stop_loss = trailingStopPrice;
         console.log(
-          `[TradeMonitor] Milestone trailing stop activated for ${signalData.ticker} at +${m}%: high=${fmtPrice(currentInstrumentPrice)}, trailing SL=${fmtPrice(trailingStopPrice)} (${MILESTONE_TRAILING_STOP_PCT}%)`,
+          `[TradeMonitor] Milestone trailing stop activated for ${signalData.ticker} at +${m}%: high=${fmtPrice(currentInstrumentPrice)}, trail=$${trailAmount} (${MILESTONE_TRAILING_STOP_PCT}% of entry ${fmtPrice(entryPrice)}), SL=${fmtPrice(trailingStopPrice)}`,
         );
       }
 
@@ -397,7 +399,10 @@ async function checkMilestoneMode(
   }
 
   if (signalData.milestone_trailing_stop_active && signalData.milestone_trailing_stop_percent > 0) {
-    const trailPct = signalData.milestone_trailing_stop_percent;
+    const trailAmount = signalData.milestone_trailing_stop_amount
+      ?? Math.round(entryPrice * (signalData.milestone_trailing_stop_percent / 100) * 100) / 100;
+    signalData.milestone_trailing_stop_amount = trailAmount;
+
     const prevHigh = signalData.milestone_trailing_stop_high ?? currentInstrumentPrice;
     const newHigh = isBullish
       ? Math.max(prevHigh, currentInstrumentPrice)
@@ -406,8 +411,8 @@ async function checkMilestoneMode(
     if (newHigh !== prevHigh) {
       signalData.milestone_trailing_stop_high = newHigh;
       const newTrailingStop = isBullish
-        ? Math.round(newHigh * (1 - trailPct / 100) * 100) / 100
-        : Math.round(newHigh * (1 + trailPct / 100) * 100) / 100;
+        ? Math.round((newHigh - trailAmount) * 100) / 100
+        : Math.round((newHigh + trailAmount) * 100) / 100;
 
       const isTighter = signalData.current_stop_loss == null
         || (isBullish ? newTrailingStop > signalData.current_stop_loss : newTrailingStop < signalData.current_stop_loss);
@@ -416,7 +421,7 @@ async function checkMilestoneMode(
         signalData.current_stop_loss = newTrailingStop;
         await storage.updateSignal(signal.id, { data: signalData });
         console.log(
-          `[TradeMonitor] Milestone trailing stop updated for ${signalData.ticker}: high=${fmtPrice(newHigh)}, SL=${fmtPrice(newTrailingStop)}`,
+          `[TradeMonitor] Milestone trailing stop updated for ${signalData.ticker}: high=${fmtPrice(newHigh)}, trail=$${trailAmount}, SL=${fmtPrice(newTrailingStop)}`,
         );
       }
     }
