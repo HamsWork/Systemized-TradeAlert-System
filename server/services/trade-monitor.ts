@@ -433,7 +433,11 @@ async function checkMilestoneMode(
       : currentTrackingPrice >= signalData.current_stop_loss;
 
     if (stopLossHit) {
-      signalData.status = "stopped_out";
+      const currentMilestone = signalData.last_milestone_alerted ?? 0;
+      const hadProfitMilestone = currentMilestone > 0;
+      const finalStatus = hadProfitMilestone ? "closed" : "stopped_out";
+
+      signalData.status = finalStatus;
       signalData.stop_loss_hit = true;
       signalData.stop_loss_hit_at = new Date().toISOString();
       signalData.stop_loss_hit_tracking_price = currentTrackingPrice;
@@ -453,23 +457,30 @@ async function checkMilestoneMode(
         console.error(`[TradeMonitor] IBKR close error for ${signalData.ticker} (milestone SL): ${err.message}`);
       }
 
-      await storage.updateSignal(signal.id, { data: signalData, status: "stopped_out" });
+      await storage.updateSignal(signal.id, { data: signalData, status: finalStatus });
 
-      const currentMilestone = signalData.last_milestone_alerted ?? 0;
-      const shouldAlertStopLoss = currentMilestone === 0;
+      const shouldAlertStopLoss = !hadProfitMilestone;
       if (shouldAlertStopLoss) {
         await sendStopLossHitDiscord(signalData, app, signal.id);
       }
 
-      const slLabel = shouldAlertStopLoss ? "Stop loss" : "Stop loss (silent — profit milestones were hit)";
+      const slLabel = hadProfitMilestone
+        ? `Trailing stop hit after +${currentMilestone}% milestone — closed with profit`
+        : "Stop loss hit — no milestones reached";
       storage.createActivity({
-        type: "stop_loss_hit",
-        title: `Stop loss hit for ${signalData.ticker}`,
-        description: `${slLabel} triggered at ${fmtPrice(currentTrackingPrice)} (SL: ${fmtPrice(signalData.current_stop_loss)})`,
+        type: hadProfitMilestone ? "trade_closed" : "stop_loss_hit",
+        title: hadProfitMilestone
+          ? `Trade closed for ${signalData.ticker} (trailing stop after +${currentMilestone}%)`
+          : `Stop loss hit for ${signalData.ticker}`,
+        description: `${slLabel} at ${fmtPrice(currentTrackingPrice)} (SL: ${fmtPrice(signalData.current_stop_loss)})`,
         symbol: signalData.ticker,
         signalId: signal.id,
-        metadata: { lastMilestone: currentMilestone, alertSent: shouldAlertStopLoss },
+        metadata: { lastMilestone: currentMilestone, alertSent: shouldAlertStopLoss, finalStatus },
       }).catch(() => {});
+
+      console.log(
+        `[TradeMonitor] ${signalData.ticker} ten_percent ${finalStatus}: milestone=+${currentMilestone}%, exit=${fmtPrice(currentTrackingPrice)}`,
+      );
     }
   }
 }
