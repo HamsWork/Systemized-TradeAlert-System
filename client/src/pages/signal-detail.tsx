@@ -37,6 +37,7 @@ import {
   Code,
   Send,
   Loader2,
+  Milestone,
 } from "lucide-react";
 import { type Signal, type IbkrOrder, type ActivityLogEntry } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -1133,6 +1134,12 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                 {data.trade_type}
               </Badge>
             )}
+            {data.alert_mode === "ten_percent" && (
+              <Badge variant="outline" className="text-xs text-amber-500 border-amber-500/30 bg-amber-500/10" data-testid="badge-alert-mode">
+                <Milestone className="mr-1 h-3 w-3" />
+                10% Milestones
+              </Badge>
+            )}
             <Badge
               variant={signal.status === "active" ? "outline" : "secondary"}
               className={`text-xs ${
@@ -1408,7 +1415,114 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                   </>
                 )}
 
-                {(stopLoss !== undefined || data.trailing_stop_active || data.current_stop_loss != null) && (
+                {data.alert_mode === "ten_percent" && (
+                  <>
+                    <Separator />
+                    <div data-testid="detail-milestone-tracking">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Milestone className="h-3.5 w-3.5 text-amber-500/70" />
+                        <span className="text-[10px] font-medium text-amber-500/80 uppercase tracking-wider">Milestone Tracking</span>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between rounded-md px-2 py-1.5 border border-amber-500/30 bg-amber-500/10">
+                          <div className="flex items-center gap-1.5">
+                            <TrendingUp className="h-3 w-3 text-amber-500" />
+                            <span className="text-xs font-semibold text-amber-500">Current Milestone</span>
+                          </div>
+                          <span className="font-mono text-sm font-bold text-amber-400" data-testid="text-current-milestone">
+                            {data.last_milestone_alerted ? `+${data.last_milestone_alerted}%` : "—"}
+                          </span>
+                        </div>
+
+                        {data.entry_instrument_price != null && (
+                          <div className="flex items-center justify-between px-2 text-[10px] text-muted-foreground">
+                            <span>Entry (instrument)</span>
+                            <span className="font-mono font-medium text-foreground" data-testid="text-entry-instrument-price">
+                              ${Number(data.entry_instrument_price).toFixed(2)}
+                            </span>
+                          </div>
+                        )}
+
+                        {data.current_instrument_price != null && (
+                          <div className="flex items-center justify-between px-2 text-[10px] text-muted-foreground">
+                            <span>Latest tracked price</span>
+                            <span className="font-mono font-medium text-foreground" data-testid="text-current-instrument-price">
+                              ${Number(data.current_instrument_price).toFixed(2)}
+                            </span>
+                          </div>
+                        )}
+
+                        {data.entry_instrument_price != null && data.current_instrument_price != null && (
+                          <div className="flex items-center justify-between px-2 text-[10px] text-muted-foreground">
+                            <span>Profit</span>
+                            {(() => {
+                              const entry = Number(data.entry_instrument_price);
+                              const current = Number(data.current_instrument_price);
+                              const pct = entry > 0 ? ((current - entry) / entry) * 100 : 0;
+                              const isPositive = pct >= 0;
+                              return (
+                                <span className={`font-mono font-semibold ${isPositive ? "text-emerald-500" : "text-red-500"}`} data-testid="text-milestone-profit">
+                                  {isPositive ? "+" : ""}{pct.toFixed(1)}%
+                                </span>
+                              );
+                            })()}
+                          </div>
+                        )}
+                      </div>
+
+                      {data.milestone_trailing_stop_active && (
+                        <div className="mt-3 space-y-2">
+                          <div className="flex items-center gap-1.5">
+                            <ShieldAlert className="h-3.5 w-3.5 text-purple-500/70" />
+                            <span className="text-[10px] font-medium text-purple-500/80 uppercase tracking-wider">Trailing Stop</span>
+                            <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 text-purple-500 border-purple-500/30 bg-purple-500/5">
+                              {data.milestone_trailing_stop_percent}% trail
+                            </Badge>
+                          </div>
+                          <div
+                            className={`flex items-center justify-between rounded-md px-2 py-1.5 border ${
+                              isStoppedOut
+                                ? "border-red-500/30 bg-red-500/10"
+                                : "border-purple-500/30 bg-purple-500/10"
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5">
+                              {isStoppedOut
+                                ? <XCircle className="h-3 w-3 text-red-500" />
+                                : <ShieldAlert className="h-3 w-3 text-purple-500" />
+                              }
+                              <span className={`text-xs font-semibold ${isStoppedOut ? "text-red-500" : "text-purple-400"}`}>
+                                {isStoppedOut ? "Triggered" : "Active"}
+                              </span>
+                            </div>
+                            <span className={`font-mono text-xs font-medium ${isStoppedOut ? "text-red-400" : "text-foreground"}`} data-testid="text-milestone-stop-level">
+                              ${data.current_stop_loss != null ? Number(data.current_stop_loss).toFixed(2) : "—"}
+                            </span>
+                          </div>
+                          {data.milestone_trailing_stop_high != null && !isStoppedOut && (
+                            <div className="flex items-center justify-between px-2 text-[10px] text-muted-foreground">
+                              <span>Highest price</span>
+                              <span className="font-mono font-medium text-foreground" data-testid="text-milestone-high">
+                                ${Number(data.milestone_trailing_stop_high).toFixed(2)}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {!data.milestone_trailing_stop_active && !isStoppedOut && (
+                        <div className="mt-2 px-2">
+                          <p className="text-[10px] text-muted-foreground italic">
+                            Trailing stop activates at +50% milestone (30% trail)
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {data.alert_mode !== "ten_percent" && (stopLoss !== undefined || data.trailing_stop_active || data.current_stop_loss != null) && (
                   <>
                     <Separator />
                     <div data-testid="detail-stop-loss">
