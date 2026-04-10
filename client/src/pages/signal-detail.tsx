@@ -1477,7 +1477,12 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                             <ShieldAlert className="h-3.5 w-3.5 text-purple-500/70" />
                             <span className="text-[10px] font-medium text-purple-500/80 uppercase tracking-wider">Trailing Stop</span>
                             <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 text-purple-500 border-purple-500/30 bg-purple-500/5">
-                              ${data.milestone_trailing_stop_amount != null ? Number(data.milestone_trailing_stop_amount).toFixed(2) : "?"} trail ({data.milestone_trailing_stop_percent}% of entry)
+                              ${(data.milestone_trailing_stop_amount != null
+                                ? Number(data.milestone_trailing_stop_amount)
+                                : data.entry_instrument_price != null && data.milestone_trailing_stop_percent
+                                  ? Number(data.entry_instrument_price) * Number(data.milestone_trailing_stop_percent) / 100
+                                  : 0
+                              ).toFixed(2)} trail ({data.milestone_trailing_stop_percent}% of entry)
                             </Badge>
                           </div>
                           <div
