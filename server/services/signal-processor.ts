@@ -73,6 +73,27 @@ const INGEST_INSTRUMENT_ENUM = [
   "Crypto",
 ] as const;
 
+const DIRECTION_ALIASES: Record<string, "Long" | "Short" | "Call" | "Put"> = {
+  LONG: "Long",
+  BUY: "Long",
+  BULL: "Long",
+  BULLISH: "Long",
+  A_LONG: "Call",
+  B_LONG: "Call",
+  F_LONG: "Call",
+  SHORT: "Short",
+  SELL: "Short",
+  BEAR: "Short",
+  BEARISH: "Short",
+  A: "Put",
+  B: "Put",
+  F: "Put",
+  CALL: "Call",
+  C: "Call",
+  PUT: "Put",
+  P: "Put",
+};
+
 function isTdiFormat(body: Record<string, any>): boolean {
   return !!(
     body.symbol &&
@@ -219,6 +240,28 @@ function normalizeBodyForIngest(
         ? s
         : "Shares");
     out.instrumentType = mapped;
+  }
+
+  // Normalize direction for all ingest paths, not only TDI payloads.
+  // This avoids dropping bullish option signals when sources send variants
+  // like "long", "buy", or uppercase/lowercase differences.
+  const rawDirection = out.direction;
+  if (rawDirection != null) {
+    const normalizedKey = String(rawDirection).trim().toUpperCase();
+    const alias = DIRECTION_ALIASES[normalizedKey];
+    const instrumentType = out.instrumentType ?? "Shares";
+
+    if (instrumentType === "Options" || instrumentType === "LETF Option") {
+      if (alias === "Long") out.direction = "Call";
+      else if (alias === "Short") out.direction = "Put";
+      else if (alias === "Call" || alias === "Put") out.direction = alias;
+      else out.direction = String(rawDirection).trim();
+    } else {
+      if (alias === "Call") out.direction = "Long";
+      else if (alias === "Put") out.direction = "Short";
+      else if (alias === "Long" || alias === "Short") out.direction = alias;
+      else out.direction = String(rawDirection).trim();
+    }
   }
   return out;
 }
