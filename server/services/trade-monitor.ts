@@ -52,6 +52,20 @@ interface TargetInfo {
   tpNumber?: number;
 }
 
+function hasProfitBeenAlerted(signalData: Record<string, any>): boolean {
+  if (signalData.profit_alerted === true) return true;
+  if ((signalData.last_milestone_alerted ?? 0) > 0) return true;
+  const hitTargets = signalData.hit_targets;
+  if (hitTargets && typeof hitTargets === "object" && Object.keys(hitTargets).length > 0) {
+    return true;
+  }
+  return false;
+}
+
+function markProfitAlerted(signalData: Record<string, any>): void {
+  signalData.profit_alerted = true;
+}
+
 function parseTargets(
   data: Record<string, any>,
   bullish?: boolean,
@@ -239,6 +253,7 @@ async function applyTargetHitAuto(
 
   if (takeOffPct > 0) {
     signalData.current_tp_number = (signalData.current_tp_number ?? 0) + 1;
+    markProfitAlerted(signalData);
     await sendTargetHitDiscordAlert(signalData, app, signal.id);
   }
 
@@ -381,6 +396,7 @@ async function checkMilestoneMode(
 
       await storage.updateSignal(signal.id, { data: signalData });
 
+      markProfitAlerted(signalData);
       await sendProfitMilestoneDiscordAlert(signalData, app, signal.id, m);
 
       storage.createActivity({
@@ -459,7 +475,7 @@ async function checkMilestoneMode(
 
       await storage.updateSignal(signal.id, { data: signalData, status: finalStatus });
 
-      const shouldAlertStopLoss = !hadProfitMilestone;
+      const shouldAlertStopLoss = !hasProfitBeenAlerted(signalData);
       if (shouldAlertStopLoss) {
         await sendStopLossHitDiscord(signalData, app, signal.id);
       }
@@ -613,7 +629,10 @@ async function checkSignalTargets(signal: Signal): Promise<void> {
 
         await storage.updateSignal(signal.id, { data: signalData, status: "stopped_out" });
 
-        await sendStopLossHitDiscord(signalData, app, signal.id);
+        const shouldAlertStopLoss = !hasProfitBeenAlerted(signalData);
+        if (shouldAlertStopLoss) {
+          await sendStopLossHitDiscord(signalData, app, signal.id);
+        }
         const slType = signalData.trailing_stop_active ? "Trailing stop" : "Stop loss";
         storage.createActivity({
           type: "stop_loss_hit",
@@ -810,7 +829,9 @@ export async function recordManualStopLossHit(
     `[TradeMonitor] STOP LOSS HIT (manual): ${ticker} @ ${fmtPrice(priceAtHit)} (SL: ${fmtPrice(stopLoss)})`,
   );
 
-  await sendStopLossHitDiscord(updatedData, app, signal.id);
+  if (!hasProfitBeenAlerted(updatedData)) {
+    await sendStopLossHitDiscord(updatedData, app, signal.id);
+  }
 
   await storage
     .createActivity({
