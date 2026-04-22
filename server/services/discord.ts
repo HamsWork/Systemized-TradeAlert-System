@@ -46,6 +46,20 @@ function fmtPrice(p: number | null | undefined): string {
   return `$${Number(p).toFixed(2)}`;
 }
 
+function toNumberOrNull(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function firstNumber(...values: unknown[]): number | null {
+  for (const v of values) {
+    const n = toNumberOrNull(v);
+    if (n != null) return n;
+  }
+  return null;
+}
+
 function fmtExpiration(raw: string | null | undefined): string {
   if (raw == null) return "\u2014";
   const s = String(raw).replace(/-/g, "");
@@ -245,12 +259,11 @@ function buildTemplateVars(
     direction === "Short" || direction === "Put" ? "BEAR" : "BULL";
   const right = direction === "Put" ? "PUT" : "CALL";
 
-  const entryPrice =
-    typeof signalData.entry_instrument_price === "number"
-      ? signalData.entry_instrument_price
-      : typeof signalData.entry_price === "number"
-        ? signalData.entry_price
-        : null;
+  const entryPrice = firstNumber(
+    signalData.entry_instrument_price,
+    signalData.entry_price,
+    signalData.entryPrice,
+  );
 
   const vars: Record<string, string> = {
     ticker,
@@ -261,11 +274,12 @@ function buildTemplateVars(
     trade_type: signalData.trade_type ? String(signalData.trade_type) : "Scalp",
     entry_price: fmtPrice(entryPrice),
     stock_price: fmtPrice(
-      signalData.entry_underlying_price ??
-        signalData.entry_tracking_price ??
-        signalData.current_tracking_price ??
-        signalData.current_instrument_price ??
-        null,
+      firstNumber(
+        signalData.entry_underlying_price,
+        signalData.entry_tracking_price,
+        signalData.current_tracking_price,
+        signalData.current_instrument_price,
+      ),
     ),
     expiry: fmtExpiration(signalData.expiration),
     strike:
@@ -274,17 +288,18 @@ function buildTemplateVars(
         : "\u2014",
     right,
     option_price: fmtPrice(
-      signalData.entry_option_price ??
-        signalData.entry_instrument_price ??
-        signalData.current_instrument_price ??
-        null,
+      firstNumber(
+        signalData.entry_option_price,
+        signalData.entry_instrument_price,
+        signalData.current_instrument_price,
+      ),
     ),
     letf_ticker: isLETF ? ticker : "\u2014",
     underlying: isLETF ? underlying : ticker,
     leverage: leverage != null ? String(Math.abs(leverage)) : "\u2014",
     letf_direction: dirText,
-    letf_entry: fmtPrice(signalData.entry_instrument_price),
-    stop_loss: fmtPrice(signalData.stop_loss),
+    letf_entry: fmtPrice(firstNumber(signalData.entry_instrument_price, signalData.entry_price)),
+    stop_loss: fmtPrice(firstNumber(signalData.stop_loss, signalData.stop_loss_1)),
     time_stop: signalData.time_stop ? String(signalData.time_stop) : "\u2014",
     trade_plan: buildTradePlan(signalData),
     take_profit_plan: buildTakeProfitPlan(signalData),
@@ -297,17 +312,19 @@ function buildTemplateVars(
     tp_number: String(
       signalData.current_tp_number ?? signalData.current_target_number ?? 1,
     ),
-    tp_price: fmtPrice(signalData.current_instrument_price),
+    tp_price: fmtPrice(firstNumber(signalData.current_instrument_price, signalData.current_tracking_price)),
     profit_pct:
       typeof signalData.hit_targets?.[`tp${signalData.current_target_number}`]
         ?.profitPct === "number"
         ? `${signalData.hit_targets[`tp${signalData.current_target_number}`].profitPct.toFixed(1)}%`
         : "\u2014",
     exit_price: fmtPrice(
-      signalData.stop_loss_hit_instrument_price ??
-        signalData.stop_loss_hit_price ??
-        signalData.current_instrument_price ??
-        null,
+      firstNumber(
+        signalData.stop_loss_hit_instrument_price,
+        signalData.stop_loss_hit_price,
+        signalData.current_instrument_price,
+        signalData.current_tracking_price,
+      ),
     ),
   };
 
@@ -384,6 +401,64 @@ function buildTemplateVars(
         ? `${(((exit - entryPrice) / entryPrice) * 100).toFixed(1)}%`
         : "\u2014";
     vars.profit_pct = pct;
+  }
+
+  if (messageType === "current_status") {
+    const currentPrice = firstNumber(
+      signalData.current_instrument_price,
+      signalData.current_tracking_price,
+      signalData.entry_instrument_price,
+      signalData.entry_price,
+    );
+    vars.current_price = fmtPrice(currentPrice);
+    if (entryPrice != null && currentPrice != null && entryPrice > 0) {
+      const pct = profitPctFromInstrument(
+        entryPrice,
+        Number(currentPrice),
+        instrumentType,
+        direction,
+      );
+      vars.current_profit_pct = `${pct.toFixed(1)}%`;
+    } else {
+      vars.current_profit_pct = "—";
+    }
+    vars.new_stop_loss = fmtPrice(
+      firstNumber(
+        signalData.current_stop_loss,
+        signalData.stop_loss,
+        signalData.stop_loss_1,
+      ),
+    );
+    vars.position_mgmt =
+      signalData.position_mgmt ||
+      signalData.trade_plan ||
+      "Live status update: manage position based on your active plan and current volatility.";
+  }
+
+  if (messageType === "end_trade") {
+    const exitPrice = firstNumber(
+      signalData.exit_price,
+      signalData.current_instrument_price,
+      signalData.current_tracking_price,
+      signalData.entry_instrument_price,
+      signalData.entry_price,
+    );
+    vars.exit_price = fmtPrice(exitPrice);
+    if (entryPrice != null && exitPrice != null && entryPrice > 0) {
+      const pct = profitPctFromInstrument(
+        entryPrice,
+        Number(exitPrice),
+        instrumentType,
+        direction,
+      );
+      vars.profit_pct = `${pct.toFixed(1)}%`;
+    } else {
+      vars.profit_pct = "—";
+    }
+    vars.manage_message =
+      signalData.end_trade_message ||
+      signalData.manage_message ||
+      "Manage your trade accordingly.";
   }
 
   return vars;
@@ -605,6 +680,47 @@ export async function sendRawDiscordEmbed(
       status: sent ? "sent" : "error",
       messageType: `${messageType}_custom`,
       embedData: { ticker, custom: true },
+      error,
+      sourceAppId: app.id,
+      sourceAppName: app.name,
+    })
+    .catch(() => {});
+
+  return { sent, error };
+}
+
+export async function sendTemplateDiscordMessage(
+  signal: Signal,
+  app: ConnectedApp,
+  messageType: string,
+  signalDataOverride?: Record<string, any>,
+): Promise<{ sent: boolean; error: string | null }> {
+  const data = signalDataOverride ?? ((signal.data || {}) as Record<string, any>);
+  const instrumentType = data.instrument_type || "Shares";
+  const webhookUrl = getWebhookForInstrument(app, instrumentType);
+  if (!webhookUrl) return { sent: false, error: `No webhook for ${instrumentType}` };
+
+  const template = await getRenderedTemplateEmbed(data, app, messageType);
+  if (!template) return { sent: false, error: `No template for message type ${messageType}` };
+
+  let sent = false;
+  let error: string | null = null;
+  try {
+    sent = await sendWebhook(webhookUrl, template.content || "", [template.embed]);
+    if (!sent) error = "Webhook request failed";
+  } catch (err: any) {
+    error = err.message;
+  }
+
+  await storage
+    .createDiscordMessage({
+      signalId: signal.id,
+      webhookUrl,
+      channelType: "signal",
+      instrumentType,
+      status: sent ? "sent" : "error",
+      messageType,
+      embedData: { ticker: data.ticker || data.symbol || "UNKNOWN", templated: true },
       error,
       sourceAppId: app.id,
       sourceAppName: app.name,

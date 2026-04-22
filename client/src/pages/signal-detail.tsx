@@ -1043,6 +1043,11 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const { toast } = useToast();
+  const [endTradeOpen, setEndTradeOpen] = useState(false);
+  const [endTradeMessage, setEndTradeMessage] = useState(
+    "Manage your trade accordingly.",
+  );
   const data = (signal?.data || {}) as Record<string, any>;
   const ticker = data.ticker || data.symbol || "";
 
@@ -1065,6 +1070,84 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
     },
     enabled: !!signal?.id && open,
   });
+
+  const sendCurrentStatusMutation = useMutation({
+    mutationFn: async () => {
+      if (!signal) throw new Error("No signal selected");
+      const res = await apiRequest(
+        "POST",
+        `/api/signals/${encodeURIComponent(signal.id)}/send-current-status`,
+      );
+      return res.json();
+    },
+    onSuccess: (result: any) => {
+      if (result?.sent === false) {
+        toast({
+          title: "Failed",
+          description: result?.error || "Failed to send current status to Discord",
+          variant: "destructive",
+        });
+        return;
+      }
+      toast({
+        title: "Sent",
+        description: "Current trade status pushed to Discord",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/activity/by-signal", signal.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/discord-messages/by-signal", signal.id] });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Failed",
+        description: err.message || "Failed to send current status",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const endTradeMutation = useMutation({
+    mutationFn: async () => {
+      if (!signal) throw new Error("No signal selected");
+      const res = await apiRequest(
+        "POST",
+        `/api/signals/${encodeURIComponent(signal.id)}/end-trade`,
+        { message: endTradeMessage },
+      );
+      return res.json();
+    },
+    onSuccess: (result: any) => {
+      if (result?.sent === false) {
+        toast({
+          title: "Ended, but Discord failed",
+          description: result?.error || "Trade ended but Discord message failed",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Trade ended",
+          description: "Trade closed and gold embed sent to Discord",
+        });
+      }
+      setEndTradeOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/signals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/activity/by-signal", signal.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/discord-messages/by-signal", signal.id] });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Failed",
+        description: err.message || "Failed to end trade",
+        variant: "destructive",
+      });
+    },
+  });
+
+  useEffect(() => {
+    if (open) {
+      setEndTradeMessage("Manage your trade accordingly.");
+      setEndTradeOpen(false);
+    }
+  }, [open, signal?.id]);
 
   if (!signal) return null;
 
@@ -1233,6 +1316,36 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
           </div>
 
           <div className="space-y-4">
+            <Card data-testid="card-trade-actions">
+              <CardContent className="p-3 space-y-2">
+                <h3 className="text-sm font-medium">Trade Actions</h3>
+                <Button
+                  className="w-full"
+                  variant="outline"
+                  onClick={() => sendCurrentStatusMutation.mutate()}
+                  disabled={
+                    signal.status !== "active" || sendCurrentStatusMutation.isPending
+                  }
+                  data-testid="button-send-current-status"
+                >
+                  {sendCurrentStatusMutation.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <Send className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  Send Current Status
+                </Button>
+                <Button
+                  className="w-full bg-amber-500 hover:bg-amber-600 text-black border-none"
+                  onClick={() => setEndTradeOpen(true)}
+                  disabled={signal.status !== "active" || endTradeMutation.isPending}
+                  data-testid="button-end-trade"
+                >
+                  End Trade
+                </Button>
+              </CardContent>
+            </Card>
+
             <Card data-testid="card-signal-info">
               <CardContent className="p-3 space-y-3">
                 <h3 className="text-sm font-medium flex items-center gap-2">
@@ -1623,6 +1736,43 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
           </div>
         </div>
       </DialogContent>
+      <Dialog open={endTradeOpen} onOpenChange={setEndTradeOpen}>
+        <DialogContent className="max-w-xl" data-testid="dialog-end-trade">
+          <DialogHeader>
+            <DialogTitle>End Trade</DialogTitle>
+            <DialogDescription>
+              Are you okay to end the trade?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Manage Your Trade Accordingly Message
+            </p>
+            <textarea
+              value={endTradeMessage}
+              onChange={(e) => setEndTradeMessage(e.target.value)}
+              className="w-full rounded-md border bg-background p-2 text-sm min-h-[96px]"
+              data-testid="textarea-end-trade-message"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEndTradeOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-amber-500 hover:bg-amber-600 text-black border-none"
+              onClick={() => endTradeMutation.mutate()}
+              disabled={endTradeMutation.isPending}
+              data-testid="button-confirm-end-trade"
+            >
+              {endTradeMutation.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              ) : null}
+              Confirm End Trade
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

@@ -359,6 +359,98 @@ function tenPctMilestoneTemplate(instrumentType: string): TemplateEmbed {
   };
 }
 
+function currentStatusTemplate(instrumentType: string): TemplateEmbed {
+  const label = instrumentType === "LETF" || instrumentType === "Shares" ? "Shares" : instrumentType === "Crypto" ? "Crypto" : "Options";
+  const tickerVar = instrumentType === "LETF" || instrumentType === "LETF Option" ? "{{underlying}}" : "{{ticker}}";
+  const fields: TemplateEmbed["fields"] = [{ ...SPACER_FIELD }];
+
+  if (instrumentType === "Options") {
+    fields.push(
+      { name: "🟢 Ticker", value: "{{ticker}}", inline: true },
+      { name: "📊 Stock Price", value: "{{stock_price}}", inline: true },
+      { name: "💵 Option Price", value: "{{current_price}}", inline: true },
+      { ...SPACER_FIELD },
+      { name: "❌ Expiration", value: "{{expiry}}", inline: true },
+      { name: "✍️ Strike", value: "{{strike}} {{right}}", inline: true },
+      { name: "📈 Direction", value: "{{direction}}", inline: true },
+    );
+  } else if (instrumentType === "LETF Option") {
+    fields.push(
+      { name: "🟢 Ticker", value: "{{underlying}}", inline: true },
+      { name: "💹 Leveraged ETF", value: "{{letf_ticker}} ({{leverage}}x {{letf_direction}})", inline: true },
+      { name: "💵 Option Price", value: "{{current_price}}", inline: true },
+      { ...SPACER_FIELD },
+      { name: "❌ Expiration", value: "{{expiry}}", inline: true },
+      { name: "✍️ Strike", value: "{{strike}} {{right}}", inline: true },
+      { name: "📈 Direction", value: "{{direction}}", inline: true },
+    );
+  } else if (instrumentType === "LETF") {
+    fields.push(
+      { name: "🟢 Ticker", value: "{{underlying}}", inline: true },
+      { name: "💹 LETF", value: "{{letf_ticker}} ({{leverage}}x {{letf_direction}})", inline: true },
+      { name: "📈 Direction", value: "{{direction}}", inline: true },
+      { ...SPACER_FIELD },
+      { name: "📊 Underlying Price", value: "{{stock_price}}", inline: true },
+      { name: "💵 LETF Price", value: "{{current_price}}", inline: true },
+      { name: "✅ LETF Entry", value: "{{entry_price}}", inline: true },
+    );
+  } else if (instrumentType === "Crypto") {
+    fields.push(
+      { name: "🟢 Ticker", value: "{{ticker}}", inline: true },
+      { name: "📈 Direction", value: "{{direction}}", inline: true },
+      { name: "💵 Current Price", value: "{{current_price}}", inline: true },
+      { ...SPACER_FIELD },
+      { name: "✅ Entry", value: "{{entry_price}}", inline: true },
+    );
+  } else {
+    fields.push(
+      { name: "🟢 Ticker", value: "{{ticker}}", inline: true },
+      { name: "📈 Direction", value: "{{direction}}", inline: true },
+      { name: "💵 Current Price", value: "{{current_price}}", inline: true },
+      { ...SPACER_FIELD },
+      { name: "✅ Entry", value: "{{entry_price}}", inline: true },
+    );
+  }
+
+  fields.push(
+    { name: "💸 P/L", value: "{{current_profit_pct}}", inline: true },
+    { name: "🛡️ Current Stop", value: "{{new_stop_loss}}", inline: true },
+    { ...SPACER_FIELD },
+    { name: "🎯 Trade Plan", value: "{{take_profit_plan}}", inline: false },
+    { ...SPACER_FIELD },
+    { name: "🔍 Position Management", value: "{{position_mgmt}}", inline: false },
+  );
+
+  return {
+    description: `**📡 ${tickerVar} ${label} Live Status Update**`,
+    color: "#3b82f6",
+    fields,
+    footer: DISCLAIMER,
+    timestamp: true,
+  };
+}
+
+function endTradeTemplate(instrumentType: string): TemplateEmbed {
+  const label = instrumentType === "LETF" || instrumentType === "Shares" ? "Shares" : instrumentType === "Crypto" ? "Crypto" : "Options";
+  const tickerVar = instrumentType === "LETF" || instrumentType === "LETF Option" ? "{{underlying}}" : "{{ticker}}";
+  return {
+    description: `**🏁 ${tickerVar} ${label} Trade Ended**`,
+    color: "#D4AF37",
+    fields: [
+      { ...SPACER_FIELD },
+      { name: "🟢 Ticker", value: tickerVar, inline: true },
+      { name: "🏁 Status", value: "Closed Manually", inline: true },
+      { name: "💵 Exit Price", value: "{{exit_price}}", inline: true },
+      { name: "✅ Entry", value: "{{entry_price}}", inline: true },
+      { name: "💸 Result", value: "{{profit_pct}}", inline: true },
+      { ...SPACER_FIELD },
+      { name: "🔍 Manage Your Trade Accordingly", value: "{{manage_message}}", inline: false },
+    ],
+    footer: DISCLAIMER,
+    timestamp: true,
+  };
+}
+
 function getEntryTemplate(instrumentType: string): TemplateEmbed {
   switch (instrumentType) {
     case "Options": return optionsEntryTemplate();
@@ -378,6 +470,8 @@ export function getDefaultTemplates(instrumentType: string): MessageTemplate[] {
     { type: "stop_loss_hit", label: "Stop Loss Hit", content: "", embed: stopLossHitTemplate(instrumentType) },
     { type: "ten_pct_entry", label: "10% Entry", content: "@everyone", embed: tenPctEntryTemplate(instrumentType) },
     { type: "ten_pct_milestone", label: "10% Milestone", content: "@everyone", embed: tenPctMilestoneTemplate(instrumentType) },
+    { type: "current_status", label: "Current Status", content: "", embed: currentStatusTemplate(instrumentType) },
+    { type: "end_trade", label: "End Trade", content: "", embed: endTradeTemplate(instrumentType) },
   ];
 }
 
@@ -479,6 +573,9 @@ export function buildSampleVariables(
     stop_loss: fmtPrice(data.stop_loss),
     time_stop: data.time_stop || "—",
     trade_type: data.trade_type || "Scalp",
+    current_price: fmtPrice(data.entry_instrument_price ?? data.entry_price ?? null),
+    current_profit_pct: "0.0%",
+    manage_message: "Manage your trade accordingly.",
   };
 
   const targets = data.targets as Record<string, any> || {};

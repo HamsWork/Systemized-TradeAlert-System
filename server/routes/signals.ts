@@ -19,6 +19,8 @@ import {
   sendStopLossHitDiscord,
   sendStopLossRaisedDiscord,
   sendRawDiscordEmbed,
+  profitPctFromInstrument,
+  sendTemplateDiscordMessage,
 } from "../services/discord";
 
 import type { ConnectedApp } from "@shared/schema";
@@ -366,6 +368,197 @@ export function registerSignalRoutes(app: Express) {
       }
 
       res.json(result);
+    }),
+  );
+
+  app.post(
+    "/api/signals/:id/send-current-status",
+    asyncHandler(async (req, res) => {
+      const signal = await storage.getSignal(getParam(req, "id"));
+      if (!signal) return res.status(404).json({ message: "Signal not found" });
+
+      const data = (signal.data || {}) as Record<string, any>;
+      const ticker = data.ticker || data.symbol || "UNKNOWN";
+      const app = signal.sourceAppId
+        ? await storage.getConnectedApp(signal.sourceAppId)
+        : null;
+      if (!app)
+        return res
+          .status(400)
+          .json({ message: "No source app found for this signal" });
+      if (!app.sendDiscordMessages)
+        return res
+          .status(400)
+          .json({ message: `Discord messages are disabled for ${app.name}` });
+
+      const currentInstrumentPrice =
+        (await getCurrentInstrumentPrice(data, ticker)) ??
+        (typeof data.current_instrument_price === "number"
+          ? Number(data.current_instrument_price)
+          : null);
+      const entryPrice =
+        data.entry_instrument_price != null
+          ? Number(data.entry_instrument_price)
+          : data.entry_price != null
+            ? Number(data.entry_price)
+            : null;
+      const profitPct =
+        entryPrice != null &&
+        entryPrice > 0 &&
+        currentInstrumentPrice != null &&
+        currentInstrumentPrice > 0
+          ? profitPctFromInstrument(
+              entryPrice,
+              currentInstrumentPrice,
+              data.instrument_type || "Shares",
+              data.direction || "Long",
+            )
+          : null;
+
+      const updatedData = {
+        ...data,
+        ...(profitPct != null
+          ? {
+              current_profit_pct: `${profitPct.toFixed(1)}%`,
+            }
+          : {}),
+        position_mgmt:
+          "Live status update: manage position based on your active plan and current volatility.",
+        ...(currentInstrumentPrice != null
+          ? { current_instrument_price: currentInstrumentPrice }
+          : {}),
+      };
+      await storage.updateSignal(signal.id, { data: updatedData });
+
+      const result = await sendTemplateDiscordMessage(
+        { ...signal, data: updatedData },
+        app,
+        "current_status",
+        updatedData,
+      );
+
+      await storage.createActivity({
+        type: "discord_manual_send",
+        title: `Current status sent for ${ticker}`,
+        description: result.sent
+          ? "Live trade status alert sent to Discord."
+          : `Failed to send live status alert: ${result.error ?? "unknown error"}`,
+        symbol: ticker,
+        signalId: signal.id,
+        metadata: {
+          messageType: "current_status",
+          sent: result.sent,
+        },
+      }).catch(() => {});
+
+      return res.json(result);
+    }),
+  );
+
+  app.post(
+    "/api/signals/:id/end-trade",
+    asyncHandler(async (req, res) => {
+      const signal = await storage.getSignal(getParam(req, "id"));
+      if (!signal) return res.status(404).json({ message: "Signal not found" });
+      if (signal.status !== "active")
+        return res.status(400).json({
+          message: `Signal is not active (current status: ${signal.status}). Only active signals can be ended.`,
+        });
+
+      const data = (signal.data || {}) as Record<string, any>;
+      const ticker = data.ticker || data.symbol || "UNKNOWN";
+      const app = signal.sourceAppId
+        ? await storage.getConnectedApp(signal.sourceAppId)
+        : null;
+      if (!app)
+        return res
+          .status(400)
+          .json({ message: "No source app found for this signal" });
+      if (!app.sendDiscordMessages)
+        return res
+          .status(400)
+          .json({ message: `Discord messages are disabled for ${app.name}` });
+
+      const customMessageRaw = req.body?.message;
+      const customMessage =
+        typeof customMessageRaw === "string" && customMessageRaw.trim().length > 0
+          ? customMessageRaw.trim()
+          : "Manage your trade accordingly.";
+
+      const currentInstrumentPrice =
+        (await getCurrentInstrumentPrice(data, ticker)) ??
+        (typeof data.current_instrument_price === "number"
+          ? Number(data.current_instrument_price)
+          : null);
+      const entryPrice =
+        data.entry_instrument_price != null
+          ? Number(data.entry_instrument_price)
+          : data.entry_price != null
+            ? Number(data.entry_price)
+            : null;
+      const profitPct =
+        entryPrice != null &&
+        entryPrice > 0 &&
+        currentInstrumentPrice != null &&
+        currentInstrumentPrice > 0
+          ? profitPctFromInstrument(
+              entryPrice,
+              currentInstrumentPrice,
+              data.instrument_type || "Shares",
+              data.direction || "Long",
+            )
+          : null;
+
+      const updatedData = {
+        ...data,
+        auto_track: false,
+        end_trade_message: customMessage,
+        ...(currentInstrumentPrice != null
+          ? {
+              exit_price: currentInstrumentPrice,
+              current_instrument_price: currentInstrumentPrice,
+            }
+          : {}),
+      };
+
+      const updatedSignal = await storage.updateSignal(signal.id, {
+        data: updatedData,
+        status: "closed",
+      });
+      if (!updatedSignal) {
+        return res.status(500).json({ message: "Failed to end trade" });
+      }
+
+      const result = await sendTemplateDiscordMessage(
+        updatedSignal,
+        app,
+        "end_trade",
+        {
+          ...updatedData,
+          ...(profitPct != null
+            ? {
+                profit_pct: `${profitPct.toFixed(1)}%`,
+              }
+            : {}),
+        },
+      );
+
+      await storage.createActivity({
+        type: "trade_closed",
+        title: `Trade ended: ${ticker}`,
+        description: result.sent
+          ? "Trade ended and gold embed sent to Discord."
+          : `Trade ended but Discord send failed: ${result.error ?? "unknown error"}`,
+        symbol: ticker,
+        signalId: signal.id,
+        metadata: {
+          reason: "manual_end_trade",
+          customMessage,
+          sent: result.sent,
+        },
+      }).catch(() => {});
+
+      return res.json({ ...result, signal: updatedSignal });
     }),
   );
 

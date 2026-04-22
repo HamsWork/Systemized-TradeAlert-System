@@ -51,6 +51,7 @@ export const TEMPLATE_VARIABLES: TemplateVariable[] = [
   { key: "milestone_text", label: "Milestone Text", description: "Milestone text (+N% profit reached)", category: "milestone" },
   { key: "milestone_footer", label: "Milestone Footer", description: "Footer text (varies by milestone level)", category: "milestone" },
   { key: "milestone_image", label: "Milestone Image", description: "Image URL for milestone level (boom/kaboom emoji)", category: "milestone" },
+  { key: "manage_message", label: "Manage Message", description: "Custom message for end-trade management instructions", category: "result" },
 ];
 
 export const VARIABLE_CATEGORIES: Record<string, string> = {
@@ -90,6 +91,14 @@ export function getVariablesForMessageType(messageType: string): TemplateVariabl
       )];
     case "ten_pct_milestone":
       return [...core, ...options, ...letf, ...TEMPLATE_VARIABLES.filter(v => v.category === "milestone")];
+    case "current_status":
+      return [...core, ...options, ...letf, ...TEMPLATE_VARIABLES.filter(v =>
+        ["current_price", "current_profit_pct", "new_stop_loss", "position_mgmt"].includes(v.key)
+      )];
+    case "end_trade":
+      return [...core, ...options, ...letf, ...result.filter(v =>
+        ["exit_price", "profit_pct", "manage_message"].includes(v.key)
+      )];
     default:
       return [...core, ...options, ...letf, ...targets, ...result];
   }
