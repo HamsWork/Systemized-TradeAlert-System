@@ -415,10 +415,6 @@ function currentStatusTemplate(instrumentType: string): TemplateEmbed {
   fields.push(
     { name: "💸 P/L", value: "{{current_profit_pct}}", inline: true },
     { name: "🛡️ Current Stop", value: "{{new_stop_loss}}", inline: true },
-    { ...SPACER_FIELD },
-    { name: "🎯 Trade Plan", value: "{{take_profit_plan}}", inline: false },
-    { ...SPACER_FIELD },
-    { name: "🔍 Position Management", value: "{{position_mgmt}}", inline: false },
   );
 
   return {
