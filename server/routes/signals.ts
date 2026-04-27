@@ -396,6 +396,11 @@ export function registerSignalRoutes(app: Express) {
         (typeof data.current_instrument_price === "number"
           ? Number(data.current_instrument_price)
           : null);
+      const customMessageRaw = req.body?.message;
+      const customMessage =
+        typeof customMessageRaw === "string" && customMessageRaw.trim().length > 0
+          ? customMessageRaw.trim()
+          : "Manage your trade accordingly.";
       const entryPrice =
         data.entry_instrument_price != null
           ? Number(data.entry_instrument_price)
@@ -422,16 +427,15 @@ export function registerSignalRoutes(app: Express) {
               current_profit_pct: `${profitPct.toFixed(1)}%`,
             }
           : {}),
-        position_mgmt:
-          "Live status update: manage position based on your active plan and current volatility.",
+        manage_message: customMessage,
         ...(currentInstrumentPrice != null
           ? { current_instrument_price: currentInstrumentPrice }
           : {}),
       };
-      await storage.updateSignal(signal.id, { data: updatedData });
+      await storage.updateSignal(signal.id, { data: updatedData as any });
 
       const result = await sendTemplateDiscordMessage(
-        { ...signal, data: updatedData },
+        { ...signal, data: updatedData as any },
         app,
         "current_status",
         updatedData,

@@ -702,11 +702,42 @@ export async function sendTemplateDiscordMessage(
 
   const template = await getRenderedTemplateEmbed(data, app, messageType);
   if (!template) return { sent: false, error: `No template for message type ${messageType}` };
+  const embed = { ...template.embed };
+  if (messageType === "current_status") {
+    const dropFieldNames = ["Position Management", "Trade Plan"];
+    const footerText =
+      data.manage_message ||
+      "Manage your trade accordingly.";
+
+    const cleanedFields = (embed.fields || [])
+      .filter((f) =>
+        !dropFieldNames.some((name) => (f.name || "").includes(name)) &&
+        !String(f.value || "").includes("{{position_mgmt}}") &&
+        !String(f.value || "").includes("Live status update: manage position based on your active plan and current volatility."),
+      );
+
+    const hasNotificationField = cleanedFields.some((f) =>
+      String(f.name || "").includes("Notification"),
+    );
+    if (!hasNotificationField) {
+      cleanedFields.push(
+        { name: "🔔 Notification", value: String(footerText), inline: false },
+      );
+    }
+
+    embed.fields = cleanedFields;
+    embed.footer = undefined;
+  }
+
+  if (messageType === "end_trade") {
+    // Keep trade-closed message clean: no disclaimer footer.
+    embed.footer = undefined;
+  }
 
   let sent = false;
   let error: string | null = null;
   try {
-    sent = await sendWebhook(webhookUrl, template.content || "", [template.embed]);
+    sent = await sendWebhook(webhookUrl, template.content || "", [embed]);
     if (!sent) error = "Webhook request failed";
   } catch (err: any) {
     error = err.message;

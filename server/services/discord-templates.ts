@@ -415,13 +415,14 @@ function currentStatusTemplate(instrumentType: string): TemplateEmbed {
   fields.push(
     { name: "💸 P/L", value: "{{current_profit_pct}}", inline: true },
     { name: "🛡️ Current Stop", value: "{{new_stop_loss}}", inline: true },
+    { name: "🔔 Notification", value: "{{manage_message}}", inline: false },
   );
 
   return {
     description: `**📡 ${tickerVar} ${label} Live Status Update**`,
     color: "#3b82f6",
     fields,
-    footer: DISCLAIMER,
+    footer: "{{manage_message}}",
     timestamp: true,
   };
 }
@@ -430,7 +431,7 @@ function endTradeTemplate(instrumentType: string): TemplateEmbed {
   const label = instrumentType === "LETF" || instrumentType === "Shares" ? "Shares" : instrumentType === "Crypto" ? "Crypto" : "Options";
   const tickerVar = instrumentType === "LETF" || instrumentType === "LETF Option" ? "{{underlying}}" : "{{ticker}}";
   return {
-    description: `**🏁 ${tickerVar} ${label} Trade Ended**`,
+    description: `**🏁 ${tickerVar} ${label} Trade Closed**`,
     color: "#D4AF37",
     fields: [
       { ...SPACER_FIELD },
@@ -440,9 +441,8 @@ function endTradeTemplate(instrumentType: string): TemplateEmbed {
       { name: "✅ Entry", value: "{{entry_price}}", inline: true },
       { name: "💸 Result", value: "{{profit_pct}}", inline: true },
       { ...SPACER_FIELD },
-      { name: "🔍 Manage Your Trade Accordingly", value: "{{manage_message}}", inline: false },
+      { name: "🏁 Trade Closed", value: "{{manage_message}}", inline: false },
     ],
-    footer: DISCLAIMER,
     timestamp: true,
   };
 }

@@ -38,6 +38,7 @@ import {
   Send,
   Loader2,
   Milestone,
+  X,
 } from "lucide-react";
 import { type Signal, type IbkrOrder, type ActivityLogEntry } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -1044,6 +1045,10 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
   onOpenChange: (open: boolean) => void;
 }) {
   const { toast } = useToast();
+  const [currentStatusOpen, setCurrentStatusOpen] = useState(false);
+  const [currentStatusMessage, setCurrentStatusMessage] = useState(
+    "Manage your trade accordingly.",
+  );
   const [endTradeOpen, setEndTradeOpen] = useState(false);
   const [endTradeMessage, setEndTradeMessage] = useState(
     "Manage your trade accordingly.",
@@ -1077,6 +1082,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
       const res = await apiRequest(
         "POST",
         `/api/signals/${encodeURIComponent(signal.id)}/send-current-status`,
+        { message: currentStatusMessage },
       );
       return res.json();
     },
@@ -1093,8 +1099,11 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
         title: "Sent",
         description: "Current trade status pushed to Discord",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/activity/by-signal", signal.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/discord-messages/by-signal", signal.id] });
+      setCurrentStatusOpen(false);
+      if (signal?.id) {
+        queryClient.invalidateQueries({ queryKey: ["/api/activity/by-signal", signal.id] });
+        queryClient.invalidateQueries({ queryKey: ["/api/discord-messages/by-signal", signal.id] });
+      }
     },
     onError: (err: any) => {
       toast({
@@ -1130,8 +1139,10 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
       }
       setEndTradeOpen(false);
       queryClient.invalidateQueries({ queryKey: ["/api/signals"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/activity/by-signal", signal.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/discord-messages/by-signal", signal.id] });
+      if (signal?.id) {
+        queryClient.invalidateQueries({ queryKey: ["/api/activity/by-signal", signal.id] });
+        queryClient.invalidateQueries({ queryKey: ["/api/discord-messages/by-signal", signal.id] });
+      }
     },
     onError: (err: any) => {
       toast({
@@ -1144,6 +1155,8 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
 
   useEffect(() => {
     if (open) {
+      setCurrentStatusMessage("Manage your trade accordingly.");
+      setCurrentStatusOpen(false);
       setEndTradeMessage("Manage your trade accordingly.");
       setEndTradeOpen(false);
     }
@@ -1322,7 +1335,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
                 <Button
                   className="w-full"
                   variant="outline"
-                  onClick={() => sendCurrentStatusMutation.mutate()}
+                  onClick={() => setCurrentStatusOpen(true)}
                   disabled={
                     signal.status !== "active" || sendCurrentStatusMutation.isPending
                   }
@@ -1736,17 +1749,63 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
           </div>
         </div>
       </DialogContent>
-      <Dialog open={endTradeOpen} onOpenChange={setEndTradeOpen}>
-        <DialogContent className="max-w-xl" data-testid="dialog-end-trade">
+      <Dialog open={currentStatusOpen} onOpenChange={setCurrentStatusOpen}>
+        <DialogContent className="sm:max-w-xl" data-testid="dialog-current-status">
+          <button
+            type="button"
+            onClick={() => setCurrentStatusOpen(false)}
+            className="absolute right-4 top-4 z-20 rounded-sm bg-muted/60 p-1 text-foreground opacity-100 ring-offset-background transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            data-testid="button-close-current-status-dialog"
+          >
+            <X className="h-4 w-4" />
+          </button>
           <DialogHeader>
-            <DialogTitle>End Trade</DialogTitle>
-            <DialogDescription>
-              Are you okay to end the trade?
-            </DialogDescription>
+            <DialogTitle>Current Status</DialogTitle>
           </DialogHeader>
           <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Manage Your Trade Accordingly Message
+            <p className="text-xs font-medium text-muted-foreground capitalize tracking-wider">
+              Notification Message
+            </p>
+            <textarea
+              value={currentStatusMessage}
+              onChange={(e) => setCurrentStatusMessage(e.target.value)}
+              className="w-full rounded-md border bg-background p-2 text-sm min-h-[96px]"
+              data-testid="textarea-current-status-message"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCurrentStatusOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => sendCurrentStatusMutation.mutate()}
+              disabled={sendCurrentStatusMutation.isPending}
+              data-testid="button-confirm-current-status"
+            >
+              {sendCurrentStatusMutation.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              ) : null}
+              Send Current Status
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={endTradeOpen} onOpenChange={setEndTradeOpen}>
+        <DialogContent className="sm:max-w-xl" data-testid="dialog-end-trade">
+          <button
+            type="button"
+            onClick={() => setEndTradeOpen(false)}
+            className="absolute right-4 top-4 z-20 rounded-sm bg-muted/60 p-1 text-foreground opacity-100 ring-offset-background transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            data-testid="button-close-end-trade-dialog"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <DialogHeader>
+            <DialogTitle>Trade Closed</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground capitalize tracking-wider">
+              Notification Message
             </p>
             <textarea
               value={endTradeMessage}
@@ -1768,7 +1827,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
               {endTradeMutation.isPending ? (
                 <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
               ) : null}
-              Confirm End Trade
+              Confirm Trade Closed
             </Button>
           </DialogFooter>
         </DialogContent>
