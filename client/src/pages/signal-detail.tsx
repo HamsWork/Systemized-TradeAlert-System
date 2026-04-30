@@ -684,6 +684,10 @@ function colorToHex(color: number): string {
   return COLOR_HEX[color] || `#${color.toString(16).padStart(6, "0")}`;
 }
 
+function cleanPreviewLabel(label: string): string {
+  return label.replace(/\s*\(Discord\s*Embed\)\s*$/i, "");
+}
+
 function DiscordEmbed({ msg }: { msg: DiscordPreviewMsg }) {
   const embed = msg.embed;
   const borderColor = colorToHex(embed.color);
@@ -692,9 +696,9 @@ function DiscordEmbed({ msg }: { msg: DiscordPreviewMsg }) {
   const blockFields = fields.filter(f => !f.inline);
 
   return (
-    <div className="rounded-md overflow-hidden bg-[#2b2d31] border border-[#1e1f22]" data-testid={`discord-embed-${msg.type}`}>
+    <div className="rounded-md overflow-hidden bg-[#2b2d31]" data-testid={`discord-embed-${msg.type}`}>
       <div className="flex">
-        <div className="w-1 shrink-0" style={{ backgroundColor: borderColor }} />
+        <div className="w-1.5 shrink-0" style={{ backgroundColor: borderColor }} />
         <div className="p-3 flex-1 min-w-0 space-y-2">
           {embed.description && (
             <p className="text-[13px] text-[#dbdee1] font-medium leading-snug">
@@ -856,7 +860,7 @@ function DiscordSendModal({ preview, signalId, open, onOpenChange }: {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4 text-[#5865F2]" />
-            Send: {preview.label}
+            Send: {cleanPreviewLabel(preview.label)}
           </DialogTitle>
           <DialogDescription>Edit the embed JSON and preview before sending to Discord</DialogDescription>
         </DialogHeader>
@@ -998,7 +1002,7 @@ function DiscordPreviewSection({ signalId, open }: { signalId: string; open: boo
                     }`}
                     data-testid={`button-preview-${p.type}-${i}`}
                   >
-                    {p.label}
+                    {cleanPreviewLabel(p.label)}
                   </button>
                 ))}
               </div>

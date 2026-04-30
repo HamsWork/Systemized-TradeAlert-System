@@ -236,6 +236,10 @@ function colorToHex(color: number): string {
   return COLOR_HEX[color] || `#${color.toString(16).padStart(6, "0")}`;
 }
 
+function cleanPreviewLabel(label: string): string {
+  return label.replace(/\s*\(Discord\s*Embed\)\s*$/i, "");
+}
+
 const TYPE_ICONS: Record<string, typeof TrendingUp> = {
   signal_alert: TrendingUp,
   target_hit: Target,
@@ -316,9 +320,9 @@ function DiscordEmbed({ embed }: { embed: RenderedEmbed }) {
   flushInline();
 
   return (
-    <div className="rounded-md overflow-hidden bg-[#2b2d31] border border-[#1e1f22]">
+    <div className="rounded-md overflow-hidden bg-[#2b2d31]">
       <div className="flex">
-        <div className="w-1 shrink-0" style={{ backgroundColor: borderColor }} />
+        <div className="w-1.5 shrink-0" style={{ backgroundColor: borderColor }} />
         <div className="p-3 flex-1 min-w-0 space-y-2">
           <div className="flex gap-3">
             <div className="flex-1 min-w-0 space-y-2">
@@ -734,7 +738,7 @@ function SendFromTemplateModal({ template, open, onOpenChange }: {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <SiDiscord className="h-4 w-4 text-[#5865F2]" />
-            Send: {template.label}
+            Send: {cleanPreviewLabel(template.label)}
           </DialogTitle>
           <DialogDescription>Select a Discord channel, review the rendered payload, then send</DialogDescription>
         </DialogHeader>
@@ -1006,7 +1010,7 @@ export default function DiscordTemplatesPage() {
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <p className="text-sm font-semibold truncate" data-testid={`text-template-label-${idx}`}>{template.label}</p>
+                            <p className="text-sm font-semibold truncate" data-testid={`text-template-label-${idx}`}>{cleanPreviewLabel(template.label)}</p>
                             {template.isCustom && (
                               <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-blue-500/10 text-blue-500 shrink-0">
                                 <Check className="h-2.5 w-2.5 mr-0.5" />

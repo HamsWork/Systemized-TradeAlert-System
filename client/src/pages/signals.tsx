@@ -16,6 +16,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -134,10 +144,10 @@ function CreateSignalDialog({ open, onOpenChange }: { open: boolean; onOpenChang
     if (timeStop && (tradeType === "swing" || tradeType === "leap")) data.time_stop = timeStop;
 
     createMutation.mutate({
-      data,
+      data: data as any,
       status: "active",
     });
-  };
+  }; 
 
   const showRaiseValue = ["Trail by %", "Trail by $", "Custom"].includes(raiseMethod);
 
@@ -671,6 +681,7 @@ export default function SignalsPage() {
   const [appFilter, setAppFilter] = useState<string>("all");
   const [instrumentFilter, setInstrumentFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
+  const [pendingDeleteSignalId, setPendingDeleteSignalId] = useState<string | null>(null);
   const { toast } = useToast();
 
   const signalsQuery = useQuery<Signal[]>({
@@ -688,12 +699,20 @@ export default function SignalsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await apiRequest("DELETE", `/api/signals/${id}`);
+      await apiRequest("DELETE", `/api/signals/${id}`, undefined);
     },
     onSuccess: () => {
+      setPendingDeleteSignalId(null);
       queryClient.invalidateQueries({ queryKey: ["/api/signals"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       toast({ title: "Signal removed" });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed",
+        description: error.message || "Failed to remove signal",
+        variant: "destructive",
+      });
     },
   });
 
@@ -823,7 +842,7 @@ export default function SignalsPage() {
               <SignalCard
                 key={signal.id}
                 signal={signal}
-                onDelete={(id) => deleteMutation.mutate(id)}
+                onDelete={(id) => setPendingDeleteSignalId(id)}
                 onOpen={(s) => setSelectedSignal(s)}
               />
             ))}
@@ -869,6 +888,41 @@ export default function SignalsPage() {
         open={!!selectedSignal}
         onOpenChange={(open) => { if (!open) setSelectedSignal(null); }}
       />
+      <AlertDialog
+        open={!!pendingDeleteSignalId}
+        onOpenChange={(open) => {
+          if (!open && !deleteMutation.isPending) setPendingDeleteSignalId(null);
+        }}
+      >
+        <AlertDialogContent data-testid="dialog-confirm-delete-signal-card">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this signal?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove the signal from database and stop any future tracking for it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              disabled={deleteMutation.isPending}
+              data-testid="button-cancel-delete-signal-card"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                if (!pendingDeleteSignalId) return;
+                deleteMutation.mutate(pendingDeleteSignalId);
+              }}
+              disabled={deleteMutation.isPending || !pendingDeleteSignalId}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete-signal-card"
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Yes, delete signal"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

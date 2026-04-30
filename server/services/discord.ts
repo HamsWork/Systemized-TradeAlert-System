@@ -433,6 +433,9 @@ function buildTemplateVars(
       signalData.position_mgmt ||
       signalData.trade_plan ||
       "Live status update: manage position based on your active plan and current volatility.";
+    vars.manage_message =
+      signalData.manage_message ||
+      "Manage your trade accordingly.";
   }
 
   if (messageType === "end_trade") {
