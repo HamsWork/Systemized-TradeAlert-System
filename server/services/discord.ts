@@ -725,6 +725,19 @@ export async function buildOutboundDiscordTemplatePayload(
   if (messageType === "current_status") {
     const pctRaw = String(signalData.current_profit_pct ?? "").replace("%", "");
     const pct = Number(pctRaw);
+    if (!Number.isFinite(pct) || pct < 30) {
+      embed.thumbnail = undefined;
+      embed.image = undefined;
+    } else {
+      const boomUrl =
+        "https://cdn.discordapp.com/emojis/1485922107639726119.webp?size=60&animated=true";
+      const kaboomUrl =
+        "https://cdn.discordapp.com/emojis/1485921838675787806.webp?size=60&animated=true";
+      const iconUrl = pct >= 40 ? kaboomUrl : boomUrl;
+      embed.thumbnail = { url: iconUrl };
+      // current_status should not use large banner-style images
+      embed.image = undefined;
+    }
     if (Number.isFinite(pct) && pct < 0) {
       embed.fields = (embed.fields || []).map((f) => {
         let name = String(f.name || "");
