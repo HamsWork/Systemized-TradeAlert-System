@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useDeferredValue } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -663,6 +663,8 @@ interface DiscordPreviewEmbed {
   fields?: { name: string; value: string; inline?: boolean }[];
   footer?: { text: string };
   timestamp?: string;
+  thumbnail?: { url: string };
+  image?: { url: string };
 }
 
 interface DiscordPreviewMsg {
@@ -700,31 +702,42 @@ function DiscordEmbed({ msg }: { msg: DiscordPreviewMsg }) {
       <div className="flex">
         <div className="w-1.5 shrink-0" style={{ backgroundColor: borderColor }} />
         <div className="p-3 flex-1 min-w-0 space-y-2">
-          {embed.description && (
-            <p className="text-[13px] text-[#dbdee1] font-medium leading-snug">
-              {embed.description.split(/\*\*(.*?)\*\*/).map((part, i) =>
-                i % 2 === 1 ? <strong key={i}>{part}</strong> : part
+          <div className="flex gap-3">
+            <div className="flex-1 min-w-0 space-y-2">
+              {embed.description && (
+                <p className="text-[13px] text-[#dbdee1] font-medium leading-snug">
+                  {embed.description.split(/\*\*(.*?)\*\*/).map((part, i) =>
+                    i % 2 === 1 ? <strong key={i}>{part}</strong> : part
+                  )}
+                </p>
               )}
-            </p>
-          )}
 
-          {inlineFields.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {inlineFields.map((field, i) => (
-                <div key={i} className="min-w-0">
+              {inlineFields.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {inlineFields.map((field, i) => (
+                    <div key={i} className="min-w-0">
+                      <p className="text-[11px] font-semibold text-[#b5bac1] uppercase tracking-wide">{field.name}</p>
+                      <p className="text-[12px] text-[#dbdee1] whitespace-pre-wrap break-words">{field.value || "\u200b"}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {blockFields.map((field, i) => (
+                <div key={i}>
                   <p className="text-[11px] font-semibold text-[#b5bac1] uppercase tracking-wide">{field.name}</p>
-                  <p className="text-[12px] text-[#dbdee1] whitespace-pre-wrap break-words">{field.value || "\u200b"}</p>
+                  <p className="text-[12px] text-[#dbdee1] whitespace-pre-wrap break-words leading-relaxed">{field.value || "\u200b"}</p>
                 </div>
               ))}
             </div>
-          )}
+            {embed.thumbnail?.url && (
+              <img src={embed.thumbnail.url} alt="" className="w-16 h-16 rounded object-cover shrink-0" />
+            )}
+          </div>
 
-          {blockFields.map((field, i) => (
-            <div key={i}>
-              <p className="text-[11px] font-semibold text-[#b5bac1] uppercase tracking-wide">{field.name}</p>
-              <p className="text-[12px] text-[#dbdee1] whitespace-pre-wrap break-words leading-relaxed">{field.value || "\u200b"}</p>
-            </div>
-          ))}
+          {embed.image?.url && (
+            <img src={embed.image.url} alt="" className="w-full max-h-48 rounded object-contain" />
+          )}
 
           {embed.footer && (
             <p className="text-[10px] text-[#949ba4] pt-1 border-t border-[#3f4147]">{embed.footer.text}</p>
@@ -733,6 +746,19 @@ function DiscordEmbed({ msg }: { msg: DiscordPreviewMsg }) {
       </div>
     </div>
   );
+}
+
+function outboundPayloadToPreviewMsg(
+  messageType: string,
+  content: string,
+  embed: DiscordPreviewEmbed,
+): DiscordPreviewMsg {
+  return {
+    type: messageType,
+    label: messageType === "current_status" ? "Current Status" : "End Trade",
+    content,
+    embed,
+  };
 }
 
 function extractTargetKey(preview: DiscordPreviewMsg): string | undefined {
@@ -1155,6 +1181,57 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
         variant: "destructive",
       });
     },
+  });
+
+  const deferredStatusMsg = useDeferredValue(currentStatusMessage);
+  const deferredEndMsg = useDeferredValue(endTradeMessage);
+
+  const currentStatusPreviewQuery = useQuery({
+    queryKey: [
+      "/api/signals",
+      signal?.id,
+      "preview-discord-outbound",
+      "current_status",
+      deferredStatusMsg,
+    ] as const,
+    queryFn: async () => {
+      const res = await apiRequest(
+        "POST",
+        `/api/signals/${encodeURIComponent(signal!.id)}/preview-discord-outbound`,
+        { messageType: "current_status", message: deferredStatusMsg },
+      );
+      return res.json() as Promise<{
+        content: string;
+        embed: DiscordPreviewEmbed;
+        messageType: string;
+      }>;
+    },
+    enabled: !!signal?.id && currentStatusOpen,
+    staleTime: 0,
+  });
+
+  const endTradePreviewQuery = useQuery({
+    queryKey: [
+      "/api/signals",
+      signal?.id,
+      "preview-discord-outbound",
+      "end_trade",
+      deferredEndMsg,
+    ] as const,
+    queryFn: async () => {
+      const res = await apiRequest(
+        "POST",
+        `/api/signals/${encodeURIComponent(signal!.id)}/preview-discord-outbound`,
+        { messageType: "end_trade", message: deferredEndMsg },
+      );
+      return res.json() as Promise<{
+        content: string;
+        embed: DiscordPreviewEmbed;
+        messageType: string;
+      }>;
+    },
+    enabled: !!signal?.id && endTradeOpen && signal?.status === "active",
+    staleTime: 0,
   });
 
   useEffect(() => {
@@ -1754,7 +1831,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
         </div>
       </DialogContent>
       <Dialog open={currentStatusOpen} onOpenChange={setCurrentStatusOpen}>
-        <DialogContent className="sm:max-w-xl" data-testid="dialog-current-status">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="dialog-current-status">
           <button
             type="button"
             onClick={() => setCurrentStatusOpen(false)}
@@ -1777,6 +1854,37 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
               data-testid="textarea-current-status-message"
             />
           </div>
+
+          <div className="space-y-2 border-t pt-3 mt-1">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Discord preview (same as send)
+            </p>
+            {currentStatusPreviewQuery.isLoading && (
+              <div className="space-y-2 py-2">
+                <Skeleton className="h-24 w-full rounded-lg" />
+              </div>
+            )}
+            {currentStatusPreviewQuery.isError && (
+              <p className="text-xs text-destructive">
+                {(currentStatusPreviewQuery.error as Error)?.message || "Preview failed"}
+              </p>
+            )}
+            {currentStatusPreviewQuery.data?.embed && (
+              <div className="rounded-lg bg-[#313338] p-3 space-y-2">
+                {currentStatusPreviewQuery.data.content ? (
+                  <p className="text-[13px] text-[#dbdee1]">{currentStatusPreviewQuery.data.content}</p>
+                ) : null}
+                <DiscordEmbed
+                  msg={outboundPayloadToPreviewMsg(
+                    "current_status",
+                    currentStatusPreviewQuery.data.content || "",
+                    currentStatusPreviewQuery.data.embed,
+                  )}
+                />
+              </div>
+            )}
+          </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setCurrentStatusOpen(false)}>
               Cancel
@@ -1795,7 +1903,7 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
         </DialogContent>
       </Dialog>
       <Dialog open={endTradeOpen} onOpenChange={setEndTradeOpen}>
-        <DialogContent className="sm:max-w-xl" data-testid="dialog-end-trade">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="dialog-end-trade">
           <button
             type="button"
             onClick={() => setEndTradeOpen(false)}
@@ -1818,6 +1926,37 @@ export function SignalDetailDialog({ signal, open, onOpenChange }: {
               data-testid="textarea-end-trade-message"
             />
           </div>
+
+          <div className="space-y-2 border-t pt-3 mt-1">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Discord preview (same as send)
+            </p>
+            {endTradePreviewQuery.isLoading && (
+              <div className="space-y-2 py-2">
+                <Skeleton className="h-24 w-full rounded-lg" />
+              </div>
+            )}
+            {endTradePreviewQuery.isError && (
+              <p className="text-xs text-destructive">
+                {(endTradePreviewQuery.error as Error)?.message || "Preview failed"}
+              </p>
+            )}
+            {endTradePreviewQuery.data?.embed && (
+              <div className="rounded-lg bg-[#313338] p-3 space-y-2">
+                {endTradePreviewQuery.data.content ? (
+                  <p className="text-[13px] text-[#dbdee1]">{endTradePreviewQuery.data.content}</p>
+                ) : null}
+                <DiscordEmbed
+                  msg={outboundPayloadToPreviewMsg(
+                    "end_trade",
+                    endTradePreviewQuery.data.content || "",
+                    endTradePreviewQuery.data.embed,
+                  )}
+                />
+              </div>
+            )}
+          </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setEndTradeOpen(false)}>
               Cancel

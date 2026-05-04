@@ -362,68 +362,45 @@ function tenPctMilestoneTemplate(instrumentType: string): TemplateEmbed {
 function currentStatusTemplate(instrumentType: string): TemplateEmbed {
   const label = instrumentType === "LETF" || instrumentType === "Shares" ? "Shares" : instrumentType === "Crypto" ? "Crypto" : "Options";
   const tickerVar = instrumentType === "LETF" || instrumentType === "LETF Option" ? "{{underlying}}" : "{{ticker}}";
-  const fields: TemplateEmbed["fields"] = [{ ...SPACER_FIELD }];
+  const fields: TemplateEmbed["fields"] = [];
 
-  if (instrumentType === "Options") {
+  if (instrumentType === "LETF") {
     fields.push(
-      { name: "🟢 Ticker", value: "{{ticker}}", inline: true },
-      { name: "📊 Stock Price", value: "{{stock_price}}", inline: true },
-      { name: "💵 Option Price", value: "{{current_price}}", inline: true },
-      { ...SPACER_FIELD },
-      { name: "❌ Expiration", value: "{{expiry}}", inline: true },
-      { name: "✍️ Strike", value: "{{strike}} {{right}}", inline: true },
-      { name: "📈 Direction", value: "{{direction}}", inline: true },
+      { name: "💹 LETF", value: "{{letf_ticker}} ({{leverage}}x {{letf_direction}})", inline: true },
+      { name: "💵 LETF Entry", value: "{{letf_entry}}", inline: true },
+      { name: "📊 Underlying Price", value: "{{stock_price}}", inline: true },
     );
   } else if (instrumentType === "LETF Option") {
     fields.push(
-      { name: "🟢 Ticker", value: "{{underlying}}", inline: true },
       { name: "💹 Leveraged ETF", value: "{{letf_ticker}} ({{leverage}}x {{letf_direction}})", inline: true },
-      { name: "💵 Option Price", value: "{{current_price}}", inline: true },
-      { ...SPACER_FIELD },
       { name: "❌ Expiration", value: "{{expiry}}", inline: true },
       { name: "✍️ Strike", value: "{{strike}} {{right}}", inline: true },
-      { name: "📈 Direction", value: "{{direction}}", inline: true },
     );
-  } else if (instrumentType === "LETF") {
+  } else if (instrumentType === "Options") {
     fields.push(
-      { name: "🟢 Ticker", value: "{{underlying}}", inline: true },
-      { name: "💹 LETF", value: "{{letf_ticker}} ({{leverage}}x {{letf_direction}})", inline: true },
-      { name: "📈 Direction", value: "{{direction}}", inline: true },
-      { ...SPACER_FIELD },
-      { name: "📊 Underlying Price", value: "{{stock_price}}", inline: true },
-      { name: "💵 LETF Price", value: "{{current_price}}", inline: true },
-      { name: "✅ LETF Entry", value: "{{entry_price}}", inline: true },
-    );
-  } else if (instrumentType === "Crypto") {
-    fields.push(
-      { name: "🟢 Ticker", value: "{{ticker}}", inline: true },
-      { name: "📈 Direction", value: "{{direction}}", inline: true },
-      { name: "💵 Current Price", value: "{{current_price}}", inline: true },
-      { ...SPACER_FIELD },
-      { name: "✅ Entry", value: "{{entry_price}}", inline: true },
+      { name: "❌ Expiration", value: "{{expiry}}", inline: true },
+      { name: "✍️ Strike", value: "{{strike}} {{right}}", inline: true },
     );
   } else {
     fields.push(
-      { name: "🟢 Ticker", value: "{{ticker}}", inline: true },
-      { name: "📈 Direction", value: "{{direction}}", inline: true },
-      { name: "💵 Current Price", value: "{{current_price}}", inline: true },
-      { ...SPACER_FIELD },
-      { name: "✅ Entry", value: "{{entry_price}}", inline: true },
+      { name: "📊 Direction", value: "{{direction}}", inline: true },
     );
   }
 
   fields.push(
-    { name: "💸 P/L", value: "{{current_profit_pct}}", inline: true },
-    { name: "🛡️ Current Stop", value: "{{new_stop_loss}}", inline: true },
-    { name: "🔔 Notification", value: "{{manage_message}}", inline: false },
+    { name: "📈 Entry Price", value: "{{entry_price}}", inline: true },
+    { name: "💵 Current Price", value: "{{current_price}}", inline: true },
+    { name: "📊 Profit", value: "{{current_profit_pct}}", inline: true },
+    { ...SPACER_FIELD },
+    { name: "{{milestone_title}}", value: "{{milestone_text}}", inline: false },
   );
 
   return {
-    description: `**📡 ${tickerVar} ${label} Live Status Update**`,
-    color: "#3b82f6",
+    description: `**💰 ${tickerVar} ${label} {{current_profit_pct}} Live Update**`,
+    color: GREEN,
     fields,
-    footer: "{{manage_message}}",
-    timestamp: true,
+    footer: "{{milestone_footer}}",
+    thumbnail: { url: "{{milestone_image}}" },
   };
 }
 

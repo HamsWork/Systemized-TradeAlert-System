@@ -418,7 +418,7 @@ function buildTemplateVars(
         instrumentType,
         direction,
       );
-      vars.current_profit_pct = `${pct.toFixed(1)}%`;
+      vars.current_profit_pct = `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
     } else {
       vars.current_profit_pct = "—";
     }
@@ -436,6 +436,27 @@ function buildTemplateVars(
     vars.manage_message =
       signalData.manage_message ||
       "Manage your trade accordingly.";
+    const numericProfitPct = Number(
+      String(vars.current_profit_pct || "").replace("%", ""),
+    );
+    if (Number.isFinite(numericProfitPct)) {
+      if (numericProfitPct > 0) {
+        vars.milestone_title = "💰 Gains";
+        vars.milestone_text = `${vars.current_profit_pct} profit reached`;
+      } else if (numericProfitPct < 0) {
+        vars.milestone_title = "📉 Loss";
+        vars.milestone_text = `${vars.current_profit_pct} drawdown`;
+      } else {
+        vars.milestone_title = "⚖️ Flat";
+        vars.milestone_text = "0.0% change";
+      }
+    } else {
+      vars.milestone_title = "📡 Live Update";
+      vars.milestone_text = "Live update";
+    }
+    vars.milestone_footer = vars.manage_message;
+    vars.milestone_image =
+      "https://cdn.discordapp.com/emojis/1485922107639726119.webp?size=60&animated=true";
   }
 
   if (messageType === "end_trade") {
@@ -692,6 +713,38 @@ export async function sendRawDiscordEmbed(
   return { sent, error };
 }
 
+/** Same embed + content as sent to Discord webhooks (single source of truth for preview). */
+export async function buildOutboundDiscordTemplatePayload(
+  app: ConnectedApp,
+  messageType: string,
+  signalData: Record<string, any>,
+): Promise<{ content: string; embed: DiscordEmbed } | null> {
+  const template = await getRenderedTemplateEmbed(signalData, app, messageType);
+  if (!template) return null;
+  const embed = { ...template.embed };
+  if (messageType === "current_status") {
+    const pctRaw = String(signalData.current_profit_pct ?? "").replace("%", "");
+    const pct = Number(pctRaw);
+    if (Number.isFinite(pct) && pct < 0) {
+      embed.fields = (embed.fields || []).map((f) => {
+        let name = String(f.name || "");
+        let value = String(f.value || "");
+        name = name
+          .replace(/PROFIT/gi, "LOSS")
+          .replace(/GAINS/gi, "RESULT");
+        value = value
+          .replace(/profit reached/gi, "drawdown")
+          .replace(/gains/gi, "result");
+        return { ...f, name, value };
+      });
+    }
+  }
+  if (messageType === "end_trade") {
+    embed.footer = undefined;
+  }
+  return { content: template.content || "", embed };
+}
+
 export async function sendTemplateDiscordMessage(
   signal: Signal,
   app: ConnectedApp,
@@ -703,44 +756,18 @@ export async function sendTemplateDiscordMessage(
   const webhookUrl = getWebhookForInstrument(app, instrumentType);
   if (!webhookUrl) return { sent: false, error: `No webhook for ${instrumentType}` };
 
-  const template = await getRenderedTemplateEmbed(data, app, messageType);
-  if (!template) return { sent: false, error: `No template for message type ${messageType}` };
-  const embed = { ...template.embed };
-  if (messageType === "current_status") {
-    const dropFieldNames = ["Position Management", "Trade Plan"];
-    const footerText =
-      data.manage_message ||
-      "Manage your trade accordingly.";
-
-    const cleanedFields = (embed.fields || [])
-      .filter((f) =>
-        !dropFieldNames.some((name) => (f.name || "").includes(name)) &&
-        !String(f.value || "").includes("{{position_mgmt}}") &&
-        !String(f.value || "").includes("Live status update: manage position based on your active plan and current volatility."),
-      );
-
-    const hasNotificationField = cleanedFields.some((f) =>
-      String(f.name || "").includes("Notification"),
-    );
-    if (!hasNotificationField) {
-      cleanedFields.push(
-        { name: "🔔 Notification", value: String(footerText), inline: false },
-      );
-    }
-
-    embed.fields = cleanedFields;
-    embed.footer = undefined;
-  }
-
-  if (messageType === "end_trade") {
-    // Keep trade-closed message clean: no disclaimer footer.
-    embed.footer = undefined;
-  }
+  const prepared = await buildOutboundDiscordTemplatePayload(
+    app,
+    messageType,
+    data,
+  );
+  if (!prepared)
+    return { sent: false, error: `No template for message type ${messageType}` };
 
   let sent = false;
   let error: string | null = null;
   try {
-    sent = await sendWebhook(webhookUrl, template.content || "", [embed]);
+    sent = await sendWebhook(webhookUrl, prepared.content, [prepared.embed]);
     if (!sent) error = "Webhook request failed";
   } catch (err: any) {
     error = err.message;
@@ -1551,7 +1578,7 @@ export function buildTradeClosedEmbed(
     },
     { name: "\u{1F3C1} Exit", value: `${fmtPrice(exitPrice)}`, inline: true },
     {
-      name: "\u{1F4B8} Profit",
+      name: "\u{1F4B8} Result",
       value: pnlPct != null ? `${pnlPct}%` : "\u2014",
       inline: true,
     },

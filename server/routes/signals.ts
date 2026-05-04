@@ -21,9 +21,10 @@ import {
   sendRawDiscordEmbed,
   profitPctFromInstrument,
   sendTemplateDiscordMessage,
+  buildOutboundDiscordTemplatePayload,
 } from "../services/discord";
 
-import type { ConnectedApp } from "@shared/schema";
+import type { ConnectedApp, Signal } from "@shared/schema";
 import { generateDiscordPreviews, generateAllTemplates } from "../services/discord-preview";
 // NOTE: instrumentPriceFromUnderlying and related conversion helpers were removed.
 
@@ -33,6 +34,118 @@ declare global {
       connectedApp?: ConnectedApp | null;
     }
   }
+}
+
+async function buildOutboundDataForCurrentStatus(
+  signal: Signal,
+  messageRaw: unknown,
+): Promise<Record<string, any>> {
+  const data = (signal.data || {}) as Record<string, any>;
+  const ticker = data.ticker || data.symbol || "UNKNOWN";
+  const currentInstrumentPrice =
+    (await getCurrentInstrumentPrice(data, ticker)) ??
+    (typeof data.current_instrument_price === "number"
+      ? Number(data.current_instrument_price)
+      : null);
+  const customMessage =
+    typeof messageRaw === "string" && messageRaw.trim().length > 0
+      ? messageRaw.trim()
+      : "Manage your trade accordingly.";
+  const entryPrice =
+    data.entry_instrument_price != null
+      ? Number(data.entry_instrument_price)
+      : data.entry_price != null
+        ? Number(data.entry_price)
+        : null;
+  const profitPct =
+    entryPrice != null &&
+    entryPrice > 0 &&
+    currentInstrumentPrice != null &&
+    currentInstrumentPrice > 0
+      ? profitPctFromInstrument(
+          entryPrice,
+          currentInstrumentPrice,
+          data.instrument_type || "Shares",
+          data.direction || "Long",
+        )
+      : null;
+
+  return {
+    ...data,
+    ...(profitPct != null
+      ? {
+          current_profit_pct: `${profitPct.toFixed(1)}%`,
+        }
+      : {}),
+    manage_message: customMessage,
+    ...(currentInstrumentPrice != null
+      ? { current_instrument_price: currentInstrumentPrice }
+      : {}),
+  };
+}
+
+async function buildOutboundDataForEndTrade(
+  signal: Signal,
+  messageRaw: unknown,
+): Promise<{ outbound: Record<string, any>; error: string | null }> {
+  if (signal.status !== "active") {
+    return {
+      outbound: {},
+      error: `Signal is not active (current status: ${signal.status}). Only active signals can be ended.`,
+    };
+  }
+  const data = (signal.data || {}) as Record<string, any>;
+  const ticker = data.ticker || data.symbol || "UNKNOWN";
+  const customMessage =
+    typeof messageRaw === "string" && messageRaw.trim().length > 0
+      ? messageRaw.trim()
+      : "Manage your trade accordingly.";
+  const currentInstrumentPrice =
+    (await getCurrentInstrumentPrice(data, ticker)) ??
+    (typeof data.current_instrument_price === "number"
+      ? Number(data.current_instrument_price)
+      : null);
+  const entryPrice =
+    data.entry_instrument_price != null
+      ? Number(data.entry_instrument_price)
+      : data.entry_price != null
+        ? Number(data.entry_price)
+        : null;
+  const profitPct =
+    entryPrice != null &&
+    entryPrice > 0 &&
+    currentInstrumentPrice != null &&
+    currentInstrumentPrice > 0
+      ? profitPctFromInstrument(
+          entryPrice,
+          currentInstrumentPrice,
+          data.instrument_type || "Shares",
+          data.direction || "Long",
+        )
+      : null;
+
+  const updatedData = {
+    ...data,
+    auto_track: false,
+    end_trade_message: customMessage,
+    ...(currentInstrumentPrice != null
+      ? {
+          exit_price: currentInstrumentPrice,
+          current_instrument_price: currentInstrumentPrice,
+        }
+      : {}),
+  };
+
+  const outbound = {
+    ...updatedData,
+    ...(profitPct != null
+      ? {
+          profit_pct: `${profitPct.toFixed(1)}%`,
+        }
+      : {}),
+  };
+
+  return { outbound, error: null };
 }
 
 async function authenticateApiKey(
@@ -131,6 +244,62 @@ export function registerSignalRoutes(app: Express) {
       if (!signal) return res.status(404).json({ message: "Signal not found" });
       const previews = generateDiscordPreviews(signal);
       res.json(previews);
+    }),
+  );
+
+  app.post(
+    "/api/signals/:id/preview-discord-outbound",
+    asyncHandler(async (req, res) => {
+      const messageType = req.body?.messageType as string | undefined;
+      if (messageType !== "current_status" && messageType !== "end_trade") {
+        return res.status(400).json({
+          message: "messageType must be current_status or end_trade",
+        });
+      }
+
+      const signal = await storage.getSignal(getParam(req, "id"));
+      if (!signal) return res.status(404).json({ message: "Signal not found" });
+
+      const data = (signal.data || {}) as Record<string, any>;
+      const ticker = data.ticker || data.symbol || "UNKNOWN";
+      const app = signal.sourceAppId
+        ? await storage.getConnectedApp(signal.sourceAppId)
+        : null;
+      if (!app)
+        return res
+          .status(400)
+          .json({ message: "No source app found for this signal" });
+      if (!app.sendDiscordMessages)
+        return res
+          .status(400)
+          .json({ message: `Discord messages are disabled for ${app.name}` });
+
+      let outboundData: Record<string, any>;
+      if (messageType === "current_status") {
+        outboundData = await buildOutboundDataForCurrentStatus(
+          signal,
+          req.body?.message,
+        );
+      } else {
+        const { outbound, error } = await buildOutboundDataForEndTrade(
+          signal,
+          req.body?.message,
+        );
+        if (error) return res.status(400).json({ message: error });
+        outboundData = outbound;
+      }
+
+      const payload = await buildOutboundDiscordTemplatePayload(
+        app,
+        messageType,
+        outboundData,
+      );
+      if (!payload)
+        return res
+          .status(500)
+          .json({ message: "Failed to build Discord preview payload" });
+
+      res.json({ messageType, ticker, ...payload });
     }),
   );
 
@@ -391,47 +560,16 @@ export function registerSignalRoutes(app: Express) {
           .status(400)
           .json({ message: `Discord messages are disabled for ${app.name}` });
 
-      const currentInstrumentPrice =
-        (await getCurrentInstrumentPrice(data, ticker)) ??
-        (typeof data.current_instrument_price === "number"
-          ? Number(data.current_instrument_price)
-          : null);
       const customMessageRaw = req.body?.message;
       const customMessage =
         typeof customMessageRaw === "string" && customMessageRaw.trim().length > 0
           ? customMessageRaw.trim()
           : "Manage your trade accordingly.";
-      const entryPrice =
-        data.entry_instrument_price != null
-          ? Number(data.entry_instrument_price)
-          : data.entry_price != null
-            ? Number(data.entry_price)
-            : null;
-      const profitPct =
-        entryPrice != null &&
-        entryPrice > 0 &&
-        currentInstrumentPrice != null &&
-        currentInstrumentPrice > 0
-          ? profitPctFromInstrument(
-              entryPrice,
-              currentInstrumentPrice,
-              data.instrument_type || "Shares",
-              data.direction || "Long",
-            )
-          : null;
 
-      const updatedData = {
-        ...data,
-        ...(profitPct != null
-          ? {
-              current_profit_pct: `${profitPct.toFixed(1)}%`,
-            }
-          : {}),
-        manage_message: customMessage,
-        ...(currentInstrumentPrice != null
-          ? { current_instrument_price: currentInstrumentPrice }
-          : {}),
-      };
+      const updatedData = await buildOutboundDataForCurrentStatus(
+        signal,
+        req.body?.message,
+      );
       await storage.updateSignal(signal.id, { data: updatedData as any });
 
       const result = await sendTemplateDiscordMessage(
@@ -489,41 +627,14 @@ export function registerSignalRoutes(app: Express) {
           ? customMessageRaw.trim()
           : "Manage your trade accordingly.";
 
-      const currentInstrumentPrice =
-        (await getCurrentInstrumentPrice(data, ticker)) ??
-        (typeof data.current_instrument_price === "number"
-          ? Number(data.current_instrument_price)
-          : null);
-      const entryPrice =
-        data.entry_instrument_price != null
-          ? Number(data.entry_instrument_price)
-          : data.entry_price != null
-            ? Number(data.entry_price)
-            : null;
-      const profitPct =
-        entryPrice != null &&
-        entryPrice > 0 &&
-        currentInstrumentPrice != null &&
-        currentInstrumentPrice > 0
-          ? profitPctFromInstrument(
-              entryPrice,
-              currentInstrumentPrice,
-              data.instrument_type || "Shares",
-              data.direction || "Long",
-            )
-          : null;
+      const { outbound: outboundForDiscord, error: outboundError } =
+        await buildOutboundDataForEndTrade(signal, req.body?.message);
+      if (outboundError) {
+        return res.status(400).json({ message: outboundError });
+      }
 
-      const updatedData = {
-        ...data,
-        auto_track: false,
-        end_trade_message: customMessage,
-        ...(currentInstrumentPrice != null
-          ? {
-              exit_price: currentInstrumentPrice,
-              current_instrument_price: currentInstrumentPrice,
-            }
-          : {}),
-      };
+      const updatedData = { ...outboundForDiscord };
+      delete (updatedData as any).profit_pct;
 
       const updatedSignal = await storage.updateSignal(signal.id, {
         data: updatedData,
@@ -537,14 +648,7 @@ export function registerSignalRoutes(app: Express) {
         updatedSignal,
         app,
         "end_trade",
-        {
-          ...updatedData,
-          ...(profitPct != null
-            ? {
-                profit_pct: `${profitPct.toFixed(1)}%`,
-              }
-            : {}),
-        },
+        outboundForDiscord,
       );
 
       await storage.createActivity({

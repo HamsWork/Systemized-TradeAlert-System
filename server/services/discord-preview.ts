@@ -4,6 +4,7 @@ import {
   buildTargetHitEmbed,
   buildStopLossRaisedEmbed,
   buildStopLossHitEmbed,
+  profitPctFromInstrument,
   type DiscordEmbed,
 } from "./discord";
 
@@ -143,8 +144,15 @@ function buildPreviewsFromData(
     const [key, val] = targetEntries[i];
     const tpNumber = i + 1;
     const price = Number(val.price);
-    const entryPrice = data.entry_instrument_price ?? data.entry_price ?? 0;
-    const profitPct = entryPrice ? ((price - entryPrice) / entryPrice) * 100 : 0;
+    const entryPrice = Number(data.entry_instrument_price ?? data.entry_price ?? 0);
+    const profitPct = entryPrice > 0
+      ? profitPctFromInstrument(
+          entryPrice,
+          price,
+          data.instrument_type || "Shares",
+          data.direction || "Long",
+        )
+      : 0;
     const targetData = {
       ...data,
       current_tp_number: tpNumber,
@@ -195,8 +203,15 @@ function buildPreviewsFromData(
 
   const stopLoss = data.stop_loss != null ? Number(data.stop_loss) : null;
   if (stopLoss != null) {
-    const entryPrice = data.entry_instrument_price ?? data.entry_price ?? 0;
-    const slPct = entryPrice ? ((stopLoss - entryPrice) / entryPrice) * 100 : null;
+    const entryPrice = Number(data.entry_instrument_price ?? data.entry_price ?? 0);
+    const slPct = entryPrice > 0
+      ? profitPctFromInstrument(
+          entryPrice,
+          stopLoss,
+          data.instrument_type || "Shares",
+          data.direction || "Long",
+        )
+      : null;
     const slData = {
       ...data,
       current_instrument_price: stopLoss,
