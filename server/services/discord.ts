@@ -766,7 +766,12 @@ export async function sendTemplateDiscordMessage(
 ): Promise<{ sent: boolean; error: string | null }> {
   const data = signalDataOverride ?? ((signal.data || {}) as Record<string, any>);
   const instrumentType = data.instrument_type || "Shares";
-  const webhookUrl = getWebhookForInstrument(app, instrumentType);
+  // Match entry / monitor alerts: per-signal webhook (e.g. Situ #SS vs #SWJ) wins over app defaults.
+  const webhookUrl = resolveWebhookUrl(
+    { ...signal, data } as Signal,
+    app,
+    instrumentType,
+  );
   if (!webhookUrl) return { sent: false, error: `No webhook for ${instrumentType}` };
 
   const prepared = await buildOutboundDiscordTemplatePayload(
