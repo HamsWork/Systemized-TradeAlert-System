@@ -545,6 +545,30 @@ function fmtPnl(p: number): string {
 const WEBHOOK_MAX_RETRIES = 3;
 const WEBHOOK_CLOUDFLARE_BACKOFF_MS = 60_000;
 
+type WebhookSendResult = { success: boolean; error: string | null };
+
+function summarizeDiscordWebhookFailure(
+  status: number,
+  body: string,
+): string {
+  const snippet = body.replace(/\s+/g, " ").trim().slice(0, 280);
+  if (
+    status === 429 &&
+    (body.includes("Cloudflare") ||
+      body.includes("Access denied") ||
+      body.includes("<!doctype"))
+  ) {
+    return "Discord blocked or rate-limited requests from the server IP (Cloudflare). Try again in a few minutes or redeploy.";
+  }
+  if (status === 404) {
+    return "Discord webhook not found (404). The webhook URL may have been deleted or rotated in Discord.";
+  }
+  if (snippet) {
+    return `Discord webhook HTTP ${status}: ${snippet}`;
+  }
+  return `Discord webhook HTTP ${status}`;
+}
+
 let webhookQueue: Promise<void> = Promise.resolve();
 
 function enqueueWebhook<T>(fn: () => Promise<T>): Promise<T> {
@@ -562,10 +586,10 @@ async function sendWebhook(
   embeds: DiscordEmbed[],
   _unused = false,
   chartFile?: ChartFile | null,
-): Promise<boolean> {
+): Promise<WebhookSendResult> {
   if (!url) {
     console.log("[Discord] Webhook URL not configured");
-    return false;
+    return { success: false, error: "Webhook URL not configured" };
   }
 
   return enqueueWebhook(() => sendWebhookInner(url, content, embeds, chartFile));
@@ -576,7 +600,8 @@ async function sendWebhookInner(
   content: string,
   embeds: DiscordEmbed[],
   chartFile?: ChartFile | null,
-): Promise<boolean> {
+): Promise<WebhookSendResult> {
+  let lastError: string | null = null;
   for (let attempt = 0; attempt < WEBHOOK_MAX_RETRIES; attempt++) {
     try {
       let res: Response;
@@ -610,12 +635,14 @@ async function sendWebhookInner(
         const isCloudflareBlock = bodyText.includes("Cloudflare") || bodyText.includes("<!doctype") || bodyText.includes("Access denied");
 
         if (isCloudflareBlock) {
+          lastError = summarizeDiscordWebhookFailure(res.status, bodyText);
           const waitMs = WEBHOOK_CLOUDFLARE_BACKOFF_MS * (attempt + 1);
           console.warn(`[Discord] Cloudflare IP ban detected (attempt ${attempt + 1}/${WEBHOOK_MAX_RETRIES}), waiting ${waitMs / 1000}s`);
           await new Promise((r) => setTimeout(r, waitMs));
           continue;
         }
 
+        lastError = summarizeDiscordWebhookFailure(res.status, bodyText);
         let retryAfter = 1;
         try {
           const parsed = JSON.parse(bodyText);
@@ -628,26 +655,30 @@ async function sendWebhookInner(
 
       if (!res.ok) {
         const body = await res.text();
-        console.warn(`[Discord] Webhook failed: ${res.status} ${body}`);
-        return false;
+        lastError = summarizeDiscordWebhookFailure(res.status, body);
+        console.warn(`[Discord] Webhook failed: ${lastError}`);
+        return { success: false, error: lastError };
       }
 
       console.log(
         `[Discord] Webhook sent successfully${chartFile ? " (with chart media)" : ""}`,
       );
-      return true;
+      return { success: true, error: null };
     } catch (err: any) {
-      console.warn(`[Discord] Webhook error (attempt ${attempt + 1}/${WEBHOOK_MAX_RETRIES}): ${err.message}`);
+      lastError = err.message || "Webhook network error";
+      console.warn(`[Discord] Webhook error (attempt ${attempt + 1}/${WEBHOOK_MAX_RETRIES}): ${lastError}`);
       if (attempt < WEBHOOK_MAX_RETRIES - 1) {
         await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
         continue;
       }
-      return false;
+      return { success: false, error: lastError };
     }
   }
 
+  const exhausted =
+    lastError ?? "Webhook request failed after retries (rate limit or network)";
   console.warn(`[Discord] Webhook exhausted all ${WEBHOOK_MAX_RETRIES} retries`);
-  return false;
+  return { success: false, error: exhausted };
 }
 
 export async function sendDirectWebhook(
@@ -657,12 +688,13 @@ export async function sendDirectWebhook(
   let sent = false;
   let error: string | null = null;
   try {
-    sent = await sendWebhook(
+    const webhookResult = await sendWebhook(
       webhookUrl,
       payload.content || "",
       payload.embeds || [],
     );
-    if (!sent) error = "Webhook request failed";
+    sent = webhookResult.success;
+    error = webhookResult.error;
   } catch (err: any) {
     error = err.message;
   }
@@ -684,12 +716,13 @@ export async function sendRawDiscordEmbed(
   let sent = false;
   let error: string | null = null;
   try {
-    sent = await sendWebhook(
+    const webhookResult = await sendWebhook(
       webhookUrl,
       payload.content || "",
       payload.embeds || [],
     );
-    if (!sent) error = "Webhook request failed";
+    sent = webhookResult.success;
+    error = webhookResult.error;
   } catch (err: any) {
     error = err.message;
   }
@@ -785,8 +818,13 @@ export async function sendTemplateDiscordMessage(
   let sent = false;
   let error: string | null = null;
   try {
-    sent = await sendWebhook(webhookUrl, prepared.content, [prepared.embed]);
-    if (!sent) error = "Webhook request failed";
+    const webhookResult = await sendWebhook(
+      webhookUrl,
+      prepared.content,
+      [prepared.embed],
+    );
+    sent = webhookResult.success;
+    error = webhookResult.error;
   } catch (err: any) {
     error = err.message;
   }
@@ -1678,7 +1716,7 @@ export async function sendTargetHitDiscordAlert(
     (app
       ? getContentForInstrument(app, signalData.instrument_type || "Shares")
       : "@everyone");
-  const sent = await sendWebhook(discordWebhookUrl, content, [embed]);
+  const webhookResult = await sendWebhook(discordWebhookUrl, content, [embed]);
 
   await storage
     .createDiscordMessage({
@@ -1686,8 +1724,9 @@ export async function sendTargetHitDiscordAlert(
       webhookUrl: discordWebhookUrl,
       channelType: "signal",
       instrumentType: signalData.instrument_type || "Shares",
-      status: sent ? "sent" : "error",
+      status: webhookResult.success ? "sent" : "error",
       messageType: "target_hit",
+      error: webhookResult.error,
       embedData: {
         ticker: signalData.ticker || "",
         sourceAppId: app?.id ?? null,
@@ -1801,7 +1840,7 @@ export async function sendStopLossRaisedDiscord(
     (app
       ? getContentForInstrument(app, signalData.instrument_type || "Shares")
       : "@everyone");
-  const sent = await sendWebhook(discordWebhookUrl, content, [embed]);
+  const webhookResult = await sendWebhook(discordWebhookUrl, content, [embed]);
 
   await storage
     .createDiscordMessage({
@@ -1809,8 +1848,9 @@ export async function sendStopLossRaisedDiscord(
       webhookUrl: discordWebhookUrl,
       channelType: "signal",
       instrumentType: signalData.instrument_type || "Shares",
-      status: sent ? "sent" : "error",
+      status: webhookResult.success ? "sent" : "error",
       messageType: "stop_loss_raised",
+      error: webhookResult.error,
       embedData: {
         ticker: signalData.ticker || "",
         sourceAppId: app?.id ?? null,
@@ -1842,7 +1882,7 @@ export async function sendStopLossHitDiscord(
     (app
       ? getContentForInstrument(app, signalData.instrument_type || "Shares")
       : "@everyone");
-  const sent = await sendWebhook(discordWebhookUrl, content, [embed]);
+  const webhookResult = await sendWebhook(discordWebhookUrl, content, [embed]);
 
   await storage
     .createDiscordMessage({
@@ -1850,8 +1890,9 @@ export async function sendStopLossHitDiscord(
       webhookUrl: discordWebhookUrl,
       channelType: "signal",
       instrumentType: signalData.instrument_type || "Shares",
-      status: sent ? "sent" : "error",
+      status: webhookResult.success ? "sent" : "error",
       messageType: "stop_loss_hit",
+      error: webhookResult.error,
       embedData: { embeds: [embed] },
     })
     .catch(() => {});
@@ -1879,7 +1920,7 @@ export async function sendTradeClosedManuallyDiscord(
   const content = app
     ? getContentForInstrument(app, instrumentType)
     : "@everyone";
-  const sent = await sendWebhook(webhookUrl, content, [embed]);
+  const webhookResult = await sendWebhook(webhookUrl, content, [embed]);
 
   await storage
     .createDiscordMessage({
@@ -1887,8 +1928,9 @@ export async function sendTradeClosedManuallyDiscord(
       webhookUrl,
       channelType: "signal",
       instrumentType,
-      status: sent ? "sent" : "error",
+      status: webhookResult.success ? "sent" : "error",
       messageType: "trade_closed_manually",
+      error: webhookResult.error,
       embedData: { ticker },
       sourceAppId: app?.id ?? null,
       sourceAppName: app?.name ?? null,
@@ -2002,8 +2044,15 @@ async function sendEntryDiscordAlertTenPercent(
   let sent = false;
   let error: string | null = null;
   try {
-    sent = await sendWebhook(webhookUrl, content, [embed], false, chartFile);
-    if (!sent) error = "Webhook request failed";
+    const webhookResult = await sendWebhook(
+      webhookUrl,
+      content,
+      [embed],
+      false,
+      chartFile,
+    );
+    sent = webhookResult.success;
+    error = webhookResult.error;
   } catch (err: any) {
     error = err.message;
   }
@@ -2135,7 +2184,7 @@ export async function sendProfitMilestoneDiscordAlert(
   const content = app
     ? getContentForInstrument(app, signalData.instrument_type || "Shares")
     : "@everyone";
-  const sent = await sendWebhook(discordWebhookUrl, content, [embed]);
+  const webhookResult = await sendWebhook(discordWebhookUrl, content, [embed]);
 
   await storage
     .createDiscordMessage({
@@ -2143,8 +2192,9 @@ export async function sendProfitMilestoneDiscordAlert(
       webhookUrl: discordWebhookUrl,
       channelType: "signal",
       instrumentType: signalData.instrument_type || "Shares",
-      status: sent ? "sent" : "error",
+      status: webhookResult.success ? "sent" : "error",
       messageType: "profit_milestone",
+      error: webhookResult.error,
       embedData: {
         ticker: signalData.ticker || "",
         milestonePct,
@@ -2240,8 +2290,15 @@ export async function sendEntryDicordAlert(
   let sent = false;
   let error: string | null = null;
   try {
-    sent = await sendWebhook(webhookUrl, content, [embed], false, chartFile);
-    if (!sent) error = "Webhook request failed";
+    const webhookResult = await sendWebhook(
+      webhookUrl,
+      content,
+      [embed],
+      false,
+      chartFile,
+    );
+    sent = webhookResult.success;
+    error = webhookResult.error;
   } catch (err: any) {
     error = err.message;
   }
@@ -2331,8 +2388,9 @@ export async function sendTradeExecutedDiscordAlert(
   let sent = false;
   let error: string | null = null;
   try {
-    sent = await sendWebhook(webhookUrl, content, [embed]);
-    if (!sent) error = "Webhook request failed";
+    const webhookResult = await sendWebhook(webhookUrl, content, [embed]);
+    sent = webhookResult.success;
+    error = webhookResult.error;
   } catch (err: any) {
     error = err.message;
   }
